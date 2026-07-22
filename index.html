@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>항공보안 교육 운영관리 시스템</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <!-- 로그인 화면 -->
+    <section id="login-view" class="login-view">
+      <form id="login-form" class="login-box">
+        <h1>교육 운영관리 시스템</h1>
+        <p class="subtitle">관리자 로그인</p>
+        <label>이메일<input type="email" name="email" required autocomplete="username" /></label>
+        <label>비밀번호<input type="password" name="password" required autocomplete="current-password" /></label>
+        <button type="submit">로그인</button>
+        <p id="login-error" class="error"></p>
+      </form>
+    </section>
+
+    <!-- 앱 셸 -->
+    <div id="app-view" hidden>
+      <header class="topbar">
+        <h1>항공보안 교육 운영관리</h1>
+        <div class="user-box">
+          <span id="user-email"></span>
+          <button id="logout-btn" type="button">로그아웃</button>
+        </div>
+      </header>
+
+      <nav class="tabs">
+        <button class="tab-btn" data-tab="courses" type="button">과정·차수 마스터</button>
+        <button class="tab-btn" data-tab="sessions" type="button">강의 시간표</button>
+      </nav>
+
+      <main>
+        <!-- 과정·차수 마스터 -->
+        <section class="tab-panel" data-tab="courses">
+          <h2>과정·차수 마스터</h2>
+          <form id="course-form" class="entry-form">
+            <div class="grid">
+              <label>과정코드<input name="code" required /></label>
+              <label>과정명<input name="name" required /></label>
+              <label>차수<input name="round" type="number" min="1" required /></label>
+              <label>정원<input name="capacity" type="number" min="1" required /></label>
+              <label>교육시작일<input name="startDate" type="date" required /></label>
+              <label>교육종료일<input name="endDate" type="date" required /></label>
+              <label>교육장<input name="venue" /></label>
+            </div>
+            <div class="form-actions">
+              <button id="course-submit" type="submit">등록</button>
+              <button id="course-cancel" type="button" hidden>취소</button>
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>과정코드</th><th>과정명</th><th>차수</th><th>정원</th>
+                  <th>시작일</th><th>종료일</th><th>교육장</th><th>관리</th>
+                </tr>
+              </thead>
+              <tbody id="course-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 강의 시간표 -->
+        <section class="tab-panel" data-tab="sessions" hidden>
+          <h2>강의 시간표</h2>
+          <label class="course-picker">
+            대상 과정
+            <select id="session-course">
+              <option value="">과정을 선택하세요</option>
+            </select>
+          </label>
+
+          <form id="session-form" class="entry-form">
+            <div class="grid">
+              <label>일자<input name="date" type="date" required /></label>
+              <label>과목<input name="subject" required /></label>
+              <label>시작시각<select name="startTime" required></select></label>
+              <label>종료시각<select name="endTime" required></select></label>
+              <label>강의실<select name="room" required></select></label>
+              <label>강사<input name="instructor" /></label>
+            </div>
+            <div class="form-actions">
+              <button id="session-submit" type="submit">등록</button>
+              <button id="session-cancel" type="button" hidden>취소</button>
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>일자</th><th>시간</th><th>과목</th>
+                  <th>강의실</th><th>강사</th><th>관리</th>
+                </tr>
+              </thead>
+              <tbody id="session-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

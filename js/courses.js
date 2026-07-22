@@ -1,0 +1,144 @@
+// 과정·차수 마스터 CRUD.
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  query,
+  orderBy,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { db } from "./firebase.js";
+import { escapeHtml } from "./app.js";
+
+const coursesCol = collection(db, "courses");
+let unsub = null;
+let editingId = null;
+// 다른 화면(시간표)에서 과정 목록을 재사용하기 위한 캐시.
+export let coursesCache = [];
+const listeners = [];
+
+// 과정 목록 변경 구독 (시간표 화면에서 과정 셀렉트 갱신용).
+export function onCoursesChange(cb) {
+  listeners.push(cb);
+  cb(coursesCache);
+}
+
+export function initCourses() {
+  const form = document.getElementById("course-form");
+  const tbody = document.getElementById("course-tbody");
+  const cancelBtn = document.getElementById("course-cancel");
+  const submitBtn = document.getElementById("course-submit");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = readForm(form);
+    const err = validate(data);
+    if (err) {
+      alert(err);
+      return;
+    }
+    try {
+      if (editingId) {
+        await updateDoc(doc(db, "courses", editingId), data);
+      } else {
+        await addDoc(coursesCol, data);
+      }
+      resetForm(form, submitBtn, cancelBtn);
+    } catch (e) {
+      alert("저장 실패: " + e.message);
+    }
+  });
+
+  cancelBtn.addEventListener("click", () => resetForm(form, submitBtn, cancelBtn));
+
+  // 실시간 목록.
+  const q = query(coursesCol, orderBy("code"));
+  unsub = onSnapshot(q, (snap) => {
+    coursesCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderTable(tbody, form, submitBtn, cancelBtn);
+    listeners.forEach((cb) => cb(coursesCache));
+  });
+}
+
+export function teardownCourses() {
+  if (unsub) unsub();
+  unsub = null;
+}
+
+function readForm(form) {
+  return {
+    code: form.code.value.trim(),
+    name: form.name.value.trim(),
+    capacity: Number(form.capacity.value),
+    startDate: form.startDate.value,
+    endDate: form.endDate.value,
+    venue: form.venue.value.trim(),
+    round: Number(form.round.value),
+  };
+}
+
+function validate(d) {
+  if (!d.code) return "과정코드는 필수입니다.";
+  if (!d.name) return "과정명은 필수입니다.";
+  if (!Number.isFinite(d.capacity) || d.capacity <= 0)
+    return "정원은 1 이상의 숫자여야 합니다.";
+  if (!Number.isFinite(d.round) || d.round <= 0)
+    return "차수는 1 이상의 숫자여야 합니다.";
+  if (!d.startDate || !d.endDate) return "교육기간을 입력하세요.";
+  if (d.endDate < d.startDate) return "교육종료일은 시작일 이후여야 합니다.";
+  return null;
+}
+
+function resetForm(form, submitBtn, cancelBtn) {
+  form.reset();
+  editingId = null;
+  submitBtn.textContent = "등록";
+  cancelBtn.hidden = true;
+}
+
+function renderTable(tbody, form, submitBtn, cancelBtn) {
+  tbody.innerHTML = "";
+  if (coursesCache.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty">등록된 과정이 없습니다.</td></tr>`;
+    return;
+  }
+  for (const c of coursesCache) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(c.code)}</td>
+      <td>${escapeHtml(c.name)}</td>
+      <td>${c.round ?? ""}</td>
+      <td>${c.capacity ?? ""}</td>
+      <td>${escapeHtml(c.startDate ?? "")}</td>
+      <td>${escapeHtml(c.endDate ?? "")}</td>
+      <td>${escapeHtml(c.venue ?? "")}</td>
+      <td class="actions">
+        <button type="button" class="edit">수정</button>
+        <button type="button" class="del">삭제</button>
+      </td>`;
+    tr.querySelector(".edit").addEventListener("click", () => {
+      editingId = c.id;
+      form.code.value = c.code ?? "";
+      form.name.value = c.name ?? "";
+      form.capacity.value = c.capacity ?? "";
+      form.startDate.value = c.startDate ?? "";
+      form.endDate.value = c.endDate ?? "";
+      form.venue.value = c.venue ?? "";
+      form.round.value = c.round ?? "";
+      submitBtn.textContent = "수정 저장";
+      cancelBtn.hidden = false;
+      form.scrollIntoView({ behavior: "smooth" });
+    });
+    tr.querySelector(".del").addEventListener("click", async () => {
+      if (!confirm(`'${c.name}' ${c.round}차수를 삭제하시겠습니까?`)) return;
+      try {
+        await deleteDoc(doc(db, "courses", c.id));
+      } catch (e) {
+        alert("삭제 실패: " + e.message);
+      }
+    });
+    tbody.appendChild(tr);
+  }
+}
