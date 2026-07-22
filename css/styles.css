@@ -10,6 +10,9 @@
 
 * { box-sizing: border-box; }
 
+/* HTML hidden 속성이 아래 display 규칙보다 우선하도록 강제. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
