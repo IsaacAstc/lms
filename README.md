@@ -42,6 +42,23 @@ python3 -m http.server 8000
 
 관리자 계정은 Firebase 콘솔 > Authentication 에서 이메일/비밀번호로 사전 생성한다(회원가입 UI 없음).
 
+## GitHub Pages 배포
+
+`firebase-config.js`는 커밋하지 않으므로, 배포 시 GitHub Actions가 **Secrets 값으로 파일을 생성**한다.
+(Firebase 웹 config의 apiKey는 비밀값이 아니며, 실제 보안은 Firestore 규칙 + Auth로 건다.)
+
+1. 저장소 **Settings → Secrets and variables → Actions → New repository secret** 에서 아래 6개 등록:
+   - `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_PROJECT_ID`,
+     `FIREBASE_STORAGE_BUCKET`, `FIREBASE_MESSAGING_SENDER_ID`, `FIREBASE_APP_ID`
+2. **Settings → Pages → Source** 를 **GitHub Actions** 로 설정.
+3. 배포 실행:
+   - `main` 에 병합하면 자동 배포, 또는
+   - **Actions 탭 → Deploy to GitHub Pages → Run workflow** 로 수동 실행(브랜치 지정 가능).
+4. 배포된 URL(예: `https://<계정>.github.io/lms/`)로 접속해 로그인.
+
+> Firebase 콘솔 **Authentication → Settings → 승인된 도메인**에 `<계정>.github.io` 를 추가해야
+> 배포본에서 로그인이 동작한다.
+
 ## 데이터 모델 메모
 
 CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
