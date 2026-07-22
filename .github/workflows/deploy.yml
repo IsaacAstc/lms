@@ -1,9 +1,11 @@
 name: Deploy to GitHub Pages
 
-# main 병합 시 자동 배포 + 수동 실행(테스트용, 어느 브랜치서든).
+# main 병합 시 자동 배포 + 작업 브랜치 push 시 테스트 배포 + 수동 실행.
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - claude/course-schedule-input-mcbdcv
   workflow_dispatch:
 
 permissions:
