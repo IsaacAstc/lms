@@ -24,6 +24,8 @@ export function initSurveys() {
   watchCollection("publicSurveys");
   onCollection("publicSurveys", render);
   document.getElementById("survey-refresh").addEventListener("click", loadCounts);
+  // 설문 관리 탭이 표시될 때마다 응답 수 자동 갱신.
+  document.addEventListener("tabshown", (e) => { if (e.detail === "surveys") loadCounts(); });
 }
 
 function render() {
@@ -68,9 +70,10 @@ function render() {
     });
     tbody.appendChild(tr);
   }
+  loadCounts();
 }
 
-// 각 설문의 응답 수를 조회해 표시(수동 새로고침).
+// 각 설문의 응답 수를 조회해 표시(자동 + 수동 새로고침).
 async function loadCounts() {
   const cells = document.querySelectorAll(".resp-count");
   for (const cell of cells) {
