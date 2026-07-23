@@ -9,6 +9,7 @@ import { initSettings } from "./settings.js";
 import { initPayroll } from "./payroll.js";
 import { initSurveys } from "./surveys.js";
 import { initReports } from "./reports.js";
+import { initStats } from "./stats.js";
 import { initFreetext } from "./freetext.js";
 import { initDataAdmin } from "./data-admin.js";
 import { initExportButtons } from "./export-csv.js";
@@ -57,6 +58,7 @@ function initApp() {
   initPayroll();
   initSurveys();
   initReports();
+  initStats();
   initFreetext();
   initDataAdmin();
   initExportButtons();

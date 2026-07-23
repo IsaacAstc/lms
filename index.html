@@ -38,6 +38,7 @@
         <button class="tab-btn" data-tab="payroll" type="button">강사료·집계</button>
         <button class="tab-btn" data-tab="surveys" type="button">설문 관리</button>
         <button class="tab-btn" data-tab="reports" type="button">설문 집계</button>
+        <button class="tab-btn" data-tab="stats" type="button">통계</button>
         <button class="tab-btn" data-tab="freetext" type="button">주관식 원문</button>
         <button class="tab-btn" data-tab="settings" type="button">기준값 설정</button>
         <button class="tab-btn" data-tab="data" type="button">데이터</button>
@@ -291,6 +292,33 @@
             <button class="csv-export" type="button" data-target="#rep-raw" data-name="설문_원응답">CSV 내보내기</button>
           </div>
           <div class="table-wrap" id="rep-raw"></div>
+        </section>
+
+        <!-- 통계 대시보드 -->
+        <section class="tab-panel" data-tab="stats" hidden>
+          <h2>통계</h2>
+
+          <h3>과정별 운영현황 <button class="csv-export" type="button" data-target="#stat-ops" data-name="운영현황">CSV 내보내기</button></h3>
+          <div class="load-row">
+            <label>연도 <select id="stat-year"><option value="">전체 연도</option></select></label>
+          </div>
+          <div class="table-wrap" id="stat-ops"></div>
+
+          <h3>월별 만족도 추이 <button class="csv-export" type="button" data-target="#stat-trend" data-name="만족도추이">CSV 내보내기</button></h3>
+          <div class="load-row">
+            <label>시작월 <input id="trend-start" type="month" /></label>
+            <label>종료월 <input id="trend-end" type="month" /></label>
+            <button id="trend-run" type="button">조회</button>
+          </div>
+          <p class="hint">기간 각 월의 설문을 조회해 교육/강사 만족도(100점) 추이를 표시합니다. 원문이 파기된 달은 집계 스냅샷으로 표시됩니다.</p>
+          <div class="table-wrap" id="stat-trend"></div>
+
+          <h3>차수 간 비교 <button class="csv-export" type="button" data-target="#stat-cmp" data-name="차수비교">CSV 내보내기</button></h3>
+          <div class="load-row">
+            <label>과정명 <select id="cmp-name"><option value="">과정명 선택</option></select></label>
+            <button id="cmp-run" type="button">조회</button>
+          </div>
+          <div class="table-wrap" id="stat-cmp"></div>
         </section>
 
         <!-- 주관식 원문 관리 -->
