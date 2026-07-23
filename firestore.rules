@@ -40,28 +40,24 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // --- 이하 컬렉션은 후속 단계(설문)에서 사용. 6절 요건 선반영 ---
-
-    // 설문 응답: create 만 공개 허용, 나머지는 관리자 전용.
-    // create 시 expireAt = 수집일 + 180일 검증(클라이언트 조작 방지).
-    match /surveyResponses/{responseId} {
-      allow create: if request.resource.data.expireAt
-        == request.time + duration.value(180, 'd');
-      allow read, update, delete: if isAdmin();
-    }
-
-    // 집계 데이터: 쓰기는 관리자만. 읽기 범위는 후속 단계에서 최소화 조정.
-    match /surveyAggregates/{aggregateId} {
-      allow read: if isAdmin();
+    // 공개 설문 정의: 누구나 읽기(응답 페이지 렌더), 쓰기는 관리자만.
+    match /publicSurveys/{courseId} {
+      allow read: if true;
       allow write: if isAdmin();
     }
 
-    // 1회용 토큰: 사용 처리(update) 외 읽기 금지.
-    match /surveyTokens/{tokenId} {
-      allow read: if false;
-      allow update: if request.resource.data.diff(resource.data)
-        .affectedKeys().hasOnly(['used']);
-      allow create, delete: if isAdmin();
+    // 설문 응답: create 만 공개 허용(완전 익명), 읽기·수정·삭제는 관리자만.
+    // expireAt은 서버시각 기준 약 180일 후여야 함(클라이언트 조작 방지, ±2일 허용).
+    match /surveyResponses/{responseId} {
+      allow create: if request.resource.data.expireAt is timestamp
+        && request.resource.data.expireAt > request.time + duration.value(178, 'd')
+        && request.resource.data.expireAt < request.time + duration.value(182, 'd');
+      allow read, update, delete: if isAdmin();
+    }
+
+    // 집계 데이터(영구 보관): 관리자 전용.
+    match /surveyAggregates/{aggregateId} {
+      allow read, write: if isAdmin();
     }
   }
 }

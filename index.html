@@ -36,6 +36,7 @@
         <button class="tab-btn" data-tab="rooms" type="button">강의실 관리</button>
         <button class="tab-btn" data-tab="instructors" type="button">강사 관리</button>
         <button class="tab-btn" data-tab="payroll" type="button">강사료·집계</button>
+        <button class="tab-btn" data-tab="surveys" type="button">설문 관리</button>
         <button class="tab-btn" data-tab="settings" type="button">기준값 설정</button>
         <button class="tab-btn" data-tab="data" type="button">데이터</button>
       </nav>
@@ -188,7 +189,7 @@
           </form>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>순서</th><th>강의실명</th><th>정원</th><th>비고</th><th>관리</th></tr></thead>
+              <thead><tr><th>순서</th><th>강의실명</th><th>정원</th><th>비고</th><th>설문 URL</th><th>관리</th></tr></thead>
               <tbody id="room-tbody"></tbody>
             </table>
           </div>
@@ -244,6 +245,19 @@
             </table>
           </div>
           <p id="pay-total" class="total-line"></p>
+        </section>
+
+        <!-- 설문 관리 -->
+        <section class="tab-panel" data-tab="surveys" hidden>
+          <h2>설문 관리</h2>
+          <p class="hint">시간표 등록/수정을 완료하면 그 차수의 공개 설문이 자동 생성됩니다. <b>노출 창(종료 2시간 전 ~ 종료 후 6시간, KST)</b>에만 강의실 URL에서 응답할 수 있습니다. 강사만족도는 첫·마지막 과목(교육등록/평가/설문/수료)을 제외한 강사×과목별로 생성됩니다.</p>
+          <div class="form-actions"><button id="survey-refresh" type="button">응답 수 새로고침</button></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>과정(차수)</th><th>강의실</th><th>노출 창(KST)</th><th>강사문항</th><th>응답수</th><th>강의실 설문 URL</th><th>관리</th></tr></thead>
+              <tbody id="survey-tbody"></tbody>
+            </table>
+          </div>
         </section>
 
         <!-- 기준값 설정 -->

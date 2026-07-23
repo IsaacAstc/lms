@@ -51,20 +51,27 @@ function render(tbody, form, submitBtn, cancelBtn) {
   const rooms = getRooms();
   tbody.innerHTML = "";
   if (!rooms.length) {
-    tbody.innerHTML = `<tr><td colspan="5" class="empty">등록된 강의실이 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">등록된 강의실이 없습니다.</td></tr>`;
     return;
   }
+  const base = location.origin + location.pathname.replace(/[^/]*$/, "");
   for (const r of rooms) {
+    const url = `${base}survey.html?room=${r.id}`;
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${r.order ?? ""}</td>
       <td>${escapeHtml(r.name)}</td>
       <td>${r.capacity ?? ""}</td>
       <td>${escapeHtml(r.note ?? "")}</td>
+      <td class="url-cell"><input readonly value="${escapeHtml(url)}"><button type="button" class="copy url-copy">복사</button></td>
       <td class="actions">
         <button type="button" class="edit">수정</button>
         <button type="button" class="del">삭제</button>
       </td>`;
+    tr.querySelector(".url-copy").addEventListener("click", () => {
+      navigator.clipboard?.writeText(url);
+      tr.querySelector(".url-copy").textContent = "복사됨";
+    });
     tr.querySelector(".edit").addEventListener("click", () => {
       editingId = r.id;
       form.name.value = r.name ?? "";

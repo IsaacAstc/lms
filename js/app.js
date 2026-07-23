@@ -7,6 +7,7 @@ import { initInstructors } from "./instructors.js";
 import { initPrograms } from "./programs.js";
 import { initSettings } from "./settings.js";
 import { initPayroll } from "./payroll.js";
+import { initSurveys } from "./surveys.js";
 import { initSeed } from "./seed.js";
 
 // 공용 유틸: HTML 이스케이프 (XSS 방지).
@@ -49,6 +50,7 @@ function initApp() {
   initCourses();
   initSessions();
   initPayroll();
+  initSurveys();
   initSeed();
 }
 
