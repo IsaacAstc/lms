@@ -23,9 +23,9 @@ export const INSTRUCTOR_ITEMS = [
 // 강사만족도에서 제외할 과목명 패턴(첫/마지막 과목 안전장치).
 const EXCLUDE_PATTERNS = [/교육\s*등록/, /평가/, /설문/, /수료/];
 
-// 노출 창: 종료 2시간 전 ~ 종료 후 6시간.
+// 노출 창: 종료 2시간 전 ~ 종료 후 1시간.
 const OPEN_BEFORE_MS = 2 * HOUR_MS;
-const CLOSE_AFTER_MS = 6 * HOUR_MS;
+const CLOSE_AFTER_MS = 1 * HOUR_MS;
 
 // 과정+세션으로 공개 설문 정의 객체 생성. roomId 없거나 세션 없으면 null.
 export function buildSurvey(course, sessions, roomId) {

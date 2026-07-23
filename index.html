@@ -36,6 +36,7 @@
         <button class="tab-btn" data-tab="rooms" type="button">강의실 관리</button>
         <button class="tab-btn" data-tab="instructors" type="button">강사 관리</button>
         <button class="tab-btn" data-tab="payroll" type="button">강사료·집계</button>
+        <button class="tab-btn" data-tab="expenses" type="button">소요경비</button>
         <button class="tab-btn" data-tab="surveys" type="button">설문 관리</button>
         <button class="tab-btn" data-tab="reports" type="button">설문 집계</button>
         <button class="tab-btn" data-tab="stats" type="button">통계</button>
@@ -248,6 +249,18 @@
             </table>
           </div>
           <p id="pay-total" class="total-line"></p>
+        </section>
+
+        <!-- 소요경비 -->
+        <section class="tab-panel" data-tab="expenses" hidden>
+          <h2>소요경비 <button class="csv-export" type="button" data-target="#exp-table" data-name="소요경비">CSV 내보내기</button></h2>
+          <div class="load-row">
+            <label>월 <input id="exp-month" type="month" /></label>
+            <button id="exp-run" type="button">조회</button>
+            <button id="exp-save" type="button">저장</button>
+          </div>
+          <p class="hint">사내/사외 강사료·출강여비는 그 달 시간표에서 자동 산출되고, 전임교관 교재연구비·물품·다과는 직접 입력합니다. 1인당 단가는 그 달 시작 차수의 이수인원 합으로 나눕니다(수정 가능).</p>
+          <div class="table-wrap" id="exp-table"></div>
         </section>
 
         <!-- 설문 관리 -->
