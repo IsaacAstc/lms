@@ -29,6 +29,7 @@ function showTab(name) {
   document.querySelectorAll(".tab-btn").forEach((b) => {
     b.classList.toggle("active", b.dataset.tab === name);
   });
+  document.dispatchEvent(new CustomEvent("tabshown", { detail: name }));
 }
 
 function setupTabs() {
