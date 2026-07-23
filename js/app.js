@@ -1,5 +1,5 @@
 // 앱 셸: 로그인 게이트, 탭 라우팅, 화면 초기화.
-import { watchAuth, login, logout } from "./auth.js";
+import { watchAuth, login, logout, isAdmin } from "./auth.js";
 import { initCourses } from "./courses.js";
 import { initSessions } from "./sessions.js";
 import { initRooms } from "./rooms.js";
@@ -87,7 +87,16 @@ window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("logout-btn").addEventListener("click", () => logout());
 
   watchAuth(
-    (user) => {
+    async (user) => {
+      // 인증됐더라도 관리자 권한(보안규칙 허용)이 없으면 앱 셸을 열지 않는다.
+      const admin = await isAdmin();
+      if (!admin) {
+        loginError.textContent = "관리자 권한이 없는 계정입니다. 관리자에게 문의하세요.";
+        appView.hidden = true;
+        loginView.hidden = false;
+        await logout();
+        return;
+      }
       loginView.hidden = true;
       appView.hidden = false;
       userEmail.textContent = user.email || "";
