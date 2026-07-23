@@ -38,6 +38,7 @@
         <button class="tab-btn" data-tab="payroll" type="button">강사료·집계</button>
         <button class="tab-btn" data-tab="surveys" type="button">설문 관리</button>
         <button class="tab-btn" data-tab="reports" type="button">설문 집계</button>
+        <button class="tab-btn" data-tab="freetext" type="button">주관식 원문</button>
         <button class="tab-btn" data-tab="settings" type="button">기준값 설정</button>
         <button class="tab-btn" data-tab="data" type="button">데이터</button>
       </nav>
@@ -287,6 +288,37 @@
           <p class="hint">개별 응답 원자료입니다. 완전 익명이라 개인 식별정보는 포함되지 않습니다. 교1~교6은 교육만족도 6문항 점수(5점)입니다. <b>원응답 보기</b>를 눌러야 표시됩니다.</p>
           <div class="form-actions"><button id="rep-raw-btn" type="button">원응답 보기</button></div>
           <div class="table-wrap" id="rep-raw"></div>
+        </section>
+
+        <!-- 주관식 원문 관리 -->
+        <section class="tab-panel" data-tab="freetext" hidden>
+          <h2>주관식 원문 관리</h2>
+          <p class="notice">주관식 원문은 완전 익명입니다. 개인 식별정보는 포함되지 않으며 관리자 전용으로만 열람·분류합니다.</p>
+
+          <h3>분류 항목</h3>
+          <div id="cat-list"></div>
+          <div class="load-row">
+            <input id="cat-new" placeholder="새 분류 항목" />
+            <button id="cat-add" type="button">추가</button>
+            <button id="cat-save" type="button">분류 항목 저장</button>
+          </div>
+
+          <h3>원문 조회 · 분류</h3>
+          <div class="load-row">
+            <label>기간 <input id="ft-month" type="month" /></label>
+            <label>종류
+              <select id="ft-kind"><option value="">전체</option><option>불만족</option><option>제안개선</option></select>
+            </label>
+            <label>키워드 <input id="ft-kw" placeholder="본문 검색" /></label>
+            <button id="ft-search" type="button">조회</button>
+          </div>
+          <div class="table-wrap" id="ft-list"></div>
+
+          <h3>기간 시사점 · 피드백 반영계획</h3>
+          <p id="ft-cat-counts" class="hint"></p>
+          <label class="ta-label">시사점(종합 서술)<textarea id="ft-summary" rows="4"></textarea></label>
+          <label class="ta-label">피드백 반영계획<textarea id="ft-action" rows="4"></textarea></label>
+          <div class="form-actions"><button id="ft-narr-save" type="button">시사점·피드백 저장</button></div>
         </section>
 
         <!-- 기준값 설정 -->

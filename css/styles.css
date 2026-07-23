@@ -191,6 +191,13 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .confirm-actions .c-back { background: #889; }
 
 .sum-row td { background: #eef2f7; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.5rem; }
+.chip { display: inline-flex; align-items: center; gap: 0.3rem; background: #eef2f7; border: 1px solid var(--border); border-radius: 14px; padding: 0.25rem 0.6rem; font-size: 0.82rem; }
+.chip-del { background: none; color: var(--danger); border: none; padding: 0 0.1rem; font-size: 0.95rem; cursor: pointer; }
+.chip-del:hover { background: none; }
+.ta-label { display: block; font-size: 0.85rem; margin: 0.5rem 0; }
+.ta-label textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 5px; font-family: inherit; margin-top: 0.25rem; }
+.raw-free { max-width: 320px; white-space: pre-wrap; }
 #rep-edu td, #rep-inst td, #rep-edu th, #rep-inst th { text-align: center; }
 #rep-edu td:first-child, #rep-inst td:nth-child(-n+3) { text-align: left; }
 
