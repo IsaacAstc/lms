@@ -101,7 +101,16 @@ function readForm(form) {
     venue: form.venue.value.trim(),
     round: Number(form.round.value),
     programId: form.programId.value || "",
+    appliedCount: form.appliedCount.value ? Number(form.appliedCount.value) : 0,
+    completedCount: form.completedCount.value ? Number(form.completedCount.value) : 0,
+    hasEvaluation: form.hasEvaluation.checked,
   };
+}
+
+// 잔여석 = 정원 - 신청건수 (자동 계산). 음수면 0 하한, 경고색은 CSS로.
+function remainingSeats(c) {
+  const r = (c.capacity ?? 0) - (c.appliedCount ?? 0);
+  return r >= 0 ? r : `<span class="warn">${r}</span>`;
 }
 
 function validate(d) {
@@ -113,6 +122,8 @@ function validate(d) {
     return "차수는 1 이상의 숫자여야 합니다.";
   if (!d.startDate || !d.endDate) return "교육기간을 입력하세요.";
   if (d.endDate < d.startDate) return "교육종료일은 시작일 이후여야 합니다.";
+  if (d.appliedCount < 0 || d.completedCount < 0) return "신청건수·이수인원은 0 이상이어야 합니다.";
+  if (d.appliedCount > d.capacity) return "신청건수가 정원을 초과했습니다. 정원 또는 신청건수를 확인하세요.";
   return null;
 }
 
@@ -126,7 +137,7 @@ function resetForm(form, submitBtn, cancelBtn) {
 function renderTable(tbody, form, submitBtn, cancelBtn) {
   tbody.innerHTML = "";
   if (coursesCache.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty">등록된 과정이 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" class="empty">등록된 과정이 없습니다.</td></tr>`;
     return;
   }
   for (const c of coursesCache) {
@@ -136,6 +147,10 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       <td>${escapeHtml(c.name)}</td>
       <td>${c.round ?? ""}</td>
       <td>${c.capacity ?? ""}</td>
+      <td>${c.appliedCount ?? 0}</td>
+      <td>${remainingSeats(c)}</td>
+      <td>${c.completedCount ?? 0}</td>
+      <td style="text-align:center">${c.hasEvaluation ? "○" : ""}</td>
       <td>${escapeHtml(c.startDate ?? "")}</td>
       <td>${escapeHtml(c.endDate ?? "")}</td>
       <td>${escapeHtml(c.venue ?? "")}</td>
@@ -154,6 +169,9 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       form.venue.value = c.venue ?? "";
       form.round.value = c.round ?? "";
       form.programId.value = c.programId ?? "";
+      form.appliedCount.value = c.appliedCount ?? 0;
+      form.completedCount.value = c.completedCount ?? 0;
+      form.hasEvaluation.checked = !!c.hasEvaluation;
       submitBtn.textContent = "수정 저장";
       cancelBtn.hidden = false;
       form.scrollIntoView({ behavior: "smooth" });
