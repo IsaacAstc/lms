@@ -82,10 +82,19 @@ export function initSessions() {
     selectedCourse = coursesCache.find((c) => c.id === selectedCourseId) || null;
     resetForm(form, submitBtn, cancelBtn);
     refreshSubjectList();
+    clearDraft();
+    // 차수에 연결된 커리큘럼·시작일을 초안 컨트롤에 자동 반영.
+    document.getElementById("load-program").value = selectedCourse?.programId || "";
+    document.getElementById("load-basedate").value = selectedCourse?.startDate || "";
     subscribeSessions(tbody, form, submitBtn, cancelBtn);
   });
 
-  document.getElementById("load-btn").addEventListener("click", () => bulkLoadCurriculum());
+  document.getElementById("load-btn").addEventListener("click", buildDraft);
+  document.getElementById("draft-add").addEventListener("click", () =>
+    document.getElementById("draft-tbody").appendChild(draftRow({}))
+  );
+  document.getElementById("draft-clear").addEventListener("click", clearDraft);
+  document.getElementById("draft-commit").addEventListener("click", commitDraft);
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -133,8 +142,40 @@ function refreshSubjectList() {
   }
 }
 
-// 커리큘럼을 시간표로 일괄 생성(차수 인스턴스). 이후 개별 수정 가능.
-async function bulkLoadCurriculum() {
+// 일차 → 날짜 문자열(기준일 + dayNo-1).
+function dayToDate(baseDate, dayNo) {
+  if (!baseDate) return "";
+  const d = new Date(baseDate + "T00:00:00");
+  d.setDate(d.getDate() + ((dayNo || 1) - 1));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// 편집 가능한 초안 한 행 생성(값 채움).
+function draftRow(v) {
+  const tr = document.createElement("tr");
+  const roomOpts = ['<option value="">강의실</option>']
+    .concat(getRooms().map((r) => `<option${v.room === r.name ? " selected" : ""}>${escapeHtml(r.name)}</option>`))
+    .join("");
+  const timeOpts = (arr, sel) =>
+    arr.map((t) => `<option${t === sel ? " selected" : ""}>${t}</option>`).join("");
+  tr.innerHTML = `
+    <td><input type="date" class="d-date" value="${v.date || ""}"></td>
+    <td><input class="d-subj" list="session-subject-list" value="${escapeHtml(v.subject || "")}"></td>
+    <td><select class="d-start">${timeOpts(START_TIMES, v.startTime)}</select></td>
+    <td><select class="d-end">${timeOpts(END_TIMES, v.endTime)}</select></td>
+    <td><select class="d-room">${roomOpts}</select></td>
+    <td><input class="d-inst" list="session-instructor-list" value="${escapeHtml(v.instructor || "")}" placeholder="강사명"></td>
+    <td class="actions"><button type="button" class="del d-del">삭제</button></td>`;
+  tr.dataset.kind = v.teacherKind || "";
+  tr.querySelector(".d-del").addEventListener("click", () => {
+    tr.remove();
+    if (!document.querySelectorAll("#draft-tbody tr").length) clearDraft();
+  });
+  return tr;
+}
+
+// 차수의 커리큘럼으로 초안 표를 구성(아직 저장 안 함).
+function buildDraft() {
   if (!selectedCourseId) return alert("먼저 과정(차수)을 선택하세요.");
   const pid = document.getElementById("load-program").value;
   const baseDate = document.getElementById("load-basedate").value;
@@ -143,30 +184,62 @@ async function bulkLoadCurriculum() {
   const prog = getProgramById(pid);
   const subjects = prog?.subjects || [];
   if (!subjects.length) return alert("선택한 커리큘럼에 과목이 없습니다.");
-  if (!confirm(`'${prog.name}' 커리큘럼의 ${subjects.length}개 과목을 시간표로 생성합니다.\n(1일차 = ${baseDate})`)) return;
-
-  const batch = writeBatch(db);
+  const tbody = document.getElementById("draft-tbody");
+  if (tbody.children.length && !confirm("기존 초안을 새로 불러온 내용으로 교체합니다. 계속할까요?")) return;
+  tbody.innerHTML = "";
   for (const s of subjects) {
-    const d = new Date(baseDate + "T00:00:00");
-    d.setDate(d.getDate() + ((s.dayNo || 1) - 1));
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const ref = doc(sessionsCol);
-    batch.set(ref, {
-      courseId: selectedCourseId,
-      date: dateStr,
-      subject: s.subject,
-      startTime: s.startTime,
-      endTime: s.endTime,
-      room: "",
-      instructor: "",
-      instructorId: "",
-      teacherKind: s.teacherKind || "",
-    });
+    tbody.appendChild(
+      draftRow({
+        date: dayToDate(baseDate, s.dayNo),
+        subject: s.subject,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        room: "",
+        instructor: "",
+        teacherKind: s.teacherKind,
+      })
+    );
   }
+  document.getElementById("draft-actions").hidden = false;
+}
+
+function clearDraft() {
+  document.getElementById("draft-tbody").innerHTML = "";
+  document.getElementById("draft-actions").hidden = true;
+}
+
+// 초안 전체를 시간표로 일괄 저장.
+async function commitDraft() {
+  if (!selectedCourseId) return alert("먼저 과정(차수)을 선택하세요.");
+  const rows = [...document.querySelectorAll("#draft-tbody tr")];
+  if (!rows.length) return alert("등록할 초안이 없습니다.");
+  const items = [];
+  for (const tr of rows) {
+    const instName = tr.querySelector(".d-inst").value.trim();
+    const inst = instName ? getInstructors().find((i) => i.name === instName) : null;
+    const data = {
+      date: tr.querySelector(".d-date").value,
+      subject: tr.querySelector(".d-subj").value.trim(),
+      startTime: tr.querySelector(".d-start").value,
+      endTime: tr.querySelector(".d-end").value,
+      room: tr.querySelector(".d-room").value,
+      instructor: instName,
+      instructorId: inst ? inst.id : "",
+      teacherKind: tr.dataset.kind || "",
+    };
+    if (!data.date || !data.subject) return alert("모든 행에 일자와 과목을 입력하세요.");
+    if (data.endTime <= data.startTime) return alert(`'${data.subject}' 행의 종료시각이 시작시각보다 빠릅니다.`);
+    if (instName && !data.instructorId) return alert(`'${instName}'은 강사 마스터에 없습니다. 마스터의 강사만 지정할 수 있습니다.`);
+    items.push(data);
+  }
+  if (!confirm(`${items.length}개 과목을 시간표로 등록합니다. 진행할까요?`)) return;
+  const batch = writeBatch(db);
+  for (const data of items) batch.set(doc(sessionsCol), { courseId: selectedCourseId, ...data });
   try {
     await batch.commit();
-    alert("커리큘럼을 시간표로 불러왔습니다. 강의실·강사를 개별 지정하세요.");
-  } catch (e) { alert("불러오기 실패: " + e.message); }
+    clearDraft();
+    alert("시간표 등록을 완료했습니다.");
+  } catch (e) { alert("등록 실패: " + e.message); }
 }
 
 function subscribeSessions(tbody, form, submitBtn, cancelBtn) {

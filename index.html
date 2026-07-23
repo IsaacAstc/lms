@@ -89,13 +89,26 @@
           </label>
 
           <fieldset class="load-box">
-            <legend>커리큘럼 불러오기</legend>
+            <legend>커리큘럼 불러와 초안 만들기</legend>
             <div class="load-row">
               <select id="load-program"><option value="">커리큘럼 선택</option></select>
               <label>1일차 기준일 <input id="load-basedate" type="date" /></label>
-              <button id="load-btn" type="button">불러오기</button>
+              <button id="load-btn" type="button">초안 불러오기</button>
             </div>
-            <p class="hint">선택 커리큘럼의 과목을 시간표로 일괄 생성합니다. 이후 강의실·강사를 개별 지정하세요.</p>
+            <p class="hint">차수를 선택하면 연결된 커리큘럼과 시작일이 자동 반영됩니다. 초안을 불러온 뒤 날짜·시간·강의실·강사를 수정하고 <b>시간표 등록 완료</b>를 누르면 일괄 저장됩니다. (등록 완료 전까지는 저장되지 않습니다)</p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>일자</th><th>과목</th><th>시작</th><th>종료</th><th>강의실</th><th>강사(마스터)</th><th></th></tr>
+                </thead>
+                <tbody id="draft-tbody"></tbody>
+              </table>
+            </div>
+            <div class="form-actions" id="draft-actions" hidden>
+              <button id="draft-add" type="button">행 추가</button>
+              <button id="draft-commit" type="button">시간표 등록 완료</button>
+              <button id="draft-clear" type="button">초안 취소</button>
+            </div>
           </fieldset>
 
           <form id="session-form" class="entry-form">
