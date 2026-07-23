@@ -63,7 +63,8 @@ courses/{courseId}              // 차수(운영 회차)
   code, name, capacity, startDate, endDate, venue, round,
   programId,                    // 과정 커리큘럼 연결(2단계)
   courseType,                   // 초기/정기/특별/초정기통합
-  plannedCount, completedCount, // 수강 slot: 계획인원/이수인원(#4, 수치만)
+  appliedCount, completedCount, // 수강 slot: 신청건수/이수인원(#4, 수치만). 잔여석=capacity-appliedCount(자동)
+  hasEvaluation,                // 평가 포함 여부(boolean)
   operationTag                  // 운영유형(예: 초정기통합, 자격유지)
 
 sessions/{sessionId}            // 시간표 (2단계 반영)
