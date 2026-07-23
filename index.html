@@ -46,7 +46,7 @@
       <main>
         <!-- 차수(운영) 관리 -->
         <section class="tab-panel" data-tab="courses">
-          <h2>차수(운영) 관리</h2>
+          <h2>차수(운영) 관리 <button class="csv-export" type="button" data-target="#course-tbody" data-name="차수목록">CSV 내보내기</button></h2>
           <form id="course-form" class="entry-form">
             <div class="grid">
               <label>과정코드<input name="code" required /></label>
@@ -117,7 +117,7 @@
           <datalist id="session-subject-list"></datalist>
           <datalist id="session-instructor-list"></datalist>
 
-          <h3>등록된 시간표 (셀 편집 후 일괄 저장)</h3>
+          <h3>등록된 시간표 (셀 편집 후 일괄 저장) <button class="csv-export" type="button" data-target="#session-tbody" data-name="시간표">CSV 내보내기</button></h3>
           <p class="hint">각 셀을 직접 수정하고 <b>전체 수정 완료</b>를 누르면 일괄 반영됩니다. 관리 열의 <b>복사</b>로 행을 복제해 새 강의를 추가할 수 있고, <b>삭제</b>한 행은 저장 시 제거됩니다.</p>
           <div class="table-wrap">
             <table>
@@ -138,7 +138,7 @@
 
         <!-- 과정 커리큘럼 -->
         <section class="tab-panel" data-tab="programs" hidden>
-          <h2>과정 커리큘럼</h2>
+          <h2>과정 커리큘럼 <button class="csv-export" type="button" data-target="#program-tbody" data-name="과정커리큘럼">CSV 내보내기</button></h2>
           <form id="program-form" class="entry-form">
             <div class="grid">
               <label>과정명<input name="name" required /></label>
@@ -176,7 +176,7 @@
 
         <!-- 강의실 관리 -->
         <section class="tab-panel" data-tab="rooms" hidden>
-          <h2>강의실 관리</h2>
+          <h2>강의실 관리 <button class="csv-export" type="button" data-target="#room-tbody" data-name="강의실">CSV 내보내기</button></h2>
           <form id="room-form" class="entry-form">
             <div class="grid">
               <label>강의실명<input name="name" required /></label>
@@ -199,7 +199,7 @@
 
         <!-- 강사 관리 -->
         <section class="tab-panel" data-tab="instructors" hidden>
-          <h2>강사 관리</h2>
+          <h2>강사 관리 <button class="csv-export" type="button" data-target="#instructor-tbody" data-name="강사목록">CSV 내보내기</button></h2>
           <p class="notice">※ 강사 정보는 관리자 전용으로만 저장됩니다. 강사 외 개인정보(교육생·설문 응답)는 처리하지 않습니다.</p>
           <form id="instructor-form" class="entry-form">
             <div class="grid">
@@ -228,7 +228,7 @@
 
         <!-- 강사료·집계 -->
         <section class="tab-panel" data-tab="payroll" hidden>
-          <h2>강사료·강의시간 집계</h2>
+          <h2>강사료·강의시간 집계 <button class="csv-export" type="button" data-target="#pay-tbody" data-name="강사료집계">CSV 내보내기</button></h2>
           <div class="load-row">
             <label>기간구분
               <select id="pay-period-type">
@@ -278,15 +278,18 @@
           </div>
           <p class="hint">5점 척도를 100점으로 환산해 표시합니다. 관리자 전용 화면이라 실제 값을 공개하며, 각 셀의 응답 수(n)를 함께 표시합니다. 과정유형은 차수에 연결된 커리큘럼 구분을 따릅니다. (외부 공개·내보내기 산출물에는 소표본 마스킹이 별도 적용됩니다)</p>
 
-          <h3>교육 만족도 (과정유형 × 항목, 100점)</h3>
+          <h3>교육 만족도 (과정유형 × 항목, 100점) <button class="csv-export" type="button" data-target="#rep-edu" data-name="설문_교육만족도">CSV 내보내기</button></h3>
           <div class="table-wrap" id="rep-edu"></div>
 
-          <h3>강사 만족도 (교관유형 × 강사·과목, 100점)</h3>
+          <h3>강사 만족도 (교관유형 × 강사·과목, 100점) <button class="csv-export" type="button" data-target="#rep-inst" data-name="설문_강사만족도">CSV 내보내기</button></h3>
           <div class="table-wrap" id="rep-inst"></div>
 
           <h3>설문 원응답 (개별 익명 응답)</h3>
           <p class="hint">개별 응답 원자료입니다. 완전 익명이라 개인 식별정보는 포함되지 않습니다. 교1~교6은 교육만족도 6문항 점수(5점)입니다. <b>원응답 보기</b>를 눌러야 표시됩니다.</p>
-          <div class="form-actions"><button id="rep-raw-btn" type="button">원응답 보기</button></div>
+          <div class="form-actions">
+            <button id="rep-raw-btn" type="button">원응답 보기</button>
+            <button class="csv-export" type="button" data-target="#rep-raw" data-name="설문_원응답">CSV 내보내기</button>
+          </div>
           <div class="table-wrap" id="rep-raw"></div>
         </section>
 
@@ -303,7 +306,7 @@
             <button id="cat-save" type="button">분류 항목 저장</button>
           </div>
 
-          <h3>원문 조회 · 분류</h3>
+          <h3>원문 조회 · 분류 <button class="csv-export" type="button" data-target="#ft-list" data-name="주관식원문">CSV 내보내기</button></h3>
           <div class="load-row">
             <label>기간 <input id="ft-month" type="month" /></label>
             <label>종류
