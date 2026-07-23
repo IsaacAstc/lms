@@ -1,0 +1,8 @@
+# 실제 Firebase 키는 커밋하지 않는다 (public repo)
+js/firebase-config.js
+
+# OS/에디터
+.DS_Store
+*.swp
+.vscode/
+.idea/
