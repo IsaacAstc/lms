@@ -117,21 +117,44 @@ async function submit(e, survey) {
     instructors.push(rec);
   });
 
+  const payload = {
+    courseId: survey.courseId,
+    courseType: survey.courseType || "",
+    roomId: survey.roomId,
+    collectedDate: kstToday(),
+    edu,
+    instructors,
+    freeDissatisfied: form.free_dissatisfied.value.trim(),
+    freeSuggestion: form.free_suggestion.value.trim(),
+  };
+  // 제출 전 한 번 더 확인.
+  confirmSubmit(() => doSubmit(payload, survey));
+}
+
+// 확인 오버레이: 뒤로(수정) / 확인(제출).
+function confirmSubmit(onConfirm) {
+  const ov = document.createElement("div");
+  ov.className = "confirm-overlay";
+  ov.innerHTML = `
+    <div class="confirm-box">
+      <p>응답을 제출하시겠습니까?<br>제출 후에는 수정할 수 없습니다.</p>
+      <div class="confirm-actions">
+        <button type="button" class="c-back">뒤로(수정)</button>
+        <button type="button" class="c-ok">확인(제출)</button>
+      </div>
+    </div>`;
+  ov.querySelector(".c-back").addEventListener("click", () => ov.remove());
+  ov.querySelector(".c-ok").addEventListener("click", () => { ov.remove(); onConfirm(); });
+  document.body.appendChild(ov);
+}
+
+async function doSubmit(payload, survey) {
+  const err = document.getElementById("s-error");
   const submitBtn = document.getElementById("s-submit");
   submitBtn.disabled = true;
   try {
     const expireAt = Timestamp.fromDate(new Date(Date.now() + 180 * 24 * 3600 * 1000));
-    await addDoc(collection(db, "surveyResponses"), {
-      courseId: survey.courseId,
-      courseType: survey.courseType || "",
-      roomId: survey.roomId,
-      collectedDate: kstToday(),
-      edu,
-      instructors,
-      freeDissatisfied: form.free_dissatisfied.value.trim(),
-      freeSuggestion: form.free_suggestion.value.trim(),
-      expireAt,
-    });
+    await addDoc(collection(db, "surveyResponses"), { ...payload, expireAt });
     localStorage.setItem(`survey_done_${survey.courseId}`, "1");
     msg(`<p class="empty">응답이 제출되었습니다. 참여해 주셔서 감사합니다.</p>`);
   } catch (e2) {
