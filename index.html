@@ -40,6 +40,7 @@
         <button class="tab-btn" data-tab="surveys" type="button">설문 관리</button>
         <button class="tab-btn" data-tab="reports" type="button">설문 집계</button>
         <button class="tab-btn" data-tab="stats" type="button">통계</button>
+        <button class="tab-btn" data-tab="reportdoc" type="button">운영 보고서</button>
         <button class="tab-btn" data-tab="freetext" type="button">주관식 원문</button>
         <button class="tab-btn" data-tab="settings" type="button">기준값 설정</button>
         <button class="tab-btn" data-tab="data" type="button">데이터</button>
@@ -340,6 +341,19 @@
             <button id="cmp-run" type="button">조회</button>
           </div>
           <div class="table-wrap" id="stat-cmp"></div>
+        </section>
+
+        <!-- 운영 결과 보고서 -->
+        <section class="tab-panel" data-tab="reportdoc" hidden>
+          <h2>운영 결과 보고서</h2>
+          <div class="load-row no-print">
+            <label>월 <input id="rd-month" type="month" /></label>
+            <button id="rd-run" type="button">보고서 생성</button>
+            <button id="rd-print" type="button">인쇄(PDF)</button>
+            <button class="csv-export" type="button" data-target="#rd-doc" data-name="운영결과보고서">CSV 내보내기</button>
+          </div>
+          <p class="hint no-print">선택한 월의 설문 집계·주관식·운영현황·소요경비를 운영 결과 보고서 양식으로 조립합니다. 설문 원문이 파기된 달은 집계 스냅샷으로 표시됩니다.</p>
+          <div id="rd-doc" class="report-doc"><p class="empty">월을 선택하고 ‘보고서 생성’을 누르세요.</p></div>
         </section>
 
         <!-- 주관식 원문 관리 -->
