@@ -11,6 +11,7 @@ import { initSurveys } from "./surveys.js";
 import { initReports } from "./reports.js";
 import { initFreetext } from "./freetext.js";
 import { initDataAdmin } from "./data-admin.js";
+import { initExportButtons } from "./export-csv.js";
 import { initSeed } from "./seed.js";
 
 // 공용 유틸: HTML 이스케이프 (XSS 방지).
@@ -58,6 +59,7 @@ function initApp() {
   initReports();
   initFreetext();
   initDataAdmin();
+  initExportButtons();
   initSeed();
 }
 
