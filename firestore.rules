@@ -1,0 +1,67 @@
+rules_version = '2';
+
+// 항공보안 교육 운영관리 시스템 보안규칙.
+// 수동 배포용. Firebase 콘솔 또는 `firebase deploy --only firestore:rules` 로 반영.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 관리자(인증된 사용자) 여부.
+    function isAdmin() {
+      return request.auth != null;
+    }
+
+    // 과정·차수 마스터: 읽기·쓰기 모두 관리자 전용.
+    match /courses/{courseId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 강의 시간표: 읽기·쓰기 모두 관리자 전용.
+    match /sessions/{sessionId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 강의실 마스터: 관리자 전용.
+    match /rooms/{roomId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 강사 마스터(개인정보 예외 — 강사에 한함): 관리자 전용, 공개 금지.
+    match /instructors/{instructorId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 과정 커리큘럼 마스터: 관리자 전용.
+    match /programs/{programId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 기준값 설정(강사료·여비): 관리자 전용.
+    match /settings/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // --- 이하 컬렉션은 후속 단계(설문)에서 사용. 6절 요건 선반영 ---
+
+    // 설문 응답: create 만 공개 허용, 나머지는 관리자 전용.
+    // create 시 expireAt = 수집일 + 180일 검증(클라이언트 조작 방지).
+    match /surveyResponses/{responseId} {
+      allow create: if request.resource.data.expireAt
+        == request.time + duration.value(180, 'd');
+      allow read, update, delete: if isAdmin();
+    }
+
+    // 집계 데이터: 쓰기는 관리자만. 읽기 범위는 후속 단계에서 최소화 조정.
+    match /surveyAggregates/{aggregateId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // 1회용 토큰: 사용 처리(update) 외 읽기 금지.
+    match /surveyTokens/{tokenId} {
+      allow read: if false;
+      allow update: if request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly(['used']);
+      allow create, delete: if isAdmin();
+    }
+  }
+}

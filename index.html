@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>항공보안 교육 운영관리 시스템</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <!-- 로그인 화면 -->
+    <section id="login-view" class="login-view">
+      <form id="login-form" class="login-box">
+        <h1>교육 운영관리 시스템</h1>
+        <p class="subtitle">관리자 로그인</p>
+        <label>이메일<input type="email" name="email" required autocomplete="username" /></label>
+        <label>비밀번호<input type="password" name="password" required autocomplete="current-password" /></label>
+        <button type="submit">로그인</button>
+        <p id="login-error" class="error"></p>
+      </form>
+    </section>
+
+    <!-- 앱 셸 -->
+    <div id="app-view" hidden>
+      <header class="topbar">
+        <h1>항공보안 교육 운영관리</h1>
+        <div class="user-box">
+          <span id="user-email"></span>
+          <button id="logout-btn" type="button">로그아웃</button>
+        </div>
+      </header>
+
+      <nav class="tabs">
+        <button class="tab-btn" data-tab="courses" type="button">차수(운영) 관리</button>
+        <button class="tab-btn" data-tab="sessions" type="button">강의 시간표</button>
+        <button class="tab-btn" data-tab="programs" type="button">과정 커리큘럼</button>
+        <button class="tab-btn" data-tab="rooms" type="button">강의실 관리</button>
+        <button class="tab-btn" data-tab="instructors" type="button">강사 관리</button>
+        <button class="tab-btn" data-tab="payroll" type="button">강사료·집계</button>
+        <button class="tab-btn" data-tab="settings" type="button">기준값 설정</button>
+        <button class="tab-btn" data-tab="data" type="button">데이터</button>
+      </nav>
+
+      <main>
+        <!-- 차수(운영) 관리 -->
+        <section class="tab-panel" data-tab="courses">
+          <h2>차수(운영) 관리</h2>
+          <form id="course-form" class="entry-form">
+            <div class="grid">
+              <label>과정코드<input name="code" required /></label>
+              <label>과정명<input name="name" list="course-name-list" placeholder="커리큘럼에서 선택 또는 입력" required /></label>
+              <label>차수<input name="round" type="number" min="1" required /></label>
+              <label>정원<input name="capacity" type="number" min="1" required /></label>
+              <label>교육시작일<input name="startDate" type="date" required /></label>
+              <label>교육종료일<input name="endDate" type="date" required /></label>
+              <label>교육장<input name="venue" /></label>
+              <label>커리큘럼 연결<select name="programId"></select></label>
+            </div>
+            <datalist id="course-name-list"></datalist>
+            <div class="form-actions">
+              <button id="course-submit" type="submit">등록</button>
+              <button id="course-cancel" type="button" hidden>취소</button>
+            </div>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>과정코드</th><th>과정명</th><th>차수</th><th>정원</th>
+                  <th>시작일</th><th>종료일</th><th>교육장</th><th>커리큘럼</th><th>관리</th>
+                </tr>
+              </thead>
+              <tbody id="course-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 강의 시간표 -->
+        <section class="tab-panel" data-tab="sessions" hidden>
+          <h2>강의 시간표</h2>
+          <label class="course-picker">
+            대상 과정(차수)
+            <select id="session-course">
+              <option value="">과정을 선택하세요</option>
+            </select>
+          </label>
+
+          <fieldset class="load-box">
+            <legend>커리큘럼 불러오기</legend>
+            <div class="load-row">
+              <select id="load-program"><option value="">커리큘럼 선택</option></select>
+              <label>1일차 기준일 <input id="load-basedate" type="date" /></label>
+              <button id="load-btn" type="button">불러오기</button>
+            </div>
+            <p class="hint">선택 커리큘럼의 과목을 시간표로 일괄 생성합니다. 이후 강의실·강사를 개별 지정하세요.</p>
+          </fieldset>
+
+          <form id="session-form" class="entry-form">
+            <div class="grid">
+              <label>일자<input name="date" type="date" required /></label>
+              <label>과목<input name="subject" list="session-subject-list" required /></label>
+              <label>시작시각<select name="startTime" required></select></label>
+              <label>종료시각<select name="endTime" required></select></label>
+              <label>강의실<select name="room" required></select></label>
+              <label>강사(마스터)<input name="instructor" list="session-instructor-list" placeholder="강사명 검색" /></label>
+            </div>
+            <div class="form-actions">
+              <button id="session-submit" type="submit">등록</button>
+              <button id="session-cancel" type="button" hidden>취소</button>
+            </div>
+          </form>
+          <datalist id="session-subject-list"></datalist>
+          <datalist id="session-instructor-list"></datalist>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>일자</th><th>시간</th><th>과목</th>
+                  <th>강의실</th><th>강사</th><th>교관유형</th><th>관리</th>
+                </tr>
+              </thead>
+              <tbody id="session-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 과정 커리큘럼 -->
+        <section class="tab-panel" data-tab="programs" hidden>
+          <h2>과정 커리큘럼</h2>
+          <form id="program-form" class="entry-form">
+            <div class="grid">
+              <label>과정명<input name="name" required /></label>
+              <label>구분<input name="category" placeholder="초기/정기/특별 등" /></label>
+              <label>총 일수<input name="totalDays" type="number" min="1" /></label>
+              <label>총 시간<input name="totalHours" type="number" min="1" /></label>
+              <label>비고<input name="note" /></label>
+            </div>
+            <fieldset class="subj-box">
+              <legend>과목 추가</legend>
+              <div class="load-row">
+                <label>일차<input id="subj-day" type="number" min="1" value="1" style="width:70px" /></label>
+                <label>과목명<input id="subj-name" /></label>
+                <label>시작<select id="subj-start"></select></label>
+                <label>종료<select id="subj-end"></select></label>
+                <label>교관<select id="subj-kind"></select></label>
+                <label>교육내용<input id="subj-content" /></label>
+                <button id="subject-add" type="button">과목 추가</button>
+              </div>
+              <div id="subject-draft" class="table-wrap"></div>
+            </fieldset>
+            <div class="form-actions">
+              <button id="program-submit" type="submit">등록</button>
+              <button id="program-cancel" type="button" hidden>취소</button>
+            </div>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>과정명</th><th>구분</th><th>일수</th><th>과목수</th><th>관리</th></tr></thead>
+              <tbody id="program-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 강의실 관리 -->
+        <section class="tab-panel" data-tab="rooms" hidden>
+          <h2>강의실 관리</h2>
+          <form id="room-form" class="entry-form">
+            <div class="grid">
+              <label>강의실명<input name="name" required /></label>
+              <label>정원<input name="capacity" type="number" min="0" /></label>
+              <label>표시순서<input name="order" type="number" /></label>
+              <label>비고<input name="note" /></label>
+            </div>
+            <div class="form-actions">
+              <button id="room-submit" type="submit">등록</button>
+              <button id="room-cancel" type="button" hidden>취소</button>
+            </div>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>순서</th><th>강의실명</th><th>정원</th><th>비고</th><th>관리</th></tr></thead>
+              <tbody id="room-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 강사 관리 -->
+        <section class="tab-panel" data-tab="instructors" hidden>
+          <h2>강사 관리</h2>
+          <p class="notice">※ 강사 정보는 관리자 전용으로만 저장됩니다. 강사 외 개인정보(교육생·설문 응답)는 처리하지 않습니다.</p>
+          <form id="instructor-form" class="entry-form">
+            <div class="grid">
+              <label>강사명<input name="name" required /></label>
+              <label>소속<input name="affiliation" /></label>
+              <label>강사유형<select name="instructorType" required><option value="">선택</option></select></label>
+              <label>여비기준<input name="travelBasis" list="travel-basis-list" /></label>
+              <label>직책<input name="position" /></label>
+              <label>경력(년)<input name="careerYears" type="number" min="0" /></label>
+              <label>경력산정상세<input name="careerDetail" /></label>
+            </div>
+            <div class="form-actions">
+              <button id="instructor-submit" type="submit">등록</button>
+              <button id="instructor-cancel" type="button" hidden>취소</button>
+            </div>
+          </form>
+          <datalist id="travel-basis-list"></datalist>
+          <label class="course-picker">검색 <input id="instructor-search" placeholder="강사명·소속·유형·직책" /></label>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>강사명</th><th>소속</th><th>강사유형</th><th>여비기준</th><th>직책</th><th>경력</th><th>관리</th></tr></thead>
+              <tbody id="instructor-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 강사료·집계 -->
+        <section class="tab-panel" data-tab="payroll" hidden>
+          <h2>강사료·강의시간 집계</h2>
+          <div class="load-row">
+            <label>기간구분
+              <select id="pay-period-type">
+                <option value="month">월별</option>
+                <option value="year">연간</option>
+              </select>
+            </label>
+            <label>기간 <input id="pay-period" type="month" /></label>
+            <button id="pay-run" type="button">집계</button>
+          </div>
+          <p class="hint">강사료는 강사유형별 기준·월상한을 적용해 계산됩니다. 강사 미지정 시간표는 집계에서 제외됩니다.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>강사명</th><th>강사유형</th><th>출강일수</th><th>강의시간</th><th>강사료</th><th>여비</th><th>합계</th></tr></thead>
+              <tbody id="pay-tbody"></tbody>
+            </table>
+          </div>
+          <p id="pay-total" class="total-line"></p>
+        </section>
+
+        <!-- 기준값 설정 -->
+        <section class="tab-panel" data-tab="settings" hidden>
+          <h2>기준값 설정</h2>
+          <h3>강사료 기준 (강사유형별)</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>강사유형</th><th>최초1시간(원)</th><th>추가1시간(원)</th><th>월상한(원, 빈칸=무제한)</th></tr></thead>
+              <tbody id="fee-tbody"></tbody>
+            </table>
+          </div>
+          <div class="form-actions"><button id="fee-save" type="button">강사료 기준 저장</button></div>
+
+          <h3>여비 기준 (소속지별)</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>소속지/기준</th><th>금액(원)</th><th>수동입력</th><th>비고</th></tr></thead>
+              <tbody id="travel-tbody"></tbody>
+            </table>
+          </div>
+          <div class="form-actions"><button id="travel-save" type="button">여비 기준 저장</button></div>
+        </section>
+
+        <!-- 데이터(초기 시드) -->
+        <section class="tab-panel" data-tab="data" hidden>
+          <h2>초기 데이터</h2>
+          <p class="hint">첨부 자료 기반 초기 데이터(강의실 7개, 강사 51명, 과정 커리큘럼 24개, 강사료·여비 기준)를 일괄 등록합니다. 이미 있는 항목은 건너뜁니다.</p>
+          <div class="form-actions"><button id="seed-btn" type="button">초기 데이터 시드 실행</button></div>
+          <pre id="seed-log" class="seed-log"></pre>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
