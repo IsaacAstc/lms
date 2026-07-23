@@ -11,7 +11,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
-import { onProgramsChange, getProgramById } from "./programs.js";
+import { onProgramsChange, getProgramById, getPrograms } from "./programs.js";
 
 const coursesCol = collection(db, "courses");
 let unsub = null;
@@ -54,16 +54,27 @@ export function initCourses() {
 
   cancelBtn.addEventListener("click", () => resetForm(form, submitBtn, cancelBtn));
 
-  // 커리큘럼(과정 마스터) 연결 드롭다운.
+  // 커리큘럼(과정 마스터) 연결 드롭다운 + 과정명 datalist.
   onProgramsChange((programs) => {
     const prev = form.programId.value;
     form.programId.innerHTML = `<option value="">(연결 안 함)</option>`;
+    const nameList = document.getElementById("course-name-list");
+    nameList.innerHTML = "";
     for (const p of programs) {
       const o = document.createElement("option");
       o.value = p.id; o.textContent = p.name;
       form.programId.appendChild(o);
+      const dopt = document.createElement("option");
+      dopt.value = p.name;
+      nameList.appendChild(dopt);
     }
     form.programId.value = prev;
+  });
+
+  // 과정명을 커리큘럼에서 선택하면 커리큘럼 연결을 자동 설정(이후 과정명 수정 가능).
+  form.name.addEventListener("input", () => {
+    const match = getPrograms().find((p) => p.name === form.name.value.trim());
+    if (match) form.programId.value = match.id;
   });
 
   // 실시간 목록.

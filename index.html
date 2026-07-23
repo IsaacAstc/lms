@@ -47,7 +47,7 @@
           <form id="course-form" class="entry-form">
             <div class="grid">
               <label>과정코드<input name="code" required /></label>
-              <label>과정명<input name="name" required /></label>
+              <label>과정명<input name="name" list="course-name-list" placeholder="커리큘럼에서 선택 또는 입력" required /></label>
               <label>차수<input name="round" type="number" min="1" required /></label>
               <label>정원<input name="capacity" type="number" min="1" required /></label>
               <label>교육시작일<input name="startDate" type="date" required /></label>
@@ -55,6 +55,7 @@
               <label>교육장<input name="venue" /></label>
               <label>커리큘럼 연결<select name="programId"></select></label>
             </div>
+            <datalist id="course-name-list"></datalist>
             <div class="form-actions">
               <button id="course-submit" type="submit">등록</button>
               <button id="course-cancel" type="button" hidden>취소</button>
