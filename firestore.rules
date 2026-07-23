@@ -5,9 +5,15 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 관리자(인증된 사용자) 여부.
+    // 관리자 판정: 허용 이메일 목록에 있는 로그인 사용자만.
+    // (공개 apiKey로 임의 회원가입한 계정이 관리자 권한을 얻는 것을 방지)
+    // 관리자 추가: 아래 배열에 이메일을 넣고 규칙을 다시 게시.
+    function adminEmails() {
+      return ['isaac@airport.co.kr'];
+    }
     function isAdmin() {
-      return request.auth != null;
+      return request.auth != null
+        && request.auth.token.email in adminEmails();
     }
 
     // 과정·차수 마스터: 읽기·쓰기 모두 관리자 전용.
