@@ -121,7 +121,8 @@ async function submit(e, survey) {
     courseId: survey.courseId,
     courseType: survey.courseType || "",
     roomId: survey.roomId,
-    collectedDate: kstToday(),
+    collectedDate: kstToday(),       // 일 단위(기간 조회·파기용)
+    collectedAt: fmtKst(Date.now()), // 수집 일시(표시용, KST 'YYYY-MM-DD HH:MM')
     edu,
     instructors,
     freeDissatisfied: form.free_dissatisfied.value.trim(),
