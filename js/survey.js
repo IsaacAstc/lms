@@ -6,7 +6,8 @@ import {
 import { db } from "./firebase.js";
 import { fmtKst, kstToday } from "./time.js";
 
-const SCALE_LABELS = ["1 매우 아니다", "2 아니다", "3 보통", "4 그렇다", "5 매우 그렇다"];
+// 5점 척도 설명(2·4점은 설명 없이 숫자만).
+const SCALE_DESC = ["매우 불만족", "", "보통", "", "매우 만족"];
 const root = document.getElementById("survey-root");
 
 function esc(v) {
@@ -52,9 +53,10 @@ async function main() {
 }
 
 function ratingRow(name, label) {
-  const opts = SCALE_LABELS.map(
-    (t, i) => `<label class="scale"><input type="radio" name="${name}" value="${i + 1}" required><span>${esc(t)}</span></label>`
-  ).join("");
+  const opts = SCALE_DESC.map((desc, i) => {
+    const txt = desc ? `${i + 1} ${desc}` : `${i + 1}`;
+    return `<label class="scale"><input type="radio" name="${name}" value="${i + 1}" required><span>${esc(txt)}</span></label>`;
+  }).join("");
   return `<div class="q-item"><div class="q-label">${esc(label)}</div><div class="scale-row">${opts}</div></div>`;
 }
 
