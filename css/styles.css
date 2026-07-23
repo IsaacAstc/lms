@@ -200,6 +200,8 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .raw-free { max-width: 320px; white-space: pre-wrap; }
 .csv-export { font-size: 0.72rem; padding: 0.25rem 0.6rem; background: #4a8f6d; margin-left: 0.5rem; vertical-align: middle; }
 .csv-export:hover { background: #3d795c; }
+.stat-bar { display: inline-block; vertical-align: middle; width: 90px; height: 9px; background: #e6ebf1; border-radius: 5px; overflow: hidden; margin-left: 0.3rem; }
+.stat-bar span { display: block; height: 100%; background: var(--primary); }
 #rep-edu td, #rep-inst td, #rep-edu th, #rep-inst th { text-align: center; }
 #rep-edu td:first-child, #rep-inst td:nth-child(-n+3) { text-align: left; }
 
