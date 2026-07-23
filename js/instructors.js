@@ -2,7 +2,7 @@
 import { watchCollection, onCollection, addItem, updateItem, removeItem, getCache } from "./store.js";
 import { escapeHtml } from "./app.js";
 import { INSTRUCTOR_TYPES } from "./constants.js";
-import { getTravelRates } from "./settings.js";
+import { getTravelRates, getFeeRates } from "./settings.js";
 
 let editingId = null;
 
@@ -24,12 +24,19 @@ export function initInstructors() {
   const cancelBtn = document.getElementById("instructor-cancel");
   const search = document.getElementById("instructor-search");
 
-  // 강사유형 드롭다운.
-  for (const t of INSTRUCTOR_TYPES) {
-    const o = document.createElement("option");
-    o.value = t; o.textContent = t;
-    form.instructorType.appendChild(o);
-  }
+  // 강사유형 드롭다운(강사료 기준 키 기반, 없으면 기본 9종). 설정 변경 시 갱신.
+  const refreshTypeList = () => {
+    const keys = Object.keys(getFeeRates());
+    const types = keys.length ? keys : INSTRUCTOR_TYPES;
+    const prev = form.instructorType.value;
+    form.instructorType.innerHTML = `<option value="">선택</option>`;
+    for (const t of types) {
+      const o = document.createElement("option");
+      o.value = t; o.textContent = t;
+      form.instructorType.appendChild(o);
+    }
+    if (prev) form.instructorType.value = prev;
+  };
   // 여비기준 datalist (설정값 기반).
   const refreshTravelList = () => {
     const dl = document.getElementById("travel-basis-list");
@@ -40,7 +47,7 @@ export function initInstructors() {
       dl.appendChild(o);
     }
   };
-  onCollection("settings", refreshTravelList);
+  onCollection("settings", () => { refreshTypeList(); refreshTravelList(); });
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
