@@ -46,6 +46,11 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // 소요경비(월별): 관리자 전용.
+    match /expenses/{docId} {
+      allow read, write: if isAdmin();
+    }
+
     // 공개 설문 정의: 누구나 읽기(응답 페이지 렌더), 쓰기는 관리자만.
     match /publicSurveys/{courseId} {
       allow read: if true;

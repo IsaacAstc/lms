@@ -7,6 +7,7 @@ import { initInstructors } from "./instructors.js";
 import { initPrograms } from "./programs.js";
 import { initSettings } from "./settings.js";
 import { initPayroll } from "./payroll.js";
+import { initExpenses } from "./expenses.js";
 import { initSurveys } from "./surveys.js";
 import { initReports } from "./reports.js";
 import { initStats } from "./stats.js";
@@ -56,6 +57,7 @@ function initApp() {
   initCourses();
   initSessions();
   initPayroll();
+  initExpenses();
   initSurveys();
   initReports();
   initStats();
