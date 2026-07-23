@@ -11,6 +11,7 @@ import { initExpenses } from "./expenses.js";
 import { initSurveys } from "./surveys.js";
 import { initReports } from "./reports.js";
 import { initStats } from "./stats.js";
+import { initReportDoc } from "./report-doc.js";
 import { initFreetext } from "./freetext.js";
 import { initDataAdmin } from "./data-admin.js";
 import { initExportButtons } from "./export-csv.js";
@@ -61,6 +62,7 @@ function initApp() {
   initSurveys();
   initReports();
   initStats();
+  initReportDoc();
   initFreetext();
   initDataAdmin();
   initExportButtons();
