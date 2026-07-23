@@ -243,20 +243,26 @@
           <h3>강사료 기준 (강사유형별)</h3>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>강사유형</th><th>최초1시간(원)</th><th>추가1시간(원)</th><th>월상한(원, 빈칸=무제한)</th></tr></thead>
+              <thead><tr><th>강사유형</th><th>최초1시간(원)</th><th>추가1시간(원)</th><th>월상한(원, 빈칸=무제한)</th><th>관리</th></tr></thead>
               <tbody id="fee-tbody"></tbody>
             </table>
           </div>
-          <div class="form-actions"><button id="fee-save" type="button">강사료 기준 저장</button></div>
+          <div class="form-actions">
+            <button id="fee-add" type="button">행 추가</button>
+            <button id="fee-save" type="button">강사료 기준 저장</button>
+          </div>
 
           <h3>여비 기준 (소속지별)</h3>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>소속지/기준</th><th>금액(원)</th><th>수동입력</th><th>비고</th></tr></thead>
+              <thead><tr><th>소속지/기준</th><th>금액(원)</th><th>수동입력</th><th>비고</th><th>관리</th></tr></thead>
               <tbody id="travel-tbody"></tbody>
             </table>
           </div>
-          <div class="form-actions"><button id="travel-save" type="button">여비 기준 저장</button></div>
+          <div class="form-actions">
+            <button id="travel-add" type="button">행 추가</button>
+            <button id="travel-save" type="button">여비 기준 저장</button>
+          </div>
         </section>
 
         <!-- 데이터(초기 시드) -->

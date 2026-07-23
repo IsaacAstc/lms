@@ -7,13 +7,13 @@ import { getInstructors, getInstructorById } from "./instructors.js";
 
 // ── 순수 계산 함수 (엑셀 '계산' 시트 로직) ──
 
-// 교시(50분) 단위 강의시간. 예: 10:00~11:50 → 2, 13:00~16:50 → 4.
+// 강의시간(시간). 진행시간을 60분 단위로 올림(50분→1시간).
+// 예: 10:00~10:50 → 1, 10:00~11:50 → 2, 10:00~12:50 → 3.
 export function calcHour(startTime, endTime) {
   if (!startTime || !endTime) return 0;
-  const sh = parseInt(startTime.slice(0, 2), 10);
-  const eh = parseInt(endTime.slice(0, 2), 10);
-  const h = eh - sh + 1;
-  return h > 0 ? h : 0;
+  const toMin = (t) => parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(3, 5), 10);
+  const diff = toMin(endTime) - toMin(startTime);
+  return diff > 0 ? Math.ceil(diff / 60) : 0;
 }
 
 // 강사료 = 최초1시간 + 추가1시간 × (Hour-1). 기준 없으면 0.
