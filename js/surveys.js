@@ -1,6 +1,6 @@
 // 관리자 설문 관리: 생성된 공개 설문 목록·노출창·응답수·강의실 URL·미리보기·재생성·삭제.
 import {
-  collection, getDocs, query, where, doc, deleteDoc,
+  collection, getCountFromServer, query, where, doc, deleteDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { watchCollection, onCollection, getCache } from "./store.js";
@@ -79,8 +79,8 @@ async function loadCounts() {
   for (const cell of cells) {
     const courseId = cell.dataset.course;
     try {
-      const snap = await getDocs(query(collection(db, "surveyResponses"), where("courseId", "==", courseId)));
-      cell.textContent = String(snap.size);
+      const snap = await getCountFromServer(query(collection(db, "surveyResponses"), where("courseId", "==", courseId)));
+      cell.textContent = String(snap.data().count);
     } catch (e) { cell.textContent = "?"; }
   }
 }
