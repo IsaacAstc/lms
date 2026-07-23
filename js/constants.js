@@ -42,5 +42,6 @@ function buildTimes(startHour, startMin, endHour, endMin, stepMin) {
   return times;
 }
 
-export const START_TIMES = buildTimes(9, 0, 17, 0, 10);
-export const END_TIMES = buildTimes(9, 50, 17, 50, 10);
+// 시작·종료 시각 모두 09:00 ~ 18:00 (10분 간격). 종료 > 시작 검증은 별도.
+export const START_TIMES = buildTimes(9, 0, 18, 0, 10);
+export const END_TIMES = buildTimes(9, 0, 18, 0, 10);
