@@ -12,6 +12,7 @@ import {
 import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import { onProgramsChange, getProgramById, getPrograms } from "./programs.js";
+import { onRoomsChange, getRooms } from "./rooms.js";
 
 const coursesCol = collection(db, "courses");
 let unsub = null;
@@ -69,6 +70,18 @@ export function initCourses() {
       nameList.appendChild(dopt);
     }
     form.programId.value = prev;
+  });
+
+  // 교육장 드롭다운(강의실 마스터 기반).
+  onRoomsChange(() => {
+    const prev = form.venue.value;
+    form.venue.innerHTML = `<option value="">선택</option>`;
+    for (const r of getRooms()) {
+      const o = document.createElement("option");
+      o.value = r.name; o.textContent = r.name;
+      form.venue.appendChild(o);
+    }
+    form.venue.value = prev;
   });
 
   // 과정명을 커리큘럼에서 선택하면 커리큘럼 연결을 자동 설정(이후 과정명 수정 가능).
