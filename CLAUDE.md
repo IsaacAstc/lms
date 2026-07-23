@@ -103,10 +103,11 @@ surveyTokens/{tokenId}          // 1회용, 사용여부만
 - `courses`, `sessions`: 읽기는 관리자만, 쓰기는 관리자만.
 - `surveyTokens`: 토큰 사용 처리 외 읽기 금지.
 
-## 7. 파기 처리
-- Firestore TTL 정책을 `surveyResponses.expireAt`에 설정.
-- TTL 삭제는 만료 후 즉시가 아니며 지연될 수 있음 → 관리자 페이지에 "만료 원문 일괄 삭제" 수동 버튼 병행.
-- 삭제 이행 여부 분기 1회 점검 절차를 관리자 화면에 체크리스트로 제공.
+## 7. 파기 처리 (운영 협의 반영 — 자동 TTL → 수동 범위 파기 + 모니터링)
+- 설문 응답은 완전 익명이라 보존기간은 용량 문제라기보다 원문 최소화 정책. 자동 TTL 대신 **관리자 수동 파기**로 운영한다.
+- **원문 현황 모니터링**: `데이터 관리` 탭에서 `surveyResponses` 문서 수를 count 집계로 저비용 측정, 설정 임계값(`settings/dataPolicy.rawThreshold`, 기본 100,000건) 대비 경고 표시.
+- **수동 범위 파기**: 수집일 범위를 지정해 원문 삭제. **삭제 전 월별 집계 스냅샷을 `surveyAggregates/{YYYY-MM}`에 저장**(합산 가능한 sum/count 구조)하므로 집계·보고서는 원문 파기 후에도 조회 가능(대시보드가 원문 없으면 스냅샷으로 렌더).
+- `surveyResponses.expireAt`는 유지(향후 Firestore TTL 병행 시 사용 가능).
 
 ## 8. 구현 지침
 - ES modules 사용. Firebase는 CDN modular SDK v10.
