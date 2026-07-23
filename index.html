@@ -316,9 +316,29 @@
           </div>
         </section>
 
-        <!-- 데이터(초기 시드) -->
+        <!-- 데이터 관리 -->
         <section class="tab-panel" data-tab="data" hidden>
-          <h2>초기 데이터</h2>
+          <h2>데이터 관리</h2>
+
+          <h3>원문 현황 (누적량 모니터링)</h3>
+          <p class="hint">설문 원문 문서 수를 저비용(count)으로 측정해 임계값 대비 현황을 표시합니다. 실제 Firebase 사용량과는 별개의 추정 지표입니다.</p>
+          <div class="load-row">
+            <label>경고 임계값(건) <input id="threshold-input" type="number" min="1" /></label>
+            <button id="threshold-save" type="button">임계값 저장</button>
+            <button id="raw-refresh" type="button">현황 새로고침</button>
+          </div>
+          <p id="raw-status" class="total-line"></p>
+
+          <h3>원문 파기 (수집일 범위)</h3>
+          <p class="hint">지정한 수집일 범위의 설문 원문을 삭제합니다. <b>삭제 전 월별 집계 스냅샷을 저장</b>하므로 집계·보고서는 이후에도 조회할 수 있습니다(주관식 원문만 사라짐). 되돌릴 수 없습니다.</p>
+          <div class="load-row">
+            <label>시작일 <input id="purge-start" type="date" /></label>
+            <label>종료일 <input id="purge-end" type="date" /></label>
+            <button id="purge-btn" type="button">집계 스냅샷 저장 후 원문 파기</button>
+          </div>
+          <pre id="purge-log" class="seed-log"></pre>
+
+          <h3>초기 데이터</h3>
           <p class="hint">첨부 자료 기반 초기 데이터(강의실 7개, 강사 51명, 과정 커리큘럼 24개, 강사료·여비 기준)를 일괄 등록합니다. 이미 있는 항목은 건너뜁니다.</p>
           <div class="form-actions"><button id="seed-btn" type="button">초기 데이터 시드 실행</button></div>
           <pre id="seed-log" class="seed-log"></pre>
