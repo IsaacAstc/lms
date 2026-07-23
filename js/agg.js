@@ -10,6 +10,7 @@ export { EDU_ITEMS, INSTRUCTOR_ITEMS };
 
 function courseTypeOf(id) {
   const c = coursesCache.find((x) => x.id === id);
+  if (c?.courseType) return c.courseType; // 차수에 지정된 과정유형 우선.
   const prog = c?.programId ? getProgramById(c.programId) : null;
   return prog?.category || "미분류";
 }

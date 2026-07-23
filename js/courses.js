@@ -2,12 +2,12 @@
 import {
   collection,
   addDoc,
-  updateDoc,
   deleteDoc,
   doc,
   onSnapshot,
   query,
   orderBy,
+  runTransaction,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
@@ -43,7 +43,13 @@ export function initCourses() {
     }
     try {
       if (editingId) {
-        await updateDoc(doc(db, "courses", editingId), data);
+        // 정원·신청·이수 수치 갱신은 트랜잭션으로(동시 편집 시 원자적 read-modify, CLAUDE.md #8).
+        const ref = doc(db, "courses", editingId);
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(ref);
+          if (!snap.exists()) throw new Error("이미 삭제된 과정입니다. 목록을 새로고침하세요.");
+          tx.update(ref, data);
+        });
       } else {
         await addDoc(coursesCol, data);
       }
@@ -87,7 +93,13 @@ export function initCourses() {
   // 과정명을 커리큘럼에서 선택하면 커리큘럼 연결을 자동 설정(이후 과정명 수정 가능).
   form.name.addEventListener("input", () => {
     const match = getPrograms().find((p) => p.name === form.name.value.trim());
-    if (match) form.programId.value = match.id;
+    if (match) {
+      form.programId.value = match.id;
+      // 커리큘럼 구분이 과정유형 옵션과 일치하면 자동 채움(이후 수정 가능).
+      if (!form.courseType.value && ["초기", "정기", "특별", "초정기통합"].includes(match.category)) {
+        form.courseType.value = match.category;
+      }
+    }
   });
 
   // 실시간 목록.
@@ -114,6 +126,8 @@ function readForm(form) {
     venue: form.venue.value.trim(),
     round: Number(form.round.value),
     programId: form.programId.value || "",
+    courseType: form.courseType.value || "",
+    operationTag: form.operationTag.value.trim(),
     appliedCount: form.appliedCount.value ? Number(form.appliedCount.value) : 0,
     completedCount: form.completedCount.value ? Number(form.completedCount.value) : 0,
     hasEvaluation: form.hasEvaluation.checked,
@@ -150,7 +164,7 @@ function resetForm(form, submitBtn, cancelBtn) {
 function renderTable(tbody, form, submitBtn, cancelBtn) {
   tbody.innerHTML = "";
   if (coursesCache.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="13" class="empty">등록된 과정이 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" class="empty">등록된 과정이 없습니다.</td></tr>`;
     return;
   }
   for (const c of coursesCache) {
@@ -158,6 +172,7 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
     tr.innerHTML = `
       <td>${escapeHtml(c.code)}</td>
       <td>${escapeHtml(c.name)}</td>
+      <td>${escapeHtml(c.courseType ?? "")}</td>
       <td>${c.round ?? ""}</td>
       <td>${c.capacity ?? ""}</td>
       <td>${c.appliedCount ?? 0}</td>
@@ -182,6 +197,8 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       form.venue.value = c.venue ?? "";
       form.round.value = c.round ?? "";
       form.programId.value = c.programId ?? "";
+      form.courseType.value = c.courseType ?? "";
+      form.operationTag.value = c.operationTag ?? "";
       form.appliedCount.value = c.appliedCount ?? 0;
       form.completedCount.value = c.completedCount ?? 0;
       form.hasEvaluation.checked = !!c.hasEvaluation;

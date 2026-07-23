@@ -1,6 +1,6 @@
 // 강의 시간표: 커리큘럼 초안 편집 → 등록, 등록된 시간표 셀 편집 → 일괄 저장.
 import {
-  collection, doc, onSnapshot, query, where, writeBatch,
+  collection, doc, onSnapshot, query, where, writeBatch, getDocs,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { START_TIMES, END_TIMES } from "./constants.js";
@@ -170,15 +170,53 @@ function validateRow(r, out) {
   return null;
 }
 
-// 같은 일자·강의실 시간 겹침 목록(경고용).
+// 시간대 겹침 여부.
+function overlaps(a, b) {
+  return a.date === b.date && a.startTime < b.endTime && b.startTime < a.endTime;
+}
+
+// 제출 배치 내부 충돌: 같은 일자에 (a) 동일 강의실 시간 겹침, (b) 동일 강사 이중배정.
 function findConflicts(items) {
   const msgs = [];
   for (let i = 0; i < items.length; i++) {
     for (let j = i + 1; j < items.length; j++) {
       const a = items[i], b = items[j];
-      if (!a.room || a.room !== b.room || a.date !== b.date) continue;
-      if (a.startTime < b.endTime && b.startTime < a.endTime) {
-        msgs.push(`${a.date} ${a.room}: '${a.subject}'와 '${b.subject}' 시간 겹침`);
+      if (!overlaps(a, b)) continue;
+      if (a.room && a.room === b.room) {
+        msgs.push(`${a.date} ${a.room}: '${a.subject}'와 '${b.subject}' 강의실 시간 겹침`);
+      }
+      if (a.instructorId && a.instructorId === b.instructorId) {
+        msgs.push(`${a.date} ${escapeHtml(a.instructor)}: '${a.subject}'와 '${b.subject}' 강사 이중배정`);
+      }
+    }
+  }
+  return msgs;
+}
+
+// 다른 차수와의 충돌: 같은 기간 세션을 조회해 강의실·강사 겹침 검출(경고용).
+async function findExternalConflicts(items) {
+  const dates = [...new Set(items.map((i) => i.date).filter(Boolean))];
+  if (!dates.length) return [];
+  const min = dates.reduce((a, b) => (a < b ? a : b));
+  const max = dates.reduce((a, b) => (a > b ? a : b));
+  let externals = [];
+  try {
+    const snap = await getDocs(query(sessionsCol, where("date", ">=", min), where("date", "<=", max)));
+    externals = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((s) => s.courseId !== selectedCourseId); // 현재 차수는 이 배치로 대체되므로 제외.
+  } catch (e) { return [`다른 차수 충돌 조회 실패(검증 생략): ${e.message}`]; }
+  const nameOf = (cid) => coursesCache.find((c) => c.id === cid)?.name || "다른 차수";
+  const msgs = [];
+  for (const a of items) {
+    for (const e of externals) {
+      if (!overlaps(a, e)) continue;
+      const who = `${e.date} [${escapeHtml(nameOf(e.courseId))}]`;
+      if (a.room && a.room === e.room) {
+        msgs.push(`${who} ${a.room}: '${a.subject}'가 '${escapeHtml(e.subject || "")}'와 강의실 겹침`);
+      }
+      if (a.instructorId && a.instructorId === e.instructorId) {
+        msgs.push(`${who} ${escapeHtml(a.instructor)}: '${a.subject}'와 강사 이중배정`);
       }
     }
   }
@@ -224,7 +262,7 @@ async function commitDraft() {
     if (err) return alert(err);
     items.push(out);
   }
-  const conflicts = findConflicts(items);
+  const conflicts = [...findConflicts(items), ...await findExternalConflicts(items)];
   if (conflicts.length && !confirm(`[중복 경고]\n${conflicts.join("\n")}\n\n그래도 등록할까요?`)) return;
   if (!confirm(`${items.length}개 과목을 시간표로 등록합니다. 진행할까요?`)) return;
   const batch = writeBatch(db);
@@ -282,7 +320,8 @@ async function commitGrid() {
     if (err) return alert(err);
     items.push({ id: r.id, data: out });
   }
-  const conflicts = findConflicts(items.map((i) => i.data));
+  const dataItems = items.map((i) => i.data);
+  const conflicts = [...findConflicts(dataItems), ...await findExternalConflicts(dataItems)];
   if (conflicts.length && !confirm(`[중복 경고]\n${conflicts.join("\n")}\n\n그래도 저장할까요?`)) return;
 
   // 삭제 대상 = 기존 문서 중 현재 행에 없는 id.

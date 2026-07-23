@@ -62,6 +62,11 @@
               <label>교육종료일<input name="endDate" type="date" required /></label>
               <label>교육장<select name="venue"><option value="">선택</option></select></label>
               <label>커리큘럼 연결<select name="programId"></select></label>
+              <label>과정유형<select name="courseType">
+                <option value="">(미지정)</option>
+                <option>초기</option><option>정기</option><option>특별</option><option>초정기통합</option>
+              </select></label>
+              <label>운영유형<input name="operationTag" placeholder="예: 초정기통합, 자격유지" /></label>
             </div>
             <datalist id="course-name-list"></datalist>
             <div class="form-actions">
@@ -73,7 +78,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>과정코드</th><th>과정명</th><th>차수</th>
+                  <th>과정코드</th><th>과정명</th><th>유형</th><th>차수</th>
                   <th>정원</th><th>신청</th><th>잔여</th><th>이수</th><th>평가</th>
                   <th>시작일</th><th>종료일</th><th>교육장</th><th>커리큘럼</th><th>관리</th>
                 </tr>
