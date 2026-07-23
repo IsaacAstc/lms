@@ -82,7 +82,8 @@ async function purge() {
       let agg = computeAgg(list);
       const existing = await getDoc(doc(db, "surveyAggregates", ym));
       if (existing.exists()) agg = mergeAgg(deserializeAgg(existing.data()), agg);
-      await setDoc(doc(db, "surveyAggregates", ym), { yearMonth: ym, ...serializeAgg(agg), updatedAtMs: Date.now() });
+      // merge:true → 주관식 시사점·피드백 반영계획(summary/actionTaken/categories) 등 서술 필드 보존.
+      await setDoc(doc(db, "surveyAggregates", ym), { yearMonth: ym, ...serializeAgg(agg), updatedAtMs: Date.now() }, { merge: true });
       log.textContent += `  ${ym}: 스냅샷 저장(누적 ${agg.count}건)\n`;
     }
 
