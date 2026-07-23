@@ -6,7 +6,8 @@ import { getProgramById } from "./programs.js";
 import { getInstructorById } from "./instructors.js";
 import { EDU_ITEMS, INSTRUCTOR_ITEMS } from "./survey-gen.js";
 
-const MASK_MIN = 10; // 응답자 10명 미만 마스킹
+// 설문 집계는 관리자 전용 화면이므로 실제 값을 공개(마스킹 없음).
+// (외부 공개·내보내기 산출물은 개인정보 원칙(4-8)상 소표본 마스킹 별도 적용 예정)
 
 // 과정유형: 차수→연결 커리큘럼(program)의 구분에서 자동. 없으면 미분류.
 function courseTypeOf(courseId) {
@@ -26,7 +27,7 @@ function teacherKindOf(instructorId) {
 const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
 const to100 = (m) => (m == null ? null : m * 20);
 const fmt = (v) => (v == null ? "-" : v.toFixed(2));
-const cell = (n, v) => (n < MASK_MIN ? "<span class='warn'>*</span>" : fmt(v));
+const cell = (n, v) => fmt(v);
 
 export function initReports() {
   watchCollection("surveyResponses");
