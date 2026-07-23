@@ -1,6 +1,9 @@
 // 강사료·강사별 강의시간 집계.
 // 순수 계산 함수 + 기간(월별/연간) 집계 UI.
-import { watchCollection, onCollection, getCache } from "./store.js";
+import {
+  collection, getDocs, query, where,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import { getFeeRates, getTravelRates } from "./settings.js";
 import { getInstructors, getInstructorById } from "./instructors.js";
@@ -40,7 +43,6 @@ export function calcTravel(travelBasis, travelRates) {
 // ── 집계 UI ──
 
 export function initPayroll() {
-  watchCollection("sessions");
   const periodType = document.getElementById("pay-period-type");
   const periodInput = document.getElementById("pay-period");
   const runBtn = document.getElementById("pay-run");
@@ -62,16 +64,22 @@ export function initPayroll() {
   runBtn.addEventListener("click", () => renderAggregate(periodType.value, periodInput.value));
 }
 
-// 기간 필터: month → 'YYYY-MM', year → 'YYYY'.
-function inPeriod(dateStr, type, value) {
-  if (!dateStr || !value) return false;
-  return type === "year" ? dateStr.slice(0, 4) === String(value) : dateStr.slice(0, 7) === value;
+// 선택 기간의 세션만 서버에서 조회(무료 읽기 한도 보호).
+async function fetchSessions(type, value) {
+  if (!value) return [];
+  const start = type === "year" ? `${value}-01-01` : `${value}-01`;
+  const end = type === "year" ? `${value}-12-31` : `${value}-31`;
+  const q = query(collection(db, "sessions"),
+    where("date", ">=", start), where("date", "<=", end));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-function renderAggregate(type, value) {
+async function renderAggregate(type, value) {
   const feeRates = getFeeRates();
   const travelRates = getTravelRates();
-  const sessions = getCache("sessions").filter((s) => inPeriod(s.date, type, value) && s.instructorId);
+  const all = await fetchSessions(type, value);
+  const sessions = all.filter((s) => s.instructorId);
 
   // 강사별 집계.
   const byInstructor = {};
