@@ -20,6 +20,26 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // 강의실 마스터: 관리자 전용.
+    match /rooms/{roomId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 강사 마스터(개인정보 예외 — 강사에 한함): 관리자 전용, 공개 금지.
+    match /instructors/{instructorId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 과정 커리큘럼 마스터: 관리자 전용.
+    match /programs/{programId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 기준값 설정(강사료·여비): 관리자 전용.
+    match /settings/{docId} {
+      allow read, write: if isAdmin();
+    }
+
     // --- 이하 컬렉션은 후속 단계(설문)에서 사용. 6절 요건 선반영 ---
 
     // 설문 응답: create 만 공개 허용, 나머지는 관리자 전용.

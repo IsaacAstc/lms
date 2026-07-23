@@ -133,6 +133,30 @@ th { background: #eef2f7; }
 .actions { display: flex; gap: 0.3rem; }
 .empty { text-align: center; color: var(--muted); }
 
+h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
+
+.load-box, .subj-box {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: #fafbfc;
+}
+.load-box legend, .subj-box legend { font-size: 0.85rem; font-weight: 600; padding: 0 0.4rem; }
+.load-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: flex-end;
+}
+.load-row label { display: flex; flex-direction: column; font-size: 0.8rem; gap: 0.2rem; }
+.hint { font-size: 0.8rem; color: var(--muted); margin: 0.4rem 0 0; }
+.notice { font-size: 0.82rem; color: #7a5; background: #f2f8f0; border: 1px solid #cfe6c8; padding: 0.5rem 0.75rem; border-radius: 6px; }
+.warn { color: var(--danger); font-size: 0.8rem; }
+.total-line { text-align: right; font-size: 0.95rem; font-weight: 600; margin-top: 0.75rem; }
+.seed-log { background: #1e2430; color: #d8e0ea; padding: 0.75rem; border-radius: 6px; font-size: 0.8rem; white-space: pre-wrap; min-height: 3rem; }
+#subject-draft table { margin-top: 0.5rem; }
+
 @media (max-width: 600px) {
   .grid { grid-template-columns: 1fr; }
   .topbar h1 { font-size: 0.95rem; }

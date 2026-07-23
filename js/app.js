@@ -2,6 +2,12 @@
 import { watchAuth, login, logout } from "./auth.js";
 import { initCourses } from "./courses.js";
 import { initSessions } from "./sessions.js";
+import { initRooms } from "./rooms.js";
+import { initInstructors } from "./instructors.js";
+import { initPrograms } from "./programs.js";
+import { initSettings } from "./settings.js";
+import { initPayroll } from "./payroll.js";
+import { initSeed } from "./seed.js";
 
 // 공용 유틸: HTML 이스케이프 (XSS 방지).
 export function escapeHtml(v) {
@@ -35,8 +41,15 @@ function initApp() {
   if (initialized) return;
   initialized = true;
   setupTabs();
+  // 마스터/설정 먼저 초기화(구독 시작) → 시간표·강사료가 이를 참조.
+  initSettings();
+  initRooms();
+  initInstructors();
+  initPrograms();
   initCourses();
   initSessions();
+  initPayroll();
+  initSeed();
 }
 
 window.addEventListener("DOMContentLoaded", () => {

@@ -11,6 +11,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
+import { onProgramsChange, getProgramById } from "./programs.js";
 
 const coursesCol = collection(db, "courses");
 let unsub = null;
@@ -53,6 +54,18 @@ export function initCourses() {
 
   cancelBtn.addEventListener("click", () => resetForm(form, submitBtn, cancelBtn));
 
+  // 커리큘럼(과정 마스터) 연결 드롭다운.
+  onProgramsChange((programs) => {
+    const prev = form.programId.value;
+    form.programId.innerHTML = `<option value="">(연결 안 함)</option>`;
+    for (const p of programs) {
+      const o = document.createElement("option");
+      o.value = p.id; o.textContent = p.name;
+      form.programId.appendChild(o);
+    }
+    form.programId.value = prev;
+  });
+
   // 실시간 목록.
   const q = query(coursesCol, orderBy("code"));
   unsub = onSnapshot(q, (snap) => {
@@ -76,6 +89,7 @@ function readForm(form) {
     endDate: form.endDate.value,
     venue: form.venue.value.trim(),
     round: Number(form.round.value),
+    programId: form.programId.value || "",
   };
 }
 
@@ -101,7 +115,7 @@ function resetForm(form, submitBtn, cancelBtn) {
 function renderTable(tbody, form, submitBtn, cancelBtn) {
   tbody.innerHTML = "";
   if (coursesCache.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty">등록된 과정이 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty">등록된 과정이 없습니다.</td></tr>`;
     return;
   }
   for (const c of coursesCache) {
@@ -114,6 +128,7 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       <td>${escapeHtml(c.startDate ?? "")}</td>
       <td>${escapeHtml(c.endDate ?? "")}</td>
       <td>${escapeHtml(c.venue ?? "")}</td>
+      <td>${escapeHtml(getProgramById(c.programId)?.name ?? "")}</td>
       <td class="actions">
         <button type="button" class="edit">수정</button>
         <button type="button" class="del">삭제</button>
@@ -127,6 +142,7 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       form.endDate.value = c.endDate ?? "";
       form.venue.value = c.venue ?? "";
       form.round.value = c.round ?? "";
+      form.programId.value = c.programId ?? "";
       submitBtn.textContent = "수정 저장";
       cancelBtn.hidden = false;
       form.scrollIntoView({ behavior: "smooth" });
