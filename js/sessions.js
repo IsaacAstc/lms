@@ -8,6 +8,7 @@ import { onCoursesChange, coursesCache } from "./courses.js";
 import { onRoomsChange, getRooms } from "./rooms.js";
 import { onProgramsChange, getProgramById } from "./programs.js";
 import { onInstructorsChange, getInstructors } from "./instructors.js";
+import { regenerateSurvey } from "./survey-gen.js";
 import { escapeHtml } from "./app.js";
 
 const sessionsCol = collection(db, "sessions");
@@ -231,8 +232,18 @@ async function commitDraft() {
   try {
     await batch.commit();
     clearDraft();
+    await syncSurvey();
     alert("시간표 등록을 완료했습니다.");
   } catch (e) { alert("등록 실패: " + e.message); }
+}
+
+// 현재 차수의 공개 설문 정의를 재생성(교육장→강의실ID 매핑). 실패해도 비치명적.
+async function syncSurvey() {
+  try {
+    if (!selectedCourse) return;
+    const roomId = getRooms().find((r) => r.name === selectedCourse.venue)?.id || "";
+    await regenerateSurvey(selectedCourse, roomId);
+  } catch (e) { console.warn("설문 생성 건너뜀:", e.message); }
 }
 
 // ── 등록된 시간표 그리드 ──
@@ -288,6 +299,7 @@ async function commitGrid() {
   for (const id of deletions) batch.delete(doc(db, "sessions", id));
   try {
     await batch.commit();
+    await syncSurvey();
     alert("시간표 수정을 완료했습니다.");
   } catch (e) { alert("저장 실패: " + e.message); }
 }

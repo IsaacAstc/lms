@@ -161,6 +161,27 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .entry-form label.chk { flex-direction: row; align-items: center; gap: 0.4rem; }
 .entry-form label.chk input { width: auto; }
 
+/* URL 셀(강의실·설문 관리) */
+.url-cell { display: flex; gap: 0.3rem; min-width: 240px; }
+.url-cell input { flex: 1; font-size: 0.75rem; }
+.btn-link { display: inline-block; padding: 0.3rem 0.6rem; font-size: 0.8rem; background: var(--primary); color: #fff; border-radius: 5px; text-decoration: none; }
+
+/* 공개 설문 페이지 */
+.survey-main { max-width: 720px; margin: 0 auto; padding: 1rem; }
+.survey-box { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; }
+.survey-box h1 { font-size: 1.3rem; }
+.survey-box h2 { font-size: 1.05rem; margin: 1.5rem 0 0.75rem; border-bottom: 2px solid var(--primary); padding-bottom: 0.3rem; }
+.q-item { margin-bottom: 1rem; }
+.q-label { font-size: 0.95rem; margin-bottom: 0.4rem; font-weight: 500; }
+.scale-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.scale { display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.55rem; cursor: pointer; }
+.scale input { width: auto; }
+.inst-block { border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
+.inst-block legend { font-weight: 600; font-size: 0.9rem; padding: 0 0.4rem; }
+.survey-box textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 5px; font-family: inherit; }
+.survey-box button[type="submit"] { margin-top: 1rem; width: 100%; padding: 0.75rem; font-size: 1rem; }
+.preview-banner { background: #fff3cd; border: 1px solid #ffe08a; color: #8a6d00; padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.85rem; }
+
 @media (max-width: 600px) {
   .grid { grid-template-columns: 1fr; }
   .topbar h1 { font-size: 0.95rem; }
