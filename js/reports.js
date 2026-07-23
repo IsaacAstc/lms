@@ -1,157 +1,71 @@
-// 설문 집계 대시보드 (#7): 과정유형별 교육/강사 만족도, 100점 환산.
-// 무료 한도 보호: 전체 구독 대신 선택 기간만 조회(getDocs).
+// 설문 집계 대시보드 (#7). 원문(surveyResponses) 우선, 없으면 파기 스냅샷(surveyAggregates)으로 렌더.
+// 무료 한도 보호: 선택 기간만 조회(getDocs).
 import {
-  collection, getDocs, query, where,
+  collection, getDocs, getDoc, doc, query, where,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
-import { coursesCache } from "./courses.js";
-import { getProgramById } from "./programs.js";
-import { getInstructorById } from "./instructors.js";
-import { EDU_ITEMS, INSTRUCTOR_ITEMS } from "./survey-gen.js";
-
-// 설문 집계는 관리자 전용 화면이므로 실제 값을 공개(마스킹 없음).
-// (외부 공개·내보내기 산출물은 개인정보 원칙(4-8)상 소표본 마스킹 별도 적용 예정)
-
-// 과정유형: 차수→연결 커리큘럼(program)의 구분에서 자동. 없으면 미분류.
-function courseTypeOf(courseId) {
-  const c = coursesCache.find((x) => x.id === courseId);
-  const prog = c?.programId ? getProgramById(c.programId) : null;
-  return prog?.category || "미분류";
-}
-// 과정명: 차수명. 없으면 courseId.
-function courseNameOf(courseId) {
-  const c = coursesCache.find((x) => x.id === courseId);
-  return c?.name || courseId || "-";
-}
-// 교관유형: 강사 마스터 instructorType → 전임/사내/사외 교관.
-function teacherKindOf(instructorId) {
-  const t = getInstructorById(instructorId)?.instructorType || "";
-  if (t.startsWith("전임")) return "전임교관";
-  if (t.startsWith("사내")) return "사내교관";
-  if (t.startsWith("사외")) return "사외교관";
-  return "기타";
-}
-
-const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
-const to100 = (m) => (m == null ? null : m * 20);
-const fmt = (v) => (v == null ? "-" : v.toFixed(2));
-const cell = (n, v) => fmt(v);
+import {
+  computeAgg, deserializeAgg, renderEduHTML, renderInstHTML, EDU_ITEMS,
+} from "./agg.js";
 
 export function initReports() {
-  const typeSel = document.getElementById("rep-period-type");
-  const monthInput = document.getElementById("rep-period");
   const now = new Date();
-  monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  document.getElementById("rep-period").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   document.getElementById("rep-run").addEventListener("click", run);
-  // 탭 진입 시 1회 조회(선택 기간만 읽음).
   document.addEventListener("tabshown", (e) => { if (e.detail === "reports") run(); });
 }
 
-// 선택 기간의 응답만 서버에서 조회(무료 읽기 한도 보호).
-async function currentResponses() {
-  const typeSel = document.getElementById("rep-period-type").value;
-  const month = document.getElementById("rep-period").value;
-  let q;
-  if (typeSel === "month" && month) {
-    q = query(collection(db, "surveyResponses"),
-      where("collectedDate", ">=", `${month}-01`),
-      where("collectedDate", "<=", `${month}-31`));
-  } else {
-    if (!confirm("전체 기간을 조회하면 응답이 많을 경우 읽기량이 커집니다. 계속할까요?")) return null;
-    q = collection(db, "surveyResponses");
-  }
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-}
-
 async function run() {
+  const type = document.getElementById("rep-period-type").value;
+  const month = document.getElementById("rep-period").value;
   const total = document.getElementById("rep-total");
   total.textContent = "조회 중…";
-  const responses = await currentResponses();
-  if (responses == null) { total.textContent = ""; return; }
-  total.textContent = `총 응답 ${responses.length}건`;
-  renderEducation(responses);
-  renderInstructors(responses);
-  renderRaw(responses);
-}
 
-// ── 교육 만족도: 과정유형 × 6항목 (+ 전체 평균) ──
-function renderEducation(responses) {
-  const byType = {};
-  for (const r of responses) {
-    const t = courseTypeOf(r.courseId);
-    (byType[t] = byType[t] || []).push(r);
+  let responses = null;
+  if (type === "month" && month) {
+    const snap = await getDocs(query(collection(db, "surveyResponses"),
+      where("collectedDate", ">=", `${month}-01`), where("collectedDate", "<=", `${month}-31`)));
+    responses = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } else {
+    if (!confirm("전체 기간을 조회하면 응답이 많을 경우 읽기량이 커집니다. 계속할까요?")) { total.textContent = ""; return; }
+    const snap = await getDocs(collection(db, "surveyResponses"));
+    responses = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   }
-  const types = Object.keys(byType).sort();
-  const head = `<tr><th>구분</th>${types.map((t) => `<th>${escapeHtml(t)}<br>(n=${byType[t].length})</th>`).join("")}<th>전체 평균</th></tr>`;
 
-  const rows = EDU_ITEMS.map((item, i) => {
-    const tds = types.map((t) => {
-      const scores = byType[t].map((r) => r.edu?.[`q${i}`]).filter(Number.isFinite);
-      return `<td>${cell(byType[t].length, to100(avg(scores)))}</td>`;
-    }).join("");
-    const allScores = responses.map((r) => r.edu?.[`q${i}`]).filter(Number.isFinite);
-    return `<tr><td>${escapeHtml(item)}</td>${tds}<td>${cell(responses.length, to100(avg(allScores)))}</td></tr>`;
-  }).join("");
-
-  // 종합평균: 응답자 전체 6문항 풀링 평균.
-  const totalRow = (() => {
-    const tds = types.map((t) => {
-      const all = [];
-      byType[t].forEach((r) => EDU_ITEMS.forEach((_, i) => { const v = r.edu?.[`q${i}`]; if (Number.isFinite(v)) all.push(v); }));
-      return `<td><b>${cell(byType[t].length, to100(avg(all)))}</b></td>`;
-    }).join("");
-    const all = [];
-    responses.forEach((r) => EDU_ITEMS.forEach((_, i) => { const v = r.edu?.[`q${i}`]; if (Number.isFinite(v)) all.push(v); }));
-    return `<tr class="sum-row"><td>응답자 수 가중평균(종합)</td>${tds}<td><b>${cell(responses.length, to100(avg(all)))}</b></td></tr>`;
-  })();
-
-  document.getElementById("rep-edu").innerHTML =
-    responses.length ? `<table><thead>${head}</thead><tbody>${rows}${totalRow}</tbody></table>`
-                     : `<p class="empty">해당 기간 응답이 없습니다.</p>`;
-}
-
-// ── 강사 만족도: 교관유형 그룹 × (강사×과정) × 3항목 ──
-function renderInstructors(responses) {
-  const groups = {}; // teacherKind → key(instructorId|courseId|subject) → {name,courseName,subject,entries:[]}
-  for (const r of responses) {
-    for (const it of r.instructors || []) {
-      const kind = teacherKindOf(it.instructorId);
-      const key = `${it.instructorId}|${r.courseId}|${it.subject}`;
-      const g = (groups[kind] = groups[kind] || {});
-      const e = (g[key] = g[key] || { name: it.instructorName, courseName: courseNameOf(r.courseId), subject: it.subject, entries: [] });
-      e.entries.push(it);
-    }
-  }
-  const kinds = Object.keys(groups).sort();
-  if (!kinds.length) {
-    document.getElementById("rep-inst").innerHTML = `<p class="empty">강사 만족도 응답이 없습니다.</p>`;
+  if (responses.length) {
+    const agg = computeAgg(responses);
+    total.textContent = `총 응답 ${responses.length}건 (원문)`;
+    document.getElementById("rep-edu").innerHTML = renderEduHTML(agg);
+    document.getElementById("rep-inst").innerHTML = renderInstHTML(agg);
+    renderRaw(responses);
     return;
   }
-  const head = `<tr><th>교관유형</th><th>강사</th><th>과정명(과목명)</th>${INSTRUCTOR_ITEMS.map((t) => `<th>${escapeHtml(t)}</th>`).join("")}<th>강사별 평균</th><th>n</th></tr>`;
-  let body = "";
-  for (const kind of kinds) {
-    const rows = Object.values(groups[kind]).sort((a, b) => a.name.localeCompare(b.name));
-    rows.forEach((e, idx) => {
-      const n = e.entries.length;
-      const itemMeans = INSTRUCTOR_ITEMS.map((_, i) => avg(e.entries.map((x) => x[`q${i}`]).filter(Number.isFinite)));
-      const itemTds = itemMeans.map((m) => `<td>${cell(n, to100(m))}</td>`).join("");
-      const overall = avg(itemMeans.filter((v) => v != null));
-      body += `<tr>${idx === 0 ? `<td rowspan="${rows.length}">${escapeHtml(kind)}</td>` : ""}<td>${escapeHtml(e.name)}</td><td>${escapeHtml(e.courseName)}(${escapeHtml(e.subject)})</td>${itemTds}<td><b>${cell(n, to100(overall))}</b></td><td style="text-align:right">${n}</td></tr>`;
-    });
+
+  // 원문이 없으면 해당 월의 파기 스냅샷 조회.
+  if (type === "month" && month) {
+    const sdoc = await getDoc(doc(db, "surveyAggregates", month));
+    if (sdoc.exists()) {
+      const agg = deserializeAgg(sdoc.data());
+      total.textContent = `집계 스냅샷 (원문 파기됨, 응답 ${agg.count}건 기준)`;
+      document.getElementById("rep-edu").innerHTML = renderEduHTML(agg);
+      document.getElementById("rep-inst").innerHTML = renderInstHTML(agg);
+      document.getElementById("rep-raw").innerHTML = `<p class="empty">이 기간의 원문은 파기되었습니다. 집계 결과만 보존됩니다.</p>`;
+      return;
+    }
   }
-  document.getElementById("rep-inst").innerHTML = `<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  total.textContent = "총 응답 0건";
+  document.getElementById("rep-edu").innerHTML = `<p class="empty">해당 기간 응답이 없습니다.</p>`;
+  document.getElementById("rep-inst").innerHTML = `<p class="empty">해당 기간 응답이 없습니다.</p>`;
+  document.getElementById("rep-raw").innerHTML = `<p class="empty">해당 기간 응답이 없습니다.</p>`;
 }
 
-// ── 설문 원응답(raw) — 개별 익명 응답 열람 ──
+// 설문 원응답(raw) — 개별 익명 응답.
 function renderRaw(responses) {
   const box = document.getElementById("rep-raw");
-  if (!responses.length) { box.innerHTML = `<p class="empty">해당 기간 응답이 없습니다.</p>`; return; }
   const eduHead = EDU_ITEMS.map((_, i) => `<th>교${i + 1}</th>`).join("");
   const rows = responses
-    .slice()
-    .sort((a, b) => (b.collectedDate || "").localeCompare(a.collectedDate || ""))
+    .slice().sort((a, b) => (b.collectedDate || "").localeCompare(a.collectedDate || ""))
     .map((r) => {
       const edu = EDU_ITEMS.map((_, i) => `<td>${r.edu?.[`q${i}`] ?? ""}</td>`).join("");
       const inst = (r.instructors || [])
@@ -159,18 +73,12 @@ function renderRaw(responses) {
         .join("<br>");
       return `<tr>
         <td>${escapeHtml(r.collectedDate || "")}</td>
-        <td>${escapeHtml(courseTypeOf(r.courseId))}</td>
-        <td>${escapeHtml(courseNameOf(r.courseId))}</td>
+        <td>${escapeHtml(r.courseType || "")}</td>
         ${edu}
         <td class="raw-inst">${inst || "-"}</td>
         <td class="raw-free">${escapeHtml(r.freeDissatisfied || "")}</td>
         <td class="raw-free">${escapeHtml(r.freeSuggestion || "")}</td>
       </tr>`;
-    })
-    .join("");
-  box.innerHTML = `
-    <table>
-      <thead><tr><th>수집일</th><th>과정유형</th><th>과정명</th>${eduHead}<th>강사평가(준비·질의·전반)</th><th>불만족</th><th>제안·개선</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
+    }).join("");
+  box.innerHTML = `<table><thead><tr><th>수집일</th><th>과정유형</th>${eduHead}<th>강사평가(준비·질의·전반)</th><th>불만족</th><th>제안·개선</th></tr></thead><tbody>${rows}</tbody></table>`;
 }

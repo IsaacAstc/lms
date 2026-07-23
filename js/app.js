@@ -9,6 +9,7 @@ import { initSettings } from "./settings.js";
 import { initPayroll } from "./payroll.js";
 import { initSurveys } from "./surveys.js";
 import { initReports } from "./reports.js";
+import { initDataAdmin } from "./data-admin.js";
 import { initSeed } from "./seed.js";
 
 // 공용 유틸: HTML 이스케이프 (XSS 방지).
@@ -54,6 +55,7 @@ function initApp() {
   initPayroll();
   initSurveys();
   initReports();
+  initDataAdmin();
   initSeed();
 }
 
