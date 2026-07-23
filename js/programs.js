@@ -5,6 +5,7 @@ import { TEACHER_KINDS, START_TIMES, END_TIMES } from "./constants.js";
 
 let editingId = null;
 let subjectsDraft = []; // 현재 편집 중인 과목 배열
+let editingSubjIndex = null; // 편집 중인 과목의 인덱스(null=신규 추가)
 
 export function getPrograms() {
   return [...getCache("programs")].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
@@ -29,6 +30,8 @@ export function initPrograms() {
   fillSelect(document.getElementById("subj-start"), START_TIMES);
   fillSelect(document.getElementById("subj-end"), END_TIMES);
 
+  const subjCancelBtn = document.getElementById("subject-cancel");
+
   addSubjBtn.addEventListener("click", () => {
     const dayNo = Number(document.getElementById("subj-day").value) || 1;
     const subject = document.getElementById("subj-name").value.trim();
@@ -38,11 +41,18 @@ export function initPrograms() {
     const content = document.getElementById("subj-content").value.trim();
     if (!subject) return alert("과목명을 입력하세요.");
     if (endTime <= startTime) return alert("종료시각은 시작시각 이후여야 합니다.");
-    subjectsDraft.push({ order: (subjectsDraft.length + 1) * 10, dayNo, subject, startTime, endTime, teacherKind, content });
-    document.getElementById("subj-name").value = "";
-    document.getElementById("subj-content").value = "";
+    if (editingSubjIndex != null) {
+      // 기존 과목 편집 반영(순서 유지).
+      const keepOrder = subjectsDraft[editingSubjIndex]?.order ?? (editingSubjIndex + 1) * 10;
+      subjectsDraft[editingSubjIndex] = { order: keepOrder, dayNo, subject, startTime, endTime, teacherKind, content };
+    } else {
+      subjectsDraft.push({ order: (subjectsDraft.length + 1) * 10, dayNo, subject, startTime, endTime, teacherKind, content });
+    }
+    clearSubjInputs();
     renderDraft();
   });
+
+  subjCancelBtn.addEventListener("click", clearSubjInputs);
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -78,9 +88,34 @@ function reset(form, submitBtn, cancelBtn) {
   form.reset();
   editingId = null;
   subjectsDraft = [];
+  clearSubjInputs();
   renderDraft();
   submitBtn.textContent = "등록";
   cancelBtn.hidden = true;
+}
+
+// 과목 입력칸 초기화 + 신규 추가 모드로 전환.
+function clearSubjInputs() {
+  editingSubjIndex = null;
+  document.getElementById("subj-name").value = "";
+  document.getElementById("subj-content").value = "";
+  document.getElementById("subject-add").textContent = "과목 추가";
+  document.getElementById("subject-cancel").hidden = true;
+}
+
+// 과목을 입력칸으로 불러와 편집 모드로 전환.
+function editSubject(idx) {
+  const s = subjectsDraft[idx];
+  if (!s) return;
+  document.getElementById("subj-day").value = s.dayNo ?? 1;
+  document.getElementById("subj-name").value = s.subject ?? "";
+  document.getElementById("subj-start").value = s.startTime ?? "";
+  document.getElementById("subj-end").value = s.endTime ?? "";
+  document.getElementById("subj-kind").value = s.teacherKind ?? "";
+  document.getElementById("subj-content").value = s.content ?? "";
+  editingSubjIndex = idx;
+  document.getElementById("subject-add").textContent = "과목 수정 반영";
+  document.getElementById("subject-cancel").hidden = false;
 }
 
 // 편집 중 과목 목록.
@@ -92,22 +127,47 @@ function renderDraft() {
   }
   const rows = subjectsDraft
     .map(
-      (s, idx) => `<tr>
+      (s, idx) => `<tr${idx === editingSubjIndex ? ' class="editing-row"' : ""}>
         <td>${s.dayNo}일차</td>
         <td>${escapeHtml(s.subject)}</td>
         <td>${s.startTime}~${s.endTime}</td>
         <td>${escapeHtml(s.teacherKind)}</td>
-        <td><button type="button" data-i="${idx}" class="del-subj">삭제</button></td>
+        <td class="actions">
+          <button type="button" data-i="${idx}" class="edit-subj">편집</button>
+          <button type="button" data-i="${idx}" class="del-subj">삭제</button>
+        </td>
       </tr>`
     )
     .join("");
-  box.innerHTML = `<table><thead><tr><th>일차</th><th>과목</th><th>시간</th><th>교관</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  box.innerHTML = `<table><thead><tr><th>일차</th><th>과목</th><th>시간</th><th>교관</th><th>관리</th></tr></thead><tbody>${rows}</tbody></table>`;
+  box.querySelectorAll(".edit-subj").forEach((b) =>
+    b.addEventListener("click", () => editSubject(Number(b.dataset.i)))
+  );
   box.querySelectorAll(".del-subj").forEach((b) =>
     b.addEventListener("click", () => {
-      subjectsDraft.splice(Number(b.dataset.i), 1);
+      const i = Number(b.dataset.i);
+      subjectsDraft.splice(i, 1);
+      if (editingSubjIndex === i) clearSubjInputs();
+      else if (editingSubjIndex != null && editingSubjIndex > i) editingSubjIndex -= 1;
       renderDraft();
     })
   );
+}
+
+// 과정을 폼으로 불러온다. copy=true면 신규 등록용(사본), false면 기존 수정.
+function loadIntoForm(form, p, submitBtn, cancelBtn, copy) {
+  editingId = copy ? null : p.id;
+  form.name.value = copy ? `${p.name} (사본)` : (p.name ?? "");
+  form.category.value = p.category ?? "";
+  form.totalDays.value = p.totalDays ?? "";
+  form.totalHours.value = p.totalHours ?? "";
+  form.note.value = p.note ?? "";
+  subjectsDraft = (p.subjects || []).map((s) => ({ ...s }));
+  clearSubjInputs();
+  renderDraft();
+  submitBtn.textContent = copy ? "사본 등록" : "수정 저장";
+  cancelBtn.hidden = false;
+  form.scrollIntoView({ behavior: "smooth" });
 }
 
 function renderList(tbody, form, submitBtn, cancelBtn) {
@@ -126,20 +186,14 @@ function renderList(tbody, form, submitBtn, cancelBtn) {
       <td>${(p.subjects || []).length}과목</td>
       <td class="actions">
         <button type="button" class="edit">수정</button>
+        <button type="button" class="copy">복사</button>
         <button type="button" class="del">삭제</button>
       </td>`;
     tr.querySelector(".edit").addEventListener("click", () => {
-      editingId = p.id;
-      form.name.value = p.name ?? "";
-      form.category.value = p.category ?? "";
-      form.totalDays.value = p.totalDays ?? "";
-      form.totalHours.value = p.totalHours ?? "";
-      form.note.value = p.note ?? "";
-      subjectsDraft = (p.subjects || []).map((s) => ({ ...s }));
-      renderDraft();
-      submitBtn.textContent = "수정 저장";
-      cancelBtn.hidden = false;
-      form.scrollIntoView({ behavior: "smooth" });
+      loadIntoForm(form, p, submitBtn, cancelBtn, false);
+    });
+    tr.querySelector(".copy").addEventListener("click", () => {
+      loadIntoForm(form, p, submitBtn, cancelBtn, true);
     });
     tr.querySelector(".del").addEventListener("click", async () => {
       if (!confirm(`'${p.name}' 과정을 삭제하시겠습니까?`)) return;
