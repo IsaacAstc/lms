@@ -194,7 +194,30 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 #rep-edu td, #rep-inst td, #rep-edu th, #rep-inst th { text-align: center; }
 #rep-edu td:first-child, #rep-inst td:nth-child(-n+3) { text-align: left; }
 
-@media (max-width: 600px) {
+/* 탭을 상단 고정(스크롤해도 화면 전환 쉽게) */
+.tabs { position: sticky; top: 0; z-index: 10; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 700px) {
   .grid { grid-template-columns: 1fr; }
+  main { padding: 0.75rem; }
+  .topbar { flex-direction: column; align-items: flex-start; gap: 0.35rem; }
   .topbar h1 { font-size: 0.95rem; }
+  .tab-btn { padding: 0.7rem 0.75rem; font-size: 0.9rem; }
+
+  /* 폼/조회줄: 세로 스택, 입력 꽉 채움 */
+  .load-row { flex-direction: column; align-items: stretch; }
+  .load-row label, .load-row input, .load-row select, .load-row button { width: 100%; }
+  .entry-form { padding: 0.75rem; }
+  .form-actions { flex-wrap: wrap; }
+  .form-actions button { flex: 1 1 auto; }
+
+  /* 표: 가로 스크롤 유지 + 셀 축소 */
+  table { font-size: 0.78rem; }
+  th, td { padding: 0.4rem 0.45rem; }
+  .table-wrap { -webkit-overflow-scrolling: touch; }
+  .url-cell { flex-direction: column; min-width: 150px; }
+  .url-cell input { font-size: 0.7rem; }
+
+  .course-picker { width: 100%; }
+  .course-picker select { width: 100%; }
 }

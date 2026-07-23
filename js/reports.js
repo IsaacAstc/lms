@@ -9,11 +9,26 @@ import {
   computeAgg, deserializeAgg, renderEduHTML, renderInstHTML, EDU_ITEMS,
 } from "./agg.js";
 
+// 원응답은 버튼 클릭 시에만 표시(불필요한 렌더·오해 방지).
+let rawState = { responses: [], purged: false };
+
 export function initReports() {
   const now = new Date();
   document.getElementById("rep-period").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   document.getElementById("rep-run").addEventListener("click", run);
+  document.getElementById("rep-raw-btn").addEventListener("click", showRaw);
   document.addEventListener("tabshown", (e) => { if (e.detail === "reports") run(); });
+}
+
+function resetRaw(state) {
+  rawState = state;
+  document.getElementById("rep-raw").innerHTML = "";
+}
+function showRaw() {
+  const box = document.getElementById("rep-raw");
+  if (rawState.purged) { box.innerHTML = `<p class="empty">이 기간의 원문은 파기되었습니다. 집계 결과만 보존됩니다.</p>`; return; }
+  if (!rawState.responses.length) { box.innerHTML = `<p class="empty">표시할 원응답이 없습니다.</p>`; return; }
+  renderRaw(rawState.responses);
 }
 
 async function run() {
@@ -38,7 +53,7 @@ async function run() {
     total.textContent = `총 응답 ${responses.length}건 (원문)`;
     document.getElementById("rep-edu").innerHTML = renderEduHTML(agg);
     document.getElementById("rep-inst").innerHTML = renderInstHTML(agg);
-    renderRaw(responses);
+    resetRaw({ responses, purged: false });
     return;
   }
 
@@ -50,29 +65,30 @@ async function run() {
       total.textContent = `집계 스냅샷 (원문 파기됨, 응답 ${agg.count}건 기준)`;
       document.getElementById("rep-edu").innerHTML = renderEduHTML(agg);
       document.getElementById("rep-inst").innerHTML = renderInstHTML(agg);
-      document.getElementById("rep-raw").innerHTML = `<p class="empty">이 기간의 원문은 파기되었습니다. 집계 결과만 보존됩니다.</p>`;
+      resetRaw({ responses: [], purged: true });
       return;
     }
   }
   total.textContent = "총 응답 0건";
   document.getElementById("rep-edu").innerHTML = `<p class="empty">해당 기간 응답이 없습니다.</p>`;
   document.getElementById("rep-inst").innerHTML = `<p class="empty">해당 기간 응답이 없습니다.</p>`;
-  document.getElementById("rep-raw").innerHTML = `<p class="empty">해당 기간 응답이 없습니다.</p>`;
+  resetRaw({ responses: [], purged: false });
 }
 
 // 설문 원응답(raw) — 개별 익명 응답.
 function renderRaw(responses) {
   const box = document.getElementById("rep-raw");
   const eduHead = EDU_ITEMS.map((_, i) => `<th>교${i + 1}</th>`).join("");
+  const when = (r) => r.collectedAt || r.collectedDate || "";
   const rows = responses
-    .slice().sort((a, b) => (b.collectedDate || "").localeCompare(a.collectedDate || ""))
+    .slice().sort((a, b) => when(b).localeCompare(when(a)))
     .map((r) => {
       const edu = EDU_ITEMS.map((_, i) => `<td>${r.edu?.[`q${i}`] ?? ""}</td>`).join("");
       const inst = (r.instructors || [])
         .map((it) => `${escapeHtml(it.subject)}/${escapeHtml(it.instructorName)}: ${[0, 1, 2].map((i) => it[`q${i}`] ?? "-").join("·")}`)
         .join("<br>");
       return `<tr>
-        <td>${escapeHtml(r.collectedDate || "")}</td>
+        <td>${escapeHtml(when(r))}</td>
         <td>${escapeHtml(r.courseType || "")}</td>
         ${edu}
         <td class="raw-inst">${inst || "-"}</td>
@@ -80,5 +96,5 @@ function renderRaw(responses) {
         <td class="raw-free">${escapeHtml(r.freeSuggestion || "")}</td>
       </tr>`;
     }).join("");
-  box.innerHTML = `<table><thead><tr><th>수집일</th><th>과정유형</th>${eduHead}<th>강사평가(준비·질의·전반)</th><th>불만족</th><th>제안·개선</th></tr></thead><tbody>${rows}</tbody></table>`;
+  box.innerHTML = `<table><thead><tr><th>수집일시</th><th>과정유형</th>${eduHead}<th>강사평가(준비·질의·전반)</th><th>불만족</th><th>제안·개선</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
