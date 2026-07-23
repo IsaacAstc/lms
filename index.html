@@ -55,7 +55,7 @@
               <label class="chk">평가 포함<input name="hasEvaluation" type="checkbox" /></label>
               <label>교육시작일<input name="startDate" type="date" required /></label>
               <label>교육종료일<input name="endDate" type="date" required /></label>
-              <label>교육장<input name="venue" /></label>
+              <label>교육장<select name="venue"><option value="">선택</option></select></label>
               <label>커리큘럼 연결<select name="programId"></select></label>
             </div>
             <datalist id="course-name-list"></datalist>
@@ -111,33 +111,25 @@
             </div>
           </fieldset>
 
-          <form id="session-form" class="entry-form">
-            <div class="grid">
-              <label>일자<input name="date" type="date" required /></label>
-              <label>과목<input name="subject" list="session-subject-list" required /></label>
-              <label>시작시각<select name="startTime" required></select></label>
-              <label>종료시각<select name="endTime" required></select></label>
-              <label>강의실<select name="room" required></select></label>
-              <label>강사(마스터)<input name="instructor" list="session-instructor-list" placeholder="강사명 검색" /></label>
-            </div>
-            <div class="form-actions">
-              <button id="session-submit" type="submit">등록</button>
-              <button id="session-cancel" type="button" hidden>취소</button>
-            </div>
-          </form>
           <datalist id="session-subject-list"></datalist>
           <datalist id="session-instructor-list"></datalist>
 
+          <h3>등록된 시간표 (셀 편집 후 일괄 저장)</h3>
+          <p class="hint">각 셀을 직접 수정하고 <b>전체 수정 완료</b>를 누르면 일괄 반영됩니다. 관리 열의 <b>복사</b>로 행을 복제해 새 강의를 추가할 수 있고, <b>삭제</b>한 행은 저장 시 제거됩니다.</p>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>일자</th><th>시간</th><th>과목</th>
-                  <th>강의실</th><th>강사</th><th>교관유형</th><th>관리</th>
+                  <th>일자</th><th>과목</th><th>시작</th><th>종료</th>
+                  <th>강의실</th><th>강사(마스터)</th><th>관리</th>
                 </tr>
               </thead>
               <tbody id="session-tbody"></tbody>
             </table>
+          </div>
+          <div class="form-actions" id="grid-actions" hidden>
+            <button id="grid-add" type="button">행 추가</button>
+            <button id="session-commit" type="button">전체 수정 완료</button>
           </div>
         </section>
 
