@@ -28,4 +28,10 @@
 ## 3단계(설문) 기준
 
 - `publicSurveys`: `where("roomId","==",...)` 단일 필드 → **추가 인덱스 불필요.** 노출 창 판정은 클라이언트에서 처리.
-- `surveyResponses`: `where("courseId","==",...)` 단일 필드(응답수·집계) → **추가 인덱스 불필요.**
+- `surveyResponses`: `where("courseId","==",...)` 단일 필드(응답수) → **추가 인덱스 불필요.**
+
+## 무료 한도 최적화(기간 조회) 관련
+
+읽기 한도(50k/일) 보호를 위해 집계 화면은 전체 구독 대신 **선택 기간만 조회**한다. 모두 단일 필드 범위 쿼리라 **복합 인덱스 불필요**(자동 단일 인덱스로 충분):
+- 강사료·집계: `sessions` `where("date", ">=", …) & where("date","<=", …)`
+- 설문 집계: `surveyResponses` `where("collectedDate", ">=", …) & where("collectedDate","<=", …)`
