@@ -158,6 +158,8 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 #subject-draft table { margin-top: 0.5rem; }
 .editing-row { background: #fff7e0; }
 .actions .copy { background: #4a7; }
+.entry-form label.chk { flex-direction: row; align-items: center; gap: 0.4rem; }
+.entry-form label.chk input { width: auto; }
 
 @media (max-width: 600px) {
   .grid { grid-template-columns: 1fr; }
