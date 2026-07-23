@@ -1,5 +1,9 @@
-// 설문 집계 대시보드 (#7): 과정유형별 교육/강사 만족도, 100점 환산, 소표본(10명 미만) 마스킹.
-import { watchCollection, onCollection, getCache } from "./store.js";
+// 설문 집계 대시보드 (#7): 과정유형별 교육/강사 만족도, 100점 환산.
+// 무료 한도 보호: 전체 구독 대신 선택 기간만 조회(getDocs).
+import {
+  collection, getDocs, query, where,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import { coursesCache } from "./courses.js";
 import { getProgramById } from "./programs.js";
@@ -35,28 +39,38 @@ const fmt = (v) => (v == null ? "-" : v.toFixed(2));
 const cell = (n, v) => fmt(v);
 
 export function initReports() {
-  watchCollection("surveyResponses");
   const typeSel = document.getElementById("rep-period-type");
   const monthInput = document.getElementById("rep-period");
   const now = new Date();
   monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   document.getElementById("rep-run").addEventListener("click", run);
-  // 데이터 도착 시 자동 1회 렌더.
-  onCollection("surveyResponses", () => { if (document.querySelector('.tab-panel[data-tab="reports"]:not([hidden])')) run(); });
+  // 탭 진입 시 1회 조회(선택 기간만 읽음).
   document.addEventListener("tabshown", (e) => { if (e.detail === "reports") run(); });
 }
 
-function currentResponses() {
+// 선택 기간의 응답만 서버에서 조회(무료 읽기 한도 보호).
+async function currentResponses() {
   const typeSel = document.getElementById("rep-period-type").value;
   const month = document.getElementById("rep-period").value;
-  let list = getCache("surveyResponses");
-  if (typeSel === "month" && month) list = list.filter((r) => (r.collectedDate || "").slice(0, 7) === month);
-  return list;
+  let q;
+  if (typeSel === "month" && month) {
+    q = query(collection(db, "surveyResponses"),
+      where("collectedDate", ">=", `${month}-01`),
+      where("collectedDate", "<=", `${month}-31`));
+  } else {
+    if (!confirm("전체 기간을 조회하면 응답이 많을 경우 읽기량이 커집니다. 계속할까요?")) return null;
+    q = collection(db, "surveyResponses");
+  }
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-function run() {
-  const responses = currentResponses();
-  document.getElementById("rep-total").textContent = `총 응답 ${responses.length}건`;
+async function run() {
+  const total = document.getElementById("rep-total");
+  total.textContent = "조회 중…";
+  const responses = await currentResponses();
+  if (responses == null) { total.textContent = ""; return; }
+  total.textContent = `총 응답 ${responses.length}건`;
   renderEducation(responses);
   renderInstructors(responses);
   renderRaw(responses);
