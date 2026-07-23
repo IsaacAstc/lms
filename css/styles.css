@@ -232,3 +232,11 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
   .course-picker { width: 100%; }
   .course-picker select { width: 100%; }
 }
+
+/* 운영 결과 보고서 */
+.report-doc { background: #fff; }
+.report-doc section { margin: 1rem 0 1.5rem; }
+.report-doc h3 { border-bottom: 2px solid #333; padding-bottom: .25rem; margin-top: 1.25rem; }
+.report-doc h4 { margin: .5rem 0 .25rem; font-size: .95rem; }
+.report-doc .report-narr { white-space: pre-wrap; border: 1px solid #ccc; padding: .5rem; min-height: 2rem; border-radius: 4px; }
+.report-head h1 { margin-bottom: .25rem; }
