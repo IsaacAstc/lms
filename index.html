@@ -37,6 +37,7 @@
         <button class="tab-btn" data-tab="instructors" type="button">강사 관리</button>
         <button class="tab-btn" data-tab="payroll" type="button">강사료·집계</button>
         <button class="tab-btn" data-tab="surveys" type="button">설문 관리</button>
+        <button class="tab-btn" data-tab="reports" type="button">설문 집계</button>
         <button class="tab-btn" data-tab="settings" type="button">기준값 설정</button>
         <button class="tab-btn" data-tab="data" type="button">데이터</button>
       </nav>
@@ -258,6 +259,29 @@
               <tbody id="survey-tbody"></tbody>
             </table>
           </div>
+        </section>
+
+        <!-- 설문 집계 -->
+        <section class="tab-panel" data-tab="reports" hidden>
+          <h2>설문 집계</h2>
+          <div class="load-row">
+            <label>기간구분
+              <select id="rep-period-type">
+                <option value="month">월별</option>
+                <option value="all">전체</option>
+              </select>
+            </label>
+            <label>기간(수집일) <input id="rep-period" type="month" /></label>
+            <button id="rep-run" type="button">집계</button>
+            <span id="rep-total" class="total-line"></span>
+          </div>
+          <p class="hint">5점 척도를 100점으로 환산해 표시합니다. <b>응답자 10명 미만 셀은 <span class="warn">*</span>로 마스킹</b>(소표본 비식별)됩니다. 과정유형은 차수에 연결된 커리큘럼 구분을 따릅니다.</p>
+
+          <h3>교육 만족도 (과정유형 × 항목, 100점)</h3>
+          <div class="table-wrap" id="rep-edu"></div>
+
+          <h3>강사 만족도 (교관유형 × 강사·과목, 100점)</h3>
+          <div class="table-wrap" id="rep-inst"></div>
         </section>
 
         <!-- 기준값 설정 -->

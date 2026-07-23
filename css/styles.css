@@ -190,6 +190,10 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .confirm-actions button { flex: 1; padding: 0.7rem; font-size: 0.95rem; }
 .confirm-actions .c-back { background: #889; }
 
+.sum-row td { background: #eef2f7; }
+#rep-edu td, #rep-inst td, #rep-edu th, #rep-inst th { text-align: center; }
+#rep-edu td:first-child, #rep-inst td:nth-child(-n+3) { text-align: left; }
+
 @media (max-width: 600px) {
   .grid { grid-template-columns: 1fr; }
   .topbar h1 { font-size: 0.95rem; }
