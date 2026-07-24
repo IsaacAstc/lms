@@ -14,6 +14,7 @@ import { initStats } from "./stats.js";
 import { initReportDoc } from "./report-doc.js";
 import { initFreetext } from "./freetext.js";
 import { initDataAdmin } from "./data-admin.js";
+import { initAdmins } from "./admins.js";
 import { initExportButtons } from "./export-csv.js";
 import { initSeed } from "./seed.js";
 
@@ -65,6 +66,7 @@ function initApp() {
   initReportDoc();
   initFreetext();
   initDataAdmin();
+  initAdmins();
   initExportButtons();
   initSeed();
 }
