@@ -43,6 +43,7 @@
         <button class="tab-btn" data-tab="reportdoc" type="button">운영 보고서</button>
         <button class="tab-btn" data-tab="freetext" type="button">주관식 원문</button>
         <button class="tab-btn" data-tab="settings" type="button">기준값 설정</button>
+        <button class="tab-btn" data-tab="admins" type="button">관리자 계정</button>
         <button class="tab-btn" data-tab="data" type="button">데이터</button>
       </nav>
 
@@ -412,6 +413,45 @@
           <div class="form-actions">
             <button id="travel-add" type="button">행 추가</button>
             <button id="travel-save" type="button">여비 기준 저장</button>
+          </div>
+        </section>
+
+        <!-- 관리자 계정 -->
+        <section class="tab-panel" data-tab="admins" hidden>
+          <h2>관리자 계정</h2>
+
+          <h3>내 비밀번호 변경</h3>
+          <p class="hint">현재 로그인: <b id="me-email"></b></p>
+          <div class="grid">
+            <label>현재 비밀번호<input id="pw-current" type="password" autocomplete="current-password" /></label>
+            <label>새 비밀번호<input id="pw-new" type="password" autocomplete="new-password" /></label>
+            <label>새 비밀번호 확인<input id="pw-new2" type="password" autocomplete="new-password" /></label>
+          </div>
+          <div class="form-actions">
+            <button id="pw-change-btn" type="button">비밀번호 변경</button>
+            <button id="admin-reset-btn" type="button">내 계정 재설정 메일</button>
+          </div>
+          <p id="pw-msg" class="error"></p>
+
+          <h3>관리자 추가</h3>
+          <p class="hint">이메일을 등록하면 관리자 권한(보안규칙 허용)이 부여됩니다. 초기 비밀번호를 입력하면 Auth 계정도 함께 생성합니다(현재 로그인은 유지). 비워 두면 권한만 부여하고, 대상자는 재설정 메일 등으로 로그인 설정합니다.</p>
+          <div class="grid">
+            <label>이메일<input id="admin-email" type="email" placeholder="name@airport.co.kr" /></label>
+            <label>초기 비밀번호(선택)<input id="admin-pw" type="password" autocomplete="new-password" placeholder="6자 이상" /></label>
+            <label>메모(선택)<input id="admin-memo" placeholder="예: 교육팀 홍길동" /></label>
+          </div>
+          <div class="form-actions">
+            <button id="admin-add-btn" type="button">관리자 추가</button>
+          </div>
+          <p id="admin-add-msg" class="error"></p>
+
+          <h3>관리자 목록</h3>
+          <p class="hint">삭제는 관리자 권한(allowlist)만 회수하며, Auth 계정 완전 삭제는 Firebase 콘솔에서 처리합니다. 부트스트랩 관리자는 보안규칙에 고정되어 목록에 표시되지 않습니다.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>이메일</th><th>메모</th><th>추가일</th><th>관리</th></tr></thead>
+              <tbody id="admin-tbody"></tbody>
+            </table>
           </div>
         </section>
 
