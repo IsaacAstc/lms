@@ -109,6 +109,10 @@ export function initCourses() {
     coursesCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderTable(tbody, form, submitBtn, cancelBtn);
     listeners.forEach((cb) => cb(coursesCache));
+  }, (err) => {
+    // 조회 실패(권한 등)를 조용히 감추지 않고 표시.
+    console.error("courses onSnapshot:", err);
+    tbody.innerHTML = `<tr><td colspan="14" class="empty">목록을 불러오지 못했습니다: ${escapeHtml(err.code || err.message)}<br>보안규칙 재배포 또는 로그인 계정의 관리자 권한을 확인하세요.</td></tr>`;
   });
 }
 

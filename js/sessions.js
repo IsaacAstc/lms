@@ -351,6 +351,9 @@ function subscribeSessions() {
     sessionsCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     sessionsCache.sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
     renderGrid();
+  }, (err) => {
+    console.error("sessions onSnapshot:", err);
+    document.getElementById("session-tbody").innerHTML = `<tr><td colspan="7" class="empty">시간표를 불러오지 못했습니다: ${escapeHtml(err.code || err.message)}</td></tr>`;
   });
 }
 
