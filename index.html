@@ -30,8 +30,7 @@
       </header>
 
       <nav class="tabs">
-        <button class="tab-btn" data-tab="courses" type="button">차수(운영) 관리</button>
-        <button class="tab-btn" data-tab="sessions" type="button">강의 시간표</button>
+        <button class="tab-btn" data-tab="courses" type="button">차수·시간표</button>
         <button class="tab-btn" data-tab="programs" type="button">과정 커리큘럼</button>
         <button class="tab-btn" data-tab="rooms" type="button">강의실 관리</button>
         <button class="tab-btn" data-tab="instructors" type="button">강사 관리</button>
@@ -88,17 +87,11 @@
               <tbody id="course-tbody"></tbody>
             </table>
           </div>
-        </section>
 
-        <!-- 강의 시간표 -->
-        <section class="tab-panel" data-tab="sessions" hidden>
-          <h2>강의 시간표</h2>
-          <label class="course-picker">
-            대상 과정(차수)
-            <select id="session-course">
-              <option value="">과정을 선택하세요</option>
-            </select>
-          </label>
+          <!-- 선택 차수 시간표 편집기(목록의 '시간표' 버튼으로 펼침) -->
+          <div id="timetable-editor" hidden>
+          <h2 id="tt-course-name">강의 시간표</h2>
+          <p class="hint">위 목록에서 <b>시간표</b> 버튼을 누른 차수의 시간표를 편집합니다. <button id="tt-close" type="button">닫기</button></p>
 
           <fieldset class="load-box">
             <legend>커리큘럼 불러와 초안 만들기</legend>
@@ -143,6 +136,7 @@
             <button id="grid-add" type="button">행 추가</button>
             <button id="session-commit" type="button">전체 수정 완료</button>
           </div>
+          </div><!-- /#timetable-editor -->
         </section>
 
         <!-- 과정 커리큘럼 -->
