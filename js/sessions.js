@@ -9,6 +9,7 @@ import { onRoomsChange, getRooms } from "./rooms.js";
 import { onProgramsChange, getProgramById } from "./programs.js";
 import { onInstructorsChange, getInstructors } from "./instructors.js";
 import { regenerateSurvey } from "./survey-gen.js";
+import { tableToCsv, downloadCsv } from "./csv.js";
 import { escapeHtml } from "./app.js";
 
 const sessionsCol = collection(db, "sessions");
@@ -40,6 +41,9 @@ export function initSessions() {
 
   // 시간표 편집기 닫기.
   document.getElementById("tt-close").addEventListener("click", closeEditor);
+
+  // 전체 차수 시간표 CSV.
+  document.getElementById("tt-export-all").addEventListener("click", exportAllTimetables);
 
   // 커리큘럼 불러오기 select.
   onProgramsChange((programs) => {
@@ -102,6 +106,39 @@ function closeEditor() {
   if (unsub) { unsub(); unsub = null; }
   clearDraft();
   document.getElementById("timetable-editor").hidden = true;
+}
+
+// 전체 차수의 등록된 시간표를 한 CSV로 내보내기(차수 정보 열 포함).
+async function exportAllTimetables() {
+  const btn = document.getElementById("tt-export-all");
+  btn.disabled = true;
+  try {
+    const snap = await getDocs(sessionsCol);
+    const byId = Object.fromEntries(coursesCache.map((c) => [c.id, c]));
+    const rows = snap.docs.map((d) => d.data());
+    if (!rows.length) return alert("등록된 시간표가 없습니다.");
+    rows.sort((a, b) => {
+      const ca = byId[a.courseId], cb = byId[b.courseId];
+      const ka = `${ca?.code || ""}${String(ca?.round ?? "").padStart(3, "0")}${a.date}${a.startTime}`;
+      const kb = `${cb?.code || ""}${String(cb?.round ?? "").padStart(3, "0")}${b.date}${b.startTime}`;
+      return ka.localeCompare(kb);
+    });
+    const body = rows.map((s) => {
+      const c = byId[s.courseId];
+      return `<tr>
+        <td>${escapeHtml(c?.code || "")}</td><td>${escapeHtml(c?.name || "")}</td><td>${escapeHtml(String(c?.round ?? ""))}</td>
+        <td>${escapeHtml(s.date || "")}</td><td>${escapeHtml(s.subject || "")}</td>
+        <td>${escapeHtml(s.startTime || "")}</td><td>${escapeHtml(s.endTime || "")}</td>
+        <td>${escapeHtml(s.room || "")}</td><td>${escapeHtml(s.instructor || "")}</td></tr>`;
+    }).join("");
+    const table = document.createElement("table");
+    table.innerHTML = `<thead><tr><th>과정코드</th><th>과정명</th><th>차수</th><th>일자</th><th>과목</th><th>시작</th><th>종료</th><th>강의실</th><th>강사</th></tr></thead><tbody>${body}</tbody>`;
+    downloadCsv(`전체시간표_${new Date().toISOString().slice(0, 10)}.csv`, tableToCsv(table));
+  } catch (e) {
+    alert("전체 시간표 내보내기 실패: " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // 선택 차수 커리큘럼 과목을 datalist로 제안.
