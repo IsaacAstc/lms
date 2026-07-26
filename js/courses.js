@@ -13,6 +13,7 @@ import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import { onProgramsChange, getProgramById, getPrograms } from "./programs.js";
 import { onRoomsChange, getRooms } from "./rooms.js";
+import { selectCourse } from "./sessions.js";
 
 const coursesCol = collection(db, "courses");
 let unsub = null;
@@ -184,9 +185,11 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       <td>${escapeHtml(c.venue ?? "")}</td>
       <td>${escapeHtml(getProgramById(c.programId)?.name ?? "")}</td>
       <td class="actions">
+        <button type="button" class="timetable">시간표</button>
         <button type="button" class="edit">수정</button>
         <button type="button" class="del">삭제</button>
       </td>`;
+    tr.querySelector(".timetable").addEventListener("click", () => selectCourse(c.id));
     tr.querySelector(".edit").addEventListener("click", () => {
       editingId = c.id;
       form.code.value = c.code ?? "";
