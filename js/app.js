@@ -30,20 +30,58 @@ export function escapeHtml(v) {
 
 let initialized = false;
 
+// 상단 그룹(1단계) → 서브탭(2단계). 패널은 기존 그대로(data-tab)이며 표시만 제어.
+const TAB_GROUPS = [
+  { id: "courses", label: "차수·시간표", tabs: [["courses", ""]] },
+  { id: "master", label: "마스터", tabs: [["programs", "과정 커리큘럼"], ["rooms", "강의실"], ["instructors", "강사"]] },
+  { id: "finance", label: "강사료·경비", tabs: [["payroll", "강사료·집계"], ["expenses", "소요경비"]] },
+  { id: "surveys", label: "설문 관리", tabs: [["surveys", ""]] },
+  { id: "survey-result", label: "설문 결과", tabs: [["reports", "설문 집계"], ["freetext", "주관식 원문"]] },
+  { id: "stats", label: "통계", tabs: [["stats", ""]] },
+  { id: "reportdoc", label: "운영 보고서", tabs: [["reportdoc", ""]] },
+  { id: "admin", label: "설정", tabs: [["settings", "기준값 설정"], ["admins", "관리자 계정"], ["data", "데이터 관리"]] },
+];
+const groupOfTab = (name) => TAB_GROUPS.find((g) => g.tabs.some(([t]) => t === name));
+
 function showTab(name) {
-  document.querySelectorAll(".tab-panel").forEach((p) => {
-    p.hidden = p.dataset.tab !== name;
+  const group = groupOfTab(name);
+  document.querySelectorAll(".tab-panel").forEach((p) => { p.hidden = p.dataset.tab !== name; });
+  // 상단 그룹 버튼 활성화(그룹 내 어떤 서브탭이든 활성이면 그룹 강조).
+  document.querySelectorAll("#main-tabs .tab-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.group === group?.id);
   });
-  document.querySelectorAll(".tab-btn").forEach((b) => {
-    b.classList.toggle("active", b.dataset.tab === name);
-  });
+  // 서브탭 바: 그룹에 탭이 2개 이상일 때만 노출.
+  renderSubtabs(group, name);
   document.dispatchEvent(new CustomEvent("tabshown", { detail: name }));
 }
 
+function renderSubtabs(group, active) {
+  const bar = document.getElementById("sub-tabs");
+  if (!group || group.tabs.length < 2) { bar.hidden = true; bar.innerHTML = ""; return; }
+  bar.hidden = false;
+  bar.innerHTML = "";
+  for (const [tab, label] of group.tabs) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "subtab-btn" + (tab === active ? " active" : "");
+    b.textContent = label;
+    b.addEventListener("click", () => showTab(tab));
+    bar.appendChild(b);
+  }
+}
+
 function setupTabs() {
-  document.querySelectorAll(".tab-btn").forEach((btn) => {
-    btn.addEventListener("click", () => showTab(btn.dataset.tab));
-  });
+  const nav = document.getElementById("main-tabs");
+  nav.innerHTML = "";
+  for (const g of TAB_GROUPS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "tab-btn";
+    b.dataset.group = g.id;
+    b.textContent = g.label;
+    b.addEventListener("click", () => showTab(g.tabs[0][0]));
+    nav.appendChild(b);
+  }
   showTab("courses");
 }
 
