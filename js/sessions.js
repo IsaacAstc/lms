@@ -18,8 +18,6 @@ let selectedCourse = null;
 let sessionsCache = [];
 
 export function initSessions() {
-  const courseSel = document.getElementById("session-course");
-
   // 강사 datalist(강사 마스터 기반).
   onInstructorsChange(() => {
     const dl = document.getElementById("session-instructor-list");
@@ -32,18 +30,16 @@ export function initSessions() {
     }
   });
 
-  // 과정 셀렉트(차수).
-  onCoursesChange((courses) => {
-    const prev = courseSel.value;
-    courseSel.innerHTML = `<option value="">과정을 선택하세요</option>`;
-    for (const c of courses) {
-      const o = document.createElement("option");
-      o.value = c.id;
-      o.textContent = `${c.code} ${c.name} (${c.round}차수)`;
-      courseSel.appendChild(o);
-    }
-    courseSel.value = prev;
+  // 선택 차수가 목록에서 갱신되면 편집기 헤딩·상태 동기화.
+  onCoursesChange(() => {
+    if (!selectedCourseId) return;
+    selectedCourse = coursesCache.find((c) => c.id === selectedCourseId) || null;
+    if (!selectedCourse) closeEditor();
+    else updateHeading();
   });
+
+  // 시간표 편집기 닫기.
+  document.getElementById("tt-close").addEventListener("click", closeEditor);
 
   // 커리큘럼 불러오기 select.
   onProgramsChange((programs) => {
@@ -61,16 +57,6 @@ export function initSessions() {
   // 강의실 변경 시 그리드 옵션 갱신(편집 중이 아니면).
   onRoomsChange(() => { if (selectedCourseId) renderGrid(); });
 
-  courseSel.addEventListener("change", () => {
-    selectedCourseId = courseSel.value;
-    selectedCourse = coursesCache.find((c) => c.id === selectedCourseId) || null;
-    refreshSubjectList();
-    clearDraft();
-    document.getElementById("load-program").value = selectedCourse?.programId || "";
-    document.getElementById("load-basedate").value = selectedCourse?.startDate || "";
-    subscribeSessions();
-  });
-
   document.getElementById("load-btn").addEventListener("click", buildDraft);
   document.getElementById("draft-add").addEventListener("click", () =>
     document.getElementById("draft-tbody").appendChild(editRow({ room: selectedCourse?.venue }, { draft: true }))
@@ -87,6 +73,35 @@ export function initSessions() {
 export function teardownSessions() {
   if (unsub) unsub();
   unsub = null;
+}
+
+// 차수 목록의 '시간표' 버튼에서 호출: 해당 차수 시간표 편집기를 펼침.
+export function selectCourse(courseId) {
+  selectedCourseId = courseId;
+  selectedCourse = coursesCache.find((c) => c.id === selectedCourseId) || null;
+  if (!selectedCourse) return closeEditor();
+  refreshSubjectList();
+  clearDraft();
+  document.getElementById("load-program").value = selectedCourse.programId || "";
+  document.getElementById("load-basedate").value = selectedCourse.startDate || "";
+  subscribeSessions();
+  updateHeading();
+  const editor = document.getElementById("timetable-editor");
+  editor.hidden = false;
+  editor.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function updateHeading() {
+  const h = document.getElementById("tt-course-name");
+  if (h && selectedCourse) h.textContent = `강의 시간표 — ${selectedCourse.code} ${selectedCourse.name} (${selectedCourse.round}차수)`;
+}
+
+function closeEditor() {
+  selectedCourseId = "";
+  selectedCourse = null;
+  if (unsub) { unsub(); unsub = null; }
+  clearDraft();
+  document.getElementById("timetable-editor").hidden = true;
 }
 
 // 선택 차수 커리큘럼 과목을 datalist로 제안.
