@@ -79,6 +79,27 @@ body {
 }
 .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
 
+/* 2단계 서브탭 */
+.subtabs {
+  display: flex;
+  gap: 0.25rem;
+  background: #f4f6f8;
+  border-bottom: 1px solid var(--border);
+  padding: 0.35rem 0.5rem;
+  overflow-x: auto;
+}
+.subtab-btn {
+  border: none;
+  background: none;
+  padding: 0.4rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--muted);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.subtab-btn.active { background: var(--primary); color: #fff; font-weight: 600; }
+
 main { padding: 1rem; max-width: 1100px; margin: 0 auto; }
 h2 { font-size: 1.1rem; }
 
