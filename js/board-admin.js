@@ -6,7 +6,7 @@ import { db } from "./firebase.js";
 import { boardFields } from "./courses.js";
 
 export function initBoardAdmin() {
-  document.getElementById("board-sync").addEventListener("click", syncAll);
+  document.getElementById("board-sync").addEventListener("click", () => syncAll(true));
   document.getElementById("board-apply-save").addEventListener("click", saveApply);
   document.getElementById("board-url-copy").addEventListener("click", () => {
     navigator.clipboard?.writeText(document.getElementById("board-url").value);
@@ -23,6 +23,43 @@ async function load() {
     const d = await getDoc(doc(db, "publicBoard", "__config"));
     document.getElementById("board-apply-input").value = d.exists() ? (d.data().applyInfo || "") : "";
   } catch { /* */ }
+  // 탭 진입 시 차이만 자동 동기화(변경 없으면 쓰기 없음). CSV 대량등록·시드분 자동 반영.
+  autoSync();
+}
+
+// 보드 미러 필드 비교(updatedAtMs 제외).
+function boardDiffers(a, b) {
+  const keys = ["code", "name", "courseType", "round", "startDate", "endDate", "venue", "capacity", "appliedCount", "remaining", "hasEvaluation"];
+  return keys.some((k) => (a?.[k] ?? "") !== (b[k] ?? ""));
+}
+
+// 미게시/변경된 차수만 게시 + 삭제분 정리(조용히). 상태 표시.
+async function autoSync() {
+  const log = document.getElementById("board-sync-log");
+  log.textContent = "현황 확인 중…";
+  try {
+    const [csnap, bsnap] = await Promise.all([
+      getDocs(collection(db, "courses")),
+      getDocs(collection(db, "publicBoard")),
+    ]);
+    const boardById = {};
+    bsnap.docs.forEach((d) => { if (!d.id.startsWith("__")) boardById[d.id] = d.data(); });
+    const courseIds = new Set(csnap.docs.map((d) => d.id));
+    const toWrite = csnap.docs.filter((d) => { const cur = boardById[d.id]; return !cur || boardDiffers(cur, boardFields(d.data())); });
+    const stale = bsnap.docs.filter((d) => !d.id.startsWith("__") && !courseIds.has(d.id));
+    for (let i = 0; i < toWrite.length; i += 450) {
+      const batch = writeBatch(db);
+      toWrite.slice(i, i + 450).forEach((d) => batch.set(doc(db, "publicBoard", d.id), boardFields(d.data())));
+      await batch.commit();
+    }
+    for (let i = 0; i < stale.length; i += 450) {
+      const batch = writeBatch(db);
+      stale.slice(i, i + 450).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+    log.textContent = `게시 ${csnap.size}건` +
+      (toWrite.length || stale.length ? ` · 자동 반영: 갱신 ${toWrite.length}건${stale.length ? `, 정리 ${stale.length}건` : ""}` : " · 최신 상태");
+  } catch (e) { log.textContent = "현황 확인 실패: " + e.message; }
 }
 
 async function saveApply() {
@@ -33,7 +70,7 @@ async function saveApply() {
   } catch (e) { alert("저장 실패: " + e.message); }
 }
 
-async function syncAll() {
+async function syncAll(force) {
   const log = document.getElementById("board-sync-log");
   const btn = document.getElementById("board-sync");
   btn.disabled = true;
