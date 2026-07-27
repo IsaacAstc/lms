@@ -35,7 +35,7 @@
       <main>
         <!-- 차수(운영) 관리 -->
         <section class="tab-panel" data-tab="courses">
-          <h2>차수·시간표 <button class="csv-export" type="button" data-target="#course-tbody" data-name="차수목록">차수목록 CSV</button></h2>
+          <h2>차수·시간표 <button class="csv-export" type="button" data-target="#course-tbody" data-name="차수목록">차수목록 CSV</button> <button class="csv-import" type="button" data-import="courses">CSV 가져오기</button> <button class="csv-tpl" type="button" data-import="courses">템플릿</button></h2>
           <div class="load-row" id="tt-export-bar">
             <span class="hint">시간표 내보내기:</span>
             <button id="tt-export-all" type="button">전체</button>
@@ -113,7 +113,7 @@
           <datalist id="session-subject-list"></datalist>
           <datalist id="session-instructor-list"></datalist>
 
-          <h3>등록된 시간표 (셀 편집 후 일괄 저장) <button class="csv-export" type="button" data-target="#session-tbody" data-name="시간표">CSV 내보내기</button></h3>
+          <h3>등록된 시간표 (셀 편집 후 일괄 저장) <button class="csv-export" type="button" data-target="#session-tbody" data-name="시간표">CSV 내보내기</button> <button class="csv-import" type="button" data-import="sessions">CSV 가져오기</button> <button class="csv-tpl" type="button" data-import="sessions">템플릿</button></h3>
           <p class="hint">각 셀을 직접 수정하고 <b>전체 수정 완료</b>를 누르면 일괄 반영됩니다. 관리 열의 <b>복사</b>로 행을 복제해 새 강의를 추가할 수 있고, <b>삭제</b>한 행은 저장 시 제거됩니다.</p>
           <div class="table-wrap">
             <table>
@@ -135,7 +135,7 @@
 
         <!-- 과정 커리큘럼 -->
         <section class="tab-panel" data-tab="programs" hidden>
-          <h2>과정 커리큘럼 <button class="csv-export" type="button" data-target="#program-tbody" data-name="과정커리큘럼">CSV 내보내기</button></h2>
+          <h2>과정 커리큘럼 <button class="csv-export" type="button" data-target="#program-tbody" data-name="과정커리큘럼">CSV 내보내기</button> <button class="csv-import" type="button" data-import="programs">CSV 가져오기</button> <button class="csv-tpl" type="button" data-import="programs">템플릿</button></h2>
           <form id="program-form" class="entry-form">
             <div class="grid">
               <label>과정명<input name="name" required /></label>
@@ -173,7 +173,7 @@
 
         <!-- 강의실 관리 -->
         <section class="tab-panel" data-tab="rooms" hidden>
-          <h2>강의실 관리 <button class="csv-export" type="button" data-target="#room-tbody" data-name="강의실">CSV 내보내기</button></h2>
+          <h2>강의실 관리 <button class="csv-export" type="button" data-target="#room-tbody" data-name="강의실">CSV 내보내기</button> <button class="csv-import" type="button" data-import="rooms">CSV 가져오기</button> <button class="csv-tpl" type="button" data-import="rooms">템플릿</button></h2>
           <form id="room-form" class="entry-form">
             <div class="grid">
               <label>강의실명<input name="name" required /></label>
@@ -196,7 +196,7 @@
 
         <!-- 강사 관리 -->
         <section class="tab-panel" data-tab="instructors" hidden>
-          <h2>강사 관리 <button class="csv-export" type="button" data-target="#instructor-tbody" data-name="강사목록">CSV 내보내기</button></h2>
+          <h2>강사 관리 <button class="csv-export" type="button" data-target="#instructor-tbody" data-name="강사목록">CSV 내보내기</button> <button class="csv-import" type="button" data-import="instructors">CSV 가져오기</button> <button class="csv-tpl" type="button" data-import="instructors">템플릿</button></h2>
           <p class="notice">※ 강사 정보는 관리자 전용으로만 저장됩니다. 강사 외 개인정보(교육생·설문 응답)는 처리하지 않습니다.</p>
           <form id="instructor-form" class="entry-form">
             <div class="grid">
