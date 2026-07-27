@@ -21,6 +21,7 @@ import { onProgramsChange, getProgramById, getPrograms } from "./programs.js";
 import { onRoomsChange, getRooms } from "./rooms.js";
 import { selectCourse } from "./sessions.js";
 import { regenerateSurvey } from "./survey-gen.js";
+import { fmtDot } from "./time.js";
 
 const coursesCol = collection(db, "courses");
 let unsub = null;
@@ -283,9 +284,10 @@ function periodText(c) {
   const s = c.startDate || "";
   const e = c.endDate || "";
   if (!s && !e) return "";
-  if (!e || e === s) return escapeHtml(s);
-  const end = (s.slice(0, 4) === e.slice(0, 4)) ? e.slice(5) : e;
-  return `${escapeHtml(s)} - ${escapeHtml(end)}`;
+  if (!e || e === s) return escapeHtml(fmtDot(s));
+  // 같은 해면 종료일의 연도를 생략(축약분도 점 구분으로 통일).
+  const end = (s.slice(0, 4) === e.slice(0, 4)) ? e.slice(5).replace("-", ".") : fmtDot(e);
+  return `${escapeHtml(fmtDot(s))} - ${escapeHtml(end)}`;
 }
 
 // 커리큘럼명이 과정명과 다를 때만 과정명 아래에 작게 표기(열 하나 절약).

@@ -23,3 +23,9 @@ export function kstToday() {
 }
 
 export const HOUR_MS = 3600 * 1000;
+
+// 화면 표시용 날짜 포맷: 'YYYY-MM-DD' → 'YYYY.MM.DD' (저장·조회 형식은 그대로 유지).
+// 날짜시각 문자열('YYYY-MM-DD HH:MM')도 날짜 부분만 변환된다.
+export function fmtDot(s) {
+  return String(s ?? "").replace(/(\d{4})-(\d{2})-(\d{2})/g, "$1.$2.$3");
+}

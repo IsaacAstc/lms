@@ -5,6 +5,7 @@ import {
 import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import { coursesCache } from "./courses.js";
+import { fmtDot } from "./time.js";
 
 const DEFAULT_CATS = ["현업 활용", "강의 방식", "교재/자료", "시설/환경", "운영/진행", "기타"];
 let categories = [];
@@ -92,7 +93,7 @@ function renderEntries() {
   const entries = currentEntries();
   if (!entries.length) { box.innerHTML = `<p class="empty">조건에 맞는 원문이 없습니다.</p>`; renderCatCounts(); return; }
   const rows = entries.map((e) => `<tr>
-      <td>${escapeHtml(e.when)}</td>
+      <td>${escapeHtml(fmtDot(e.when))}</td>
       <td>${escapeHtml(e.courseName)}</td>
       <td>${escapeHtml(e.kind)}</td>
       <td class="raw-free">${escapeHtml(e.text)}</td>
