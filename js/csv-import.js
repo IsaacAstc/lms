@@ -69,7 +69,9 @@ const TARGETS = {
       records.forEach((r, i) => {
         const name = (r["강의실명"] || "").trim();
         if (!name) { skipped.push({ line: i + 2, reason: "강의실명 없음" }); return; }
-        docs.push({ name, capacity: num(r["정원"]), order: num(r["표시순서"]), note: (r["비고"] || "").trim() });
+        const cap = num(r["정원"]);
+        if (cap < 0) { skipped.push({ line: i + 2, reason: "정원은 0 이상" }); return; }
+        docs.push({ name, capacity: cap, order: num(r["표시순서"]), note: (r["비고"] || "").trim() });
       });
       return { docs, skipped };
     },
@@ -105,9 +107,25 @@ const TARGETS = {
         const name = (r["과정명"] || "").trim();
         if (!code || !name) { skipped.push({ line: i + 2, reason: "과정코드/과정명 필수" }); return; }
         const cur = (r["커리큘럼명"] || "").trim();
-        docs.push({ code, name, round: num(r["차수"]) || 1, capacity: num(r["정원"]),
-          appliedCount: num(r["신청건수"]), completedCount: num(r["이수인원"]), hasEvaluation: bool(r["평가포함"]),
-          startDate: (r["교육시작일"] || "").trim(), endDate: (r["교육종료일"] || "").trim(),
+        // 화면 등록과 동일한 검증(불량 데이터가 우회 유입되지 않도록).
+        const capacity = num(r["정원"]);
+        const round = num(r["차수"]) || 1;
+        const applied = num(r["신청건수"]);
+        const completed = num(r["이수인원"]);
+        const startDate = (r["교육시작일"] || "").trim();
+        const endDate = (r["교육종료일"] || "").trim();
+        const bad =
+          capacity <= 0 ? "정원은 1 이상"
+          : round <= 0 ? "차수는 1 이상"
+          : (!startDate || !endDate) ? "교육기간 필요"
+          : endDate < startDate ? "종료일이 시작일보다 빠름"
+          : (applied < 0 || completed < 0) ? "신청·이수는 0 이상"
+          : applied > capacity ? "신청건수가 정원 초과"
+          : null;
+        if (bad) { skipped.push({ line: i + 2, reason: bad }); return; }
+        docs.push({ code, name, round, capacity,
+          appliedCount: applied, completedCount: completed, hasEvaluation: bool(r["평가포함"]),
+          startDate, endDate,
           venue: (r["교육장"] || "").trim(), courseType: (r["과정유형"] || "").trim(),
           operationTag: (r["운영유형"] || "").trim(), programId: cur ? (pByName[cur] || "") : "",
           hidden: bool(r["숨김"]) });
@@ -132,8 +150,17 @@ const TARGETS = {
         const iname = (r["강사"] || "").trim();
         const inst = iname ? iByName[iname] : null;
         if (iname && !inst) { skipped.push({ line: i + 2, reason: `강사 미등록(${iname})` }); return; }
-        docs.push({ courseId: cid, date: (r["일자"] || "").trim(), subject: (r["과목"] || "").trim(),
-          startTime: (r["시작"] || "").trim(), endTime: (r["종료"] || "").trim(), room: (r["강의실"] || "").trim(),
+        // 화면 입력과 동일한 검증(일자·과목 필수, 종료 > 시작).
+        const date = (r["일자"] || "").trim();
+        const subject = (r["과목"] || "").trim();
+        const startTime = (r["시작"] || "").trim();
+        const endTime = (r["종료"] || "").trim();
+        const bad = (!date || !subject) ? "일자·과목 필요"
+          : (startTime && endTime && endTime <= startTime) ? "종료시각이 시작시각보다 빠름"
+          : null;
+        if (bad) { skipped.push({ line: i + 2, reason: bad }); return; }
+        docs.push({ courseId: cid, date, subject, startTime, endTime,
+          room: (r["강의실"] || "").trim(),
           instructor: iname, instructorId: inst?.id || "", teacherKind: kindOf(inst?.type) });
       });
       return { docs, skipped };
