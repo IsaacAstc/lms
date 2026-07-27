@@ -271,7 +271,7 @@ function findConflicts(items) {
         msgs.push(`${a.date} ${a.room}: '${a.subject}'와 '${b.subject}' 강의실 시간 겹침`);
       }
       if (a.instructorId && a.instructorId === b.instructorId) {
-        msgs.push(`${a.date} ${escapeHtml(a.instructor)}: '${a.subject}'와 '${b.subject}' 강사 이중배정`);
+        msgs.push(`${a.date} ${a.instructor}: '${a.subject}'와 '${b.subject}' 강사 이중배정`);
       }
     }
   }
@@ -296,12 +296,12 @@ async function findExternalConflicts(items) {
   for (const a of items) {
     for (const e of externals) {
       if (!overlaps(a, e)) continue;
-      const who = `${e.date} [${escapeHtml(nameOf(e.courseId))}]`;
+      const who = `${e.date} [${nameOf(e.courseId)}]`;
       if (a.room && a.room === e.room) {
-        msgs.push(`${who} ${a.room}: '${a.subject}'가 '${escapeHtml(e.subject || "")}'와 강의실 겹침`);
+        msgs.push(`${who} ${a.room}: '${a.subject}'가 '${e.subject || ""}'와 강의실 겹침`);
       }
       if (a.instructorId && a.instructorId === e.instructorId) {
-        msgs.push(`${who} ${escapeHtml(a.instructor)}: '${a.subject}'와 강사 이중배정`);
+        msgs.push(`${who} ${a.instructor}: '${a.subject}'와 강사 이중배정`);
       }
     }
   }

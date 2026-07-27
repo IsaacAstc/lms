@@ -144,7 +144,10 @@ function render(list) {
       catch (e) { alert("메일 발송 실패: " + e.message); }
     });
     tr.querySelector(".a-del").addEventListener("click", async () => {
-      if (a.email === auth.currentUser?.email) return alert("본인 계정은 이 목록에서 삭제할 수 없습니다.");
+      // 이메일 대소문자 무관하게 본인 판정(Auth는 가입 시 표기를 보존).
+      if ((a.email || "").toLowerCase() === (auth.currentUser?.email || "").toLowerCase()) {
+        return alert("본인 계정은 이 목록에서 삭제할 수 없습니다.");
+      }
       if (!confirm(`'${a.email}'의 관리자 권한을 회수합니다.\n(Auth 계정 자체는 남아 있으며, 완전 삭제는 Firebase 콘솔에서 처리)\n계속할까요?`)) return;
       try { await deleteDoc(doc(db, "admins", a.id)); }
       catch (e) { alert("삭제 실패: " + e.message); }

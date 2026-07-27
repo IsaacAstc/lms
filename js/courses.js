@@ -62,8 +62,13 @@ export function initCourses() {
         const ref = await addDoc(coursesCol, data);
         savedId = ref.id;
       }
-      await mirrorBoard(savedId, data);      // 공개 현황 보드 갱신.
-      await syncSurveyFor(savedId, data);    // 숨김이면 공개 설문 비활성(제거).
+      // 공개 보드·설문 반영. 저장 자체는 끝났으므로 실패해도 폼은 초기화하되 반드시 알린다.
+      try {
+        await applyPublicState(savedId, data);
+      } catch (pubErr) {
+        alert(`차수는 저장했지만 공개 보드·설문 반영에 실패했습니다: ${pubErr.message}\n`
+          + `설정 → 공개 현황 보드에서 '전체 강제 동기화'를 실행하세요.`);
+      }
       resetForm(form, submitBtn, cancelBtn);
     } catch (e) {
       alert("저장 실패: " + e.message);
@@ -161,12 +166,17 @@ export function boardFields(data) {
     hasEvaluation: !!data.hasEvaluation, updatedAtMs: Date.now(),
   };
 }
+// 공개 보드 미러. 실패는 호출부에서 처리(조용히 삼키면 숨김이 안 먹힌 채 노출될 수 있음).
 async function mirrorBoard(id, data) {
-  try {
-    // 숨김 처리된 차수는 공개 보드에서 제거(미표시).
-    if (data.hidden) await deleteDoc(doc(db, "publicBoard", id));
-    else await setDoc(doc(db, "publicBoard", id), boardFields(data));
-  } catch (e) { console.warn("board mirror:", e.message); }
+  // 숨김 처리된 차수는 공개 보드에서 제거(미표시).
+  if (data.hidden) await deleteDoc(doc(db, "publicBoard", id));
+  else await setDoc(doc(db, "publicBoard", id), boardFields(data));
+}
+
+// 공개 노출 상태(보드·설문)를 차수 상태에 맞춰 일괄 반영.
+async function applyPublicState(id, data) {
+  await mirrorBoard(id, data);
+  await syncSurveyFor(id, data);
 }
 
 // 숨김 처리된 차수 id 집합(집계 제외용). 캐시 상태와 무관하게 직접 조회.
@@ -176,15 +186,14 @@ export async function getHiddenCourseIds() {
 }
 
 // 숨김 상태에 따라 공개 설문 동기화: 숨김이면 설문 제거, 해제면 재생성.
+// 실패는 호출부에서 처리(숨김이 반영되지 않으면 설문이 계속 응답 가능).
 async function syncSurveyFor(id, data) {
-  try {
-    if (data.hidden) {
-      await deleteDoc(doc(db, "publicSurveys", id));
-    } else {
-      const roomId = getRooms().find((r) => r.name === data.venue)?.id || "";
-      await regenerateSurvey({ ...data, id }, roomId);
-    }
-  } catch (e) { console.warn("survey sync:", e.message); }
+  if (data.hidden) {
+    await deleteDoc(doc(db, "publicSurveys", id));
+  } else {
+    const roomId = getRooms().find((r) => r.name === data.venue)?.id || "";
+    await regenerateSurvey({ ...data, id }, roomId);
+  }
 }
 
 // 잔여석 = 정원 - 신청건수 (자동 계산). 음수면 0 하한, 경고색은 CSS로.
@@ -253,11 +262,18 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       const on = e.target.checked;
       try {
         await updateDoc(doc(db, "courses", c.id), { hidden: on });
-        await mirrorBoard(c.id, { ...c, hidden: on });
-        await syncSurveyFor(c.id, { ...c, hidden: on });
       } catch (err) {
-        e.target.checked = !on;
+        e.target.checked = !on; // 저장 자체가 실패 → 체크 상태 원복.
         alert("숨김 설정 실패: " + err.message);
+        return;
+      }
+      try {
+        await applyPublicState(c.id, { ...c, hidden: on });
+      } catch (err) {
+        // 저장은 됐으나 공개 반영 실패 → 노출이 남을 수 있으므로 명확히 경고.
+        alert(`숨김 설정은 저장했지만 공개 보드·설문 반영에 실패했습니다: ${err.message}\n`
+          + (on ? "해당 차수가 아직 외부에 노출·응답 가능할 수 있습니다.\n" : "")
+          + "설정 → 공개 현황 보드에서 '전체 강제 동기화'를 실행하세요.");
       }
     });
     tr.querySelector(".edit").addEventListener("click", () => {
