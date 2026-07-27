@@ -23,12 +23,20 @@ export const INSTRUCTOR_ITEMS = [
 // 강사만족도에서 제외할 과목명 패턴(첫/마지막 과목 안전장치).
 const EXCLUDE_PATTERNS = [/교육\s*등록/, /평가/, /설문/, /수료/];
 
+// 이 소속의 강사는 설문에 개인 강사명 대신 기관명을 표시한다(기관 단위 평가).
+export const ORG_AS_NAME = ["공항테러대책협의회"];
+function displayInstructorName(session, inst) {
+  const aff = (inst?.affiliation || "").trim();
+  return ORG_AS_NAME.includes(aff) ? aff : session.instructor;
+}
+
 // 노출 창: 종료 2시간 전 ~ 종료 후 1시간.
 const OPEN_BEFORE_MS = 2 * HOUR_MS;
 const CLOSE_AFTER_MS = 1 * HOUR_MS;
 
 // 과정+세션으로 공개 설문 정의 객체 생성. roomId 없거나 세션 없으면 null.
-export function buildSurvey(course, sessions, roomId) {
+// instructorsById: { [id]: {affiliation, ...} } — 소속 기반 표시명 결정에 사용(없으면 세션의 강사명 사용).
+export function buildSurvey(course, sessions, roomId, instructorsById = {}) {
   if (!roomId) return null;
   if (course?.hidden) return null; // 숨김 차수는 설문 비활성(기존 문서는 호출부에서 제거).
   const sorted = [...sessions].sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
@@ -47,7 +55,10 @@ export function buildSurvey(course, sessions, roomId) {
     const key = `${s.instructorId}|${s.subject}`;
     if (seen.has(key)) return;
     seen.add(key);
-    instructorTargets.push({ key, subject: s.subject, instructorId: s.instructorId, instructorName: s.instructor });
+    instructorTargets.push({
+      key, subject: s.subject, instructorId: s.instructorId,
+      instructorName: displayInstructorName(s, instructorsById[s.instructorId]),
+    });
   });
 
   return {
@@ -70,9 +81,14 @@ export function buildSurvey(course, sessions, roomId) {
 // 과정의 세션을 읽어 공개 설문 문서를 생성/갱신. 반환: survey 또는 null(스킵).
 export async function regenerateSurvey(course, roomId) {
   if (!course?.id) return null;
-  const snap = await getDocs(query(collection(db, "sessions"), where("courseId", "==", course.id)));
+  // 강사 소속(표시명 결정용)을 함께 조회 — 캐시 상태와 무관하게 동작.
+  const [snap, isnap] = await Promise.all([
+    getDocs(query(collection(db, "sessions"), where("courseId", "==", course.id))),
+    getDocs(collection(db, "instructors")),
+  ]);
   const sessions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  const survey = buildSurvey(course, sessions, roomId);
+  const instructorsById = Object.fromEntries(isnap.docs.map((d) => [d.id, d.data()]));
+  const survey = buildSurvey(course, sessions, roomId, instructorsById);
   if (!survey) {
     // 생성 조건 미충족: 기존 문서 있으면 제거.
     await deleteDoc(doc(db, "publicSurveys", course.id)).catch(() => {});
