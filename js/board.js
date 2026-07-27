@@ -21,8 +21,8 @@ function dayOffsetStr(n) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(base);
 }
 
-// 기본 조회 범위: 오늘 ~ +60일.
-const DEFAULT_RANGE_DAYS = 60;
+// 기본 조회 범위: 오늘 ~ +N일.
+const DEFAULT_RANGE_DAYS = 30;
 function applyDefaultRange() {
   document.getElementById("board-from").value = todayStr();
   document.getElementById("board-to").value = dayOffsetStr(DEFAULT_RANGE_DAYS);
@@ -59,7 +59,7 @@ function render() {
 
   const isDefault = ranged && from === todayStr() && to === dayOffsetStr(DEFAULT_RANGE_DAYS);
   note.textContent = ranged
-    ? `${from || "처음"} ~ ${to || "끝"}${isDefault ? " (기본 60일)" : ""} · ${list.length}건`
+    ? `${from || "처음"} ~ ${to || "끝"}${isDefault ? ` (기본 ${DEFAULT_RANGE_DAYS}일)` : ""} · ${list.length}건`
     : (includePast ? `전체 기간 · ${list.length}건` : `진행 예정·진행 중 · ${list.length}건`);
 
   if (!list.length) {
@@ -94,7 +94,7 @@ function card(c) {
 }
 
 function main() {
-  applyDefaultRange(); // 최초 조회는 오늘~+60일 범위.
+  applyDefaultRange(); // 최초 조회는 오늘~+N일 기본 범위.
 
   // 신청 안내 텍스트(__config 문서) 구독.
   onSnapshot(doc(db, "publicBoard", "__config"), (snap) => {
@@ -120,7 +120,7 @@ function main() {
   document.getElementById("board-from").addEventListener("change", render);
   document.getElementById("board-to").addEventListener("change", render);
   document.getElementById("board-reset").addEventListener("click", () => {
-    applyDefaultRange(); // 기본(오늘~60일)로 복귀.
+    applyDefaultRange(); // 기본 범위로 복귀.
     render();
   });
 }
