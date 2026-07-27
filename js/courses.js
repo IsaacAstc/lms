@@ -6,6 +6,9 @@ import {
   doc,
   onSnapshot,
   query,
+  where,
+  getDocs,
+  writeBatch,
   orderBy,
   runTransaction,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -214,9 +217,15 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       form.scrollIntoView({ behavior: "smooth" });
     });
     tr.querySelector(".del").addEventListener("click", async () => {
-      if (!confirm(`'${c.name}' ${c.round}차수를 삭제하시겠습니까?`)) return;
+      if (!confirm(`'${c.name}' ${c.round}차수를 삭제하시겠습니까?\n연결된 시간표·공개설문도 함께 삭제됩니다.`)) return;
       try {
-        await deleteDoc(doc(db, "courses", c.id));
+        // 연결된 시간표 세션 조회 후 차수·세션·공개설문을 한 배치로 삭제(고아 세션 방지).
+        const ss = await getDocs(query(collection(db, "sessions"), where("courseId", "==", c.id)));
+        const batch = writeBatch(db);
+        ss.docs.forEach((d) => batch.delete(d.ref));
+        batch.delete(doc(db, "publicSurveys", c.id));
+        batch.delete(doc(db, "courses", c.id));
+        await batch.commit();
       } catch (e) {
         alert("삭제 실패: " + e.message);
       }
