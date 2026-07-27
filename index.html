@@ -478,6 +478,29 @@
           <div class="form-actions"><button id="seed-btn" type="button">초기 데이터 시드 실행</button></div>
           <pre id="seed-log" class="seed-log"></pre>
         </section>
+
+        <!-- 공개 현황 보드 관리 -->
+        <section class="tab-panel" data-tab="board" hidden>
+          <h2>공개 현황 보드</h2>
+          <p class="hint">외부 접속자가 교육 과정별 일자·정원·신청·잔여석을 실시간으로 볼 수 있는 공개 페이지입니다. 개인정보는 노출되지 않으며(수치·일정만), 실제 신청 접수는 시스템 범위 밖입니다. 차수를 저장하면 자동으로 반영되고, 기존 차수는 아래 ‘전체 동기화’로 한 번에 게시합니다.</p>
+
+          <h3>공개 페이지 주소</h3>
+          <div class="load-row url-cell">
+            <input id="board-url" readonly />
+            <button id="board-url-copy" type="button">복사</button>
+            <a id="board-open" href="board.html" target="_blank" class="btn-link">새 창에서 열기</a>
+          </div>
+
+          <h3>전체 동기화</h3>
+          <p class="hint">현재 등록된 모든 차수를 공개 보드에 게시하고, 삭제된 차수의 잔여 항목을 정리합니다.</p>
+          <div class="form-actions"><button id="board-sync" type="button">전체 동기화</button></div>
+          <p id="board-sync-log" class="total-line"></p>
+
+          <h3>신청 방법 안내 문구</h3>
+          <p class="hint">보드 하단에 노출됩니다. 실제 신청 경로(오프라인/외부 링크 등)를 안내하세요. 개인정보 입력을 요구하지 않도록 문구를 작성합니다.</p>
+          <textarea id="board-apply-input" rows="4" placeholder="예: 수강 신청은 소속 부서를 통해 접수합니다. 잔여석 확인 후 담당자(내선 0000)에게 연락 바랍니다."></textarea>
+          <div class="form-actions"><button id="board-apply-save" type="button">안내 문구 저장</button></div>
+        </section>
       </main>
     </div>
 

@@ -64,6 +64,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // 공개 현황 보드(외부 열람용): 누구나 읽기, 쓰기는 관리자만.
+    // 개인정보 없음 — 과정명·일자·정원·신청·잔여 등 수치·일정만 미러링.
+    match /publicBoard/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // 설문 응답: create 만 공개 허용(완전 익명), 읽기·수정·삭제는 관리자만.
     // expireAt은 서버시각 기준 약 180일 후여야 함(클라이언트 조작 방지, ±2일 허용).
     match /surveyResponses/{responseId} {

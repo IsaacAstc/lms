@@ -261,3 +261,25 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .report-doc h4 { margin: .5rem 0 .25rem; font-size: .95rem; }
 .report-doc .report-narr { white-space: pre-wrap; border: 1px solid #ccc; padding: .5rem; min-height: 2rem; border-radius: 4px; }
 .report-head h1 { margin-bottom: .25rem; }
+
+/* 공개 현황 보드 */
+.board-main { max-width: 1000px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+.board-title { font-size: 1.4rem; margin-bottom: 0.25rem; }
+.board-updated { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.75rem; }
+.board-controls { margin-bottom: 1rem; font-size: 0.9rem; }
+.board-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.85rem; }
+.board-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.9rem; background: #fff; }
+.board-card.full { opacity: 0.7; }
+.board-card-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.board-badge { background: var(--primary); color: #fff; border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.75rem; white-space: nowrap; }
+.board-card h3 { font-size: 1rem; margin: 0; }
+.board-card h3 small { color: var(--muted); font-weight: 400; }
+.board-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 0.75rem; margin: 0.5rem 0; }
+.board-meta div { display: flex; justify-content: space-between; font-size: 0.85rem; border-bottom: 1px dotted var(--border); padding-bottom: 0.15rem; }
+.board-meta dt { color: var(--muted); margin: 0; }
+.board-meta dd { margin: 0; font-weight: 600; }
+.board-open { color: #1a7f37; }
+.board-full { color: #b3261e; }
+.board-bar { height: 6px; background: #eee; border-radius: 3px; overflow: hidden; }
+.board-bar span { display: block; height: 100%; background: var(--primary); }
+.board-apply { margin-top: 1.5rem; }
