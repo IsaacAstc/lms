@@ -83,7 +83,7 @@
           <div class="load-row" id="course-filter">
             <label>연도 <select id="cf-year"></select></label>
             <label>기간 <input type="date" id="cf-from" /></label>
-            <span class="board-range-sep">~</span>
+            <span class="board-range-sep">-</span>
             <label><input type="date" id="cf-to" /></label>
             <button id="cf-reset" type="button">초기화(올해)</button>
             <span id="cf-count" class="hint"></span>
@@ -283,7 +283,7 @@
         <!-- 설문 관리 -->
         <section class="tab-panel" data-tab="surveys" hidden>
           <h2>설문 관리</h2>
-          <p class="hint">시간표 등록/수정을 완료하면 그 차수의 공개 설문이 자동 생성됩니다. <b>노출 창(종료 2시간 전 ~ 종료 후 6시간, KST)</b>에만 강의실 URL에서 응답할 수 있습니다. 강사만족도는 첫·마지막 과목(교육등록/평가/설문/수료)을 제외한 강사×과목별로 생성됩니다.</p>
+          <p class="hint">시간표 등록/수정을 완료하면 그 차수의 공개 설문이 자동 생성됩니다. <b>노출 창(종료 2시간 전 - 종료 후 1시간, KST)</b>에만 강의실 URL에서 응답할 수 있습니다. 강사만족도는 첫·마지막 과목(교육등록/평가/설문/수료)을 제외한 강사×과목별로 생성됩니다.</p>
           <div class="form-actions"><button id="survey-refresh" type="button">응답 수 새로고침</button></div>
           <div class="table-wrap">
             <table>
