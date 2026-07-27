@@ -42,8 +42,32 @@ export function initSessions() {
   // 시간표 편집기 닫기.
   document.getElementById("tt-close").addEventListener("click", closeEditor);
 
-  // 전체 차수 시간표 CSV.
-  document.getElementById("tt-export-all").addEventListener("click", exportAllTimetables);
+  // 시간표 CSV: 전체 / 월별 / 개별(차수).
+  document.getElementById("tt-export-all").addEventListener("click", () => exportTimetables({}));
+  document.getElementById("tt-export-month-btn").addEventListener("click", () => {
+    const m = document.getElementById("tt-export-month").value;
+    if (!m) return alert("월을 선택하세요.");
+    exportTimetables({ month: m });
+  });
+  document.getElementById("tt-export-course-btn").addEventListener("click", () => {
+    const cid = document.getElementById("tt-export-course").value;
+    if (!cid) return alert("차수를 선택하세요.");
+    exportTimetables({ courseId: cid });
+  });
+  // 개별 내보내기용 차수 셀렉트 채움.
+  onCoursesChange((courses) => {
+    const sel = document.getElementById("tt-export-course");
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = `<option value="">차수 선택</option>`;
+    for (const c of courses) {
+      const o = document.createElement("option");
+      o.value = c.id;
+      o.textContent = `${c.code} ${c.name} (${c.round}차수)`;
+      sel.appendChild(o);
+    }
+    sel.value = prev;
+  });
 
   // 커리큘럼 불러오기 select.
   onProgramsChange((programs) => {
@@ -108,19 +132,22 @@ function closeEditor() {
   document.getElementById("timetable-editor").hidden = true;
 }
 
-// 전체 차수의 등록된 시간표를 한 CSV로 내보내기(차수 정보 열 포함).
-async function exportAllTimetables() {
-  const btn = document.getElementById("tt-export-all");
-  btn.disabled = true;
+// 등록된 시간표를 CSV로 내보내기(차수 정보 열 포함).
+// filter: {} 전체 / {month:'YYYY-MM'} 월별 / {courseId} 개별.
+async function exportTimetables(filter = {}) {
   try {
+    // 세션 조회 범위 결정.
+    let sq = sessionsCol;
+    if (filter.courseId) sq = query(sessionsCol, where("courseId", "==", filter.courseId));
+    else if (filter.month) sq = query(sessionsCol, where("date", ">=", `${filter.month}-01`), where("date", "<=", `${filter.month}-31`));
     // 차수 정보를 직접 조회(캐시 상태와 무관하게 과정코드·과정명·차수 매핑 보장).
     const [snap, csnap] = await Promise.all([
-      getDocs(sessionsCol),
+      getDocs(sq),
       getDocs(collection(db, "courses")),
     ]);
     const byId = Object.fromEntries(csnap.docs.map((d) => [d.id, d.data()]));
     const rows = snap.docs.map((d) => d.data());
-    if (!rows.length) return alert("등록된 시간표가 없습니다.");
+    if (!rows.length) return alert("해당 조건에 등록된 시간표가 없습니다.");
     rows.sort((a, b) => {
       const ca = byId[a.courseId], cb = byId[b.courseId];
       const ka = `${ca?.code || ""}${String(ca?.round ?? "").padStart(3, "0")}${a.date}${a.startTime}`;
@@ -137,11 +164,13 @@ async function exportAllTimetables() {
     }).join("");
     const table = document.createElement("table");
     table.innerHTML = `<thead><tr><th>과정코드</th><th>과정명</th><th>차수</th><th>일자</th><th>과목</th><th>시작</th><th>종료</th><th>강의실</th><th>강사</th></tr></thead><tbody>${body}</tbody>`;
-    downloadCsv(`전체시간표_${new Date().toISOString().slice(0, 10)}.csv`, tableToCsv(table));
+    const stamp = new Date().toISOString().slice(0, 10);
+    let prefix = "전체시간표";
+    if (filter.courseId) { const c = byId[filter.courseId]; prefix = `시간표_${(c?.code || "차수")}_${c?.round ?? ""}차`; }
+    else if (filter.month) prefix = `시간표_${filter.month}`;
+    downloadCsv(`${prefix}_${stamp}.csv`, tableToCsv(table));
   } catch (e) {
-    alert("전체 시간표 내보내기 실패: " + e.message);
-  } finally {
-    btn.disabled = false;
+    alert("시간표 내보내기 실패: " + e.message);
   }
 }
 
