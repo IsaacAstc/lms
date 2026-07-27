@@ -9,13 +9,14 @@ import {
   onSnapshot,
   query,
   where,
+  getDoc,
   getDocs,
   writeBatch,
   orderBy,
   runTransaction,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
-import { escapeHtml } from "./app.js";
+import { escapeHtml, isMasterMode } from "./app.js";
 import { onProgramsChange, getProgramById, getPrograms } from "./programs.js";
 import { onRoomsChange, getRooms } from "./rooms.js";
 import { selectCourse } from "./sessions.js";
@@ -24,6 +25,9 @@ import { regenerateSurvey } from "./survey-gen.js";
 const coursesCol = collection(db, "courses");
 let unsub = null;
 let editingId = null;
+// 과정유형 선택지(settings/courseTypes). 문서가 없으면 기본값 사용.
+const DEFAULT_COURSE_TYPES = ["초기", "정기", "특별", "초정기통합"];
+let courseTypes = DEFAULT_COURSE_TYPES.slice();
 // 다른 화면(시간표)에서 과정 목록을 재사용하기 위한 캐시.
 export let coursesCache = [];
 const listeners = [];
@@ -77,6 +81,10 @@ export function initCourses() {
 
   cancelBtn.addEventListener("click", () => resetForm(form, submitBtn, cancelBtn));
 
+  // 과정유형 선택지 로드 + (마스터) 편집 UI.
+  initCourseTypeUi(form);
+  loadCourseTypes(form);
+
   // 커리큘럼(과정 마스터) 연결 드롭다운 + 과정명 datalist.
   onProgramsChange((programs) => {
     const prev = form.programId.value;
@@ -112,7 +120,7 @@ export function initCourses() {
     if (match) {
       form.programId.value = match.id;
       // 커리큘럼 구분이 과정유형 옵션과 일치하면 자동 채움(이후 수정 가능).
-      if (!form.courseType.value && ["초기", "정기", "특별", "초정기통합"].includes(match.category)) {
+      if (!form.courseType.value && courseTypes.includes(match.category)) {
         form.courseType.value = match.category;
       }
     }
@@ -177,6 +185,77 @@ async function mirrorBoard(id, data) {
 async function applyPublicState(id, data) {
   await mirrorBoard(id, data);
   await syncSurveyFor(id, data);
+}
+
+// ── 과정유형 선택지 관리(추가·편집은 마스터 전용, 규칙에서도 차단) ──
+async function loadCourseTypes(form) {
+  try {
+    const d = await getDoc(doc(db, "settings", "courseTypes"));
+    if (d.exists() && Array.isArray(d.data().list) && d.data().list.length) courseTypes = d.data().list.slice();
+  } catch { /* 기본값 유지 */ }
+  refreshTypeSelect(form);
+  renderTypeChips(form);
+}
+
+// 폼의 과정유형 셀렉트를 목록으로 채움(기존 선택값이 목록에 없어도 유지).
+function refreshTypeSelect(form) {
+  const sel = form.courseType;
+  const prev = sel.value;
+  const opts = courseTypes.slice();
+  if (prev && !opts.includes(prev)) opts.push(prev); // 과거 값 보존.
+  sel.innerHTML = `<option value="">(미지정)</option>`
+    + opts.map((t) => `<option>${escapeHtml(t)}</option>`).join("");
+  sel.value = prev;
+}
+
+// 셀렉트에 없는 값이면 임시 옵션을 만들어 선택(과거 값 보존).
+function setCourseTypeValue(form, value) {
+  const sel = form.courseType;
+  if (value && ![...sel.options].some((o) => o.value === value)) {
+    const o = document.createElement("option");
+    o.value = value; o.textContent = `${value} (목록에 없음)`;
+    sel.appendChild(o);
+  }
+  sel.value = value;
+}
+
+// 마스터 전용 편집 UI(칩: 이름 편집 + 삭제).
+function renderTypeChips(form) {
+  const box = document.getElementById("ctype-box");
+  box.hidden = !isMasterMode();
+  if (box.hidden) return;
+  const list = document.getElementById("ctype-list");
+  list.innerHTML = courseTypes.length
+    ? `<div class="chip-row">${courseTypes.map((t, i) =>
+        `<span class="chip"><input class="ct-name" data-i="${i}" value="${escapeHtml(t)}" size="10"><button type="button" class="chip-del" data-i="${i}">×</button></span>`).join("")}</div>`
+    : `<p class="empty">과정유형이 없습니다. 아래에서 추가하세요.</p>`;
+  list.querySelectorAll(".ct-name").forEach((el) =>
+    el.addEventListener("input", (e) => { courseTypes[+e.target.dataset.i] = e.target.value; }));
+  list.querySelectorAll(".chip-del").forEach((b) =>
+    b.addEventListener("click", () => { courseTypes.splice(+b.dataset.i, 1); renderTypeChips(form); refreshTypeSelect(form); }));
+}
+
+function initCourseTypeUi(form) {
+  document.getElementById("ctype-add").addEventListener("click", () => {
+    const inp = document.getElementById("ctype-new");
+    const v = inp.value.trim();
+    if (!v) return;
+    if (!courseTypes.includes(v)) courseTypes.push(v);
+    inp.value = "";
+    renderTypeChips(form);
+    refreshTypeSelect(form);
+  });
+  document.getElementById("ctype-save").addEventListener("click", async () => {
+    const list = courseTypes.map((t) => t.trim()).filter(Boolean);
+    if (new Set(list).size !== list.length) return alert("중복된 과정유형이 있습니다.");
+    try {
+      await setDoc(doc(db, "settings", "courseTypes"), { list }, { merge: true });
+      courseTypes = list;
+      refreshTypeSelect(form);
+      renderTypeChips(form);
+      alert("과정유형을 저장했습니다.");
+    } catch (e) { alert("저장 실패: " + e.message); }
+  });
 }
 
 // 숨김 처리된 차수 id 집합(집계 제외용). 캐시 상태와 무관하게 직접 조회.
@@ -286,7 +365,8 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       form.venue.value = c.venue ?? "";
       form.round.value = c.round ?? "";
       form.programId.value = c.programId ?? "";
-      form.courseType.value = c.courseType ?? "";
+      // 목록에서 삭제·변경된 과거 값도 선택 상태를 유지(저장 시 값이 비워지지 않도록).
+      setCourseTypeValue(form, c.courseType ?? "");
       form.operationTag.value = c.operationTag ?? "";
       form.appliedCount.value = c.appliedCount ?? 0;
       form.completedCount.value = c.completedCount ?? 0;
