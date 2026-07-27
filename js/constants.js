@@ -45,3 +45,7 @@ function buildTimes(startHour, startMin, endHour, endMin, stepMin) {
 // 시작·종료 시각 모두 09:00 ~ 18:00 (10분 간격). 종료 > 시작 검증은 별도.
 export const START_TIMES = buildTimes(9, 0, 18, 0, 10);
 export const END_TIMES = buildTimes(9, 0, 18, 0, 10);
+
+// 부트스트랩 마스터 관리자(표시용 — 실제 권한 판정은 firestore.rules).
+// firestore.rules의 adminEmails()와 동일하게 유지할 것. 소문자로 기재.
+export const BOOTSTRAP_MASTERS = ["isaac@airport.co.kr"];
