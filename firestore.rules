@@ -12,10 +12,15 @@ service cloud.firestore {
     function adminEmails() {
       return ['isaac@airport.co.kr'];
     }
+    // 이메일 대소문자 정규화: Auth는 가입 시 표기를 보존하므로 소문자로 맞춰 비교한다.
+    // (admins 문서 ID도 소문자로 저장 — 대문자 포함 계정이 인식되지 않는 문제 방지)
+    function adminEmail() {
+      return request.auth.token.email.lower();
+    }
     function isAdmin() {
       return request.auth != null
-        && (request.auth.token.email in adminEmails()
-            || exists(/databases/$(database)/documents/admins/$(request.auth.token.email)));
+        && (adminEmail() in adminEmails()
+            || exists(/databases/$(database)/documents/admins/$(adminEmail())));
     }
 
     // 관리자 계정 목록(문서ID=이메일): 관리자만 읽기·쓰기. 여기 등록되면 위 isAdmin()이 허용.
