@@ -287,3 +287,10 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 /* 과정유형 편집 칩 내 입력 */
 .chip input.ct-name { border: none; background: transparent; padding: 0.1rem 0.2rem; font-size: 0.82rem; width: 6.5rem; }
 .chip input.ct-name:focus { outline: 1px solid var(--primary); border-radius: 3px; }
+
+/* 공개 보드 기간 필터 */
+.board-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.board-range { display: inline-flex; align-items: center; gap: 0.3rem; }
+.board-range-sep { color: var(--muted); }
+.board-controls button { padding: 0.4rem 0.8rem; font-size: 0.85rem; }
+.board-hint { font-size: 0.8rem; color: var(--muted); margin: 0.4rem 0 0.75rem; min-height: 1em; }

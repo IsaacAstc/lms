@@ -13,8 +13,13 @@
       <h1 class="board-title">교육 과정 신청 현황</h1>
       <p class="board-updated" id="board-updated"></p>
       <div class="board-controls no-print">
+        <label class="board-range">기간 <input type="date" id="board-from" /></label>
+        <span class="board-range-sep">~</span>
+        <label class="board-range"><input type="date" id="board-to" /></label>
+        <button type="button" id="board-reset">초기화</button>
         <label><input type="checkbox" id="board-past" /> 지난 과정 포함</label>
       </div>
+      <p class="board-hint no-print" id="board-filter-note"></p>
       <div id="board-root"><p class="empty">현황을 불러오는 중…</p></div>
       <section id="board-apply" class="board-apply" hidden>
         <h2>신청 방법 안내</h2>

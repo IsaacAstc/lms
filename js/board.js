@@ -15,15 +15,40 @@ function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 }
 
+// 교육기간이 지정 범위와 겹치면 표시(여러 날 과정이 경계에 걸쳐도 포함).
+function inRange(c, from, to) {
+  const s = c.startDate || "";
+  const e = c.endDate || s;
+  if (from && e && e < from) return false;
+  if (to && s && s > to) return false;
+  return true;
+}
+
 function render() {
   const includePast = document.getElementById("board-past").checked;
+  const from = document.getElementById("board-from").value;
+  const to = document.getElementById("board-to").value;
+  const note = document.getElementById("board-filter-note");
   const today = todayStr();
-  // 공개 페이지는 시작일 오름차순(임박한 과정 우선). 같은 날짜는 과정명 순.
+
+  if (from && to && to < from) {
+    root.innerHTML = `<p class="empty">종료일자가 시작일자보다 빠릅니다. 기간을 다시 선택하세요.</p>`;
+    note.textContent = "";
+    return;
+  }
+
+  const ranged = !!(from || to);
+  // 기간을 지정하면 그 범위를 기준으로 하고, 아니면 '지난 과정 포함' 여부로 판단.
   const list = items
-    .filter((c) => includePast || !c.endDate || c.endDate >= today)
+    .filter((c) => (ranged ? inRange(c, from, to) : (includePast || !c.endDate || c.endDate >= today)))
     .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || "") || (a.name || "").localeCompare(b.name || ""));
+
+  note.textContent = ranged
+    ? `${from || "처음"} ~ ${to || "끝"} 기간의 과정 ${list.length}건 (기간 지정 시 '지난 과정 포함'은 적용되지 않습니다)`
+    : "";
+
   if (!list.length) {
-    root.innerHTML = `<p class="empty">현재 안내 중인 교육 과정이 없습니다.</p>`;
+    root.innerHTML = `<p class="empty">${ranged ? "해당 기간에 교육 과정이 없습니다." : "현재 안내 중인 교육 과정이 없습니다."}</p>`;
     return;
   }
   root.innerHTML = `<div class="board-grid">${list.map(card).join("")}</div>`;
@@ -75,6 +100,14 @@ function main() {
   }, () => { root.innerHTML = `<p class="empty">현황을 불러오지 못했습니다. 잠시 후 다시 시도하세요.</p>`; });
 
   document.getElementById("board-past").addEventListener("change", render);
+  document.getElementById("board-from").addEventListener("change", render);
+  document.getElementById("board-to").addEventListener("change", render);
+  document.getElementById("board-reset").addEventListener("click", () => {
+    document.getElementById("board-from").value = "";
+    document.getElementById("board-to").value = "";
+    document.getElementById("board-past").checked = false;
+    render();
+  });
 }
 
 main();
