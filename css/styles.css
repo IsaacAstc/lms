@@ -294,3 +294,11 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .board-range-sep { color: var(--muted); }
 .board-controls button { padding: 0.4rem 0.8rem; font-size: 0.85rem; }
 .board-hint { font-size: 0.8rem; color: var(--muted); margin: 0.4rem 0 0.75rem; min-height: 1em; }
+
+/* 차수 목록: 가로 스크롤 최소화 */
+.course-table th, .course-table td { padding: 0.4rem 0.45rem; }
+.course-table .c-name { white-space: normal; min-width: 9rem; max-width: 16rem; }
+.course-table .c-sub { color: var(--muted); font-size: 0.72rem; }
+.course-table .actions button { padding: 0.25rem 0.45rem; font-size: 0.75rem; }
+#course-filter { margin-bottom: 0.5rem; }
+#cf-count { margin-left: auto; align-self: center; }

@@ -80,13 +80,21 @@
               <button id="course-cancel" type="button" hidden>취소</button>
             </div>
           </form>
+          <div class="load-row" id="course-filter">
+            <label>연도 <select id="cf-year"></select></label>
+            <label>기간 <input type="date" id="cf-from" /></label>
+            <span class="board-range-sep">~</span>
+            <label><input type="date" id="cf-to" /></label>
+            <button id="cf-reset" type="button">초기화(올해)</button>
+            <span id="cf-count" class="hint"></span>
+          </div>
           <div class="table-wrap">
-            <table>
+            <table class="course-table">
               <thead>
                 <tr>
                   <th>과정코드</th><th>과정명</th><th>유형</th><th>차수</th>
                   <th>정원</th><th>신청</th><th>잔여</th><th>이수</th><th>평가</th>
-                  <th>시작일</th><th>종료일</th><th>교육장</th><th>커리큘럼</th><th>숨김</th><th>관리</th>
+                  <th>교육기간</th><th>교육장</th><th>숨김</th><th>관리</th>
                 </tr>
               </thead>
               <tbody id="course-tbody"></tbody>
