@@ -1,5 +1,5 @@
 // 앱 셸: 로그인 게이트, 탭 라우팅, 화면 초기화.
-import { watchAuth, login, logout, isAdmin } from "./auth.js";
+import { watchAuth, login, logout, isAdmin, isMaster } from "./auth.js";
 import { initCourses } from "./courses.js";
 import { initSessions } from "./sessions.js";
 import { initRooms } from "./rooms.js";
@@ -43,7 +43,18 @@ const TAB_GROUPS = [
   { id: "reportdoc", label: "운영 보고서", tabs: [["reportdoc", ""]] },
   { id: "admin", label: "설정", tabs: [["settings", "기준값 설정"], ["admins", "관리자 계정"], ["data", "데이터 관리"], ["board", "공개 현황 보드"]] },
 ];
-const groupOfTab = (name) => TAB_GROUPS.find((g) => g.tabs.some(([t]) => t === name));
+// 마스터 전용 탭(일반 관리자에게는 숨김 — 실제 차단은 firestore.rules).
+const MASTER_ONLY_TABS = new Set(["data"]);
+let masterMode = false;
+export function isMasterMode() { return masterMode; }
+
+// 현재 역할에서 접근 가능한 탭만 남긴 그룹 목록.
+function visibleGroups() {
+  return TAB_GROUPS
+    .map((g) => ({ ...g, tabs: g.tabs.filter(([t]) => masterMode || !MASTER_ONLY_TABS.has(t)) }))
+    .filter((g) => g.tabs.length);
+}
+const groupOfTab = (name) => visibleGroups().find((g) => g.tabs.some(([t]) => t === name));
 
 function showTab(name) {
   const group = groupOfTab(name);
@@ -75,7 +86,7 @@ function renderSubtabs(group, active) {
 function setupTabs() {
   const nav = document.getElementById("main-tabs");
   nav.innerHTML = "";
-  for (const g of TAB_GROUPS) {
+  for (const g of visibleGroups()) {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "tab-btn";
@@ -105,7 +116,7 @@ function initApp() {
   initStats();
   initReportDoc();
   initFreetext();
-  initDataAdmin();
+  if (masterMode) initDataAdmin(); // 데이터 관리는 마스터 전용(불필요한 조회도 방지).
   initAdmins();
   initBoardAdmin();
   initExportButtons();
@@ -143,9 +154,10 @@ window.addEventListener("DOMContentLoaded", () => {
         await logout();
         return;
       }
+      masterMode = await isMaster(); // 탭 구성 전에 역할 확정.
       loginView.hidden = true;
       appView.hidden = false;
-      userEmail.textContent = user.email || "";
+      userEmail.textContent = `${user.email || ""} (${masterMode ? "마스터 관리자" : "일반 관리자"})`;
       initApp();
     },
     () => {

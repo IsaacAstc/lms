@@ -13,7 +13,7 @@ import {
   collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db, auth, firebaseConfig } from "./firebase.js";
-import { escapeHtml } from "./app.js";
+import { escapeHtml, isMasterMode } from "./app.js";
 
 let unsub = null;
 
@@ -21,8 +21,14 @@ export function initAdmins() {
   document.getElementById("pw-change-btn").addEventListener("click", changeOwnPassword);
   document.getElementById("admin-add-btn").addEventListener("click", addAdmin);
   document.getElementById("admin-reset-btn").addEventListener("click", sendResetMe);
+  // 역할 선택은 마스터에게만 노출(규칙에서도 마스터만 부여 가능).
+  document.getElementById("admin-role-wrap").hidden = !isMasterMode();
   subscribe();
-  document.addEventListener("tabshown", (e) => { if (e.detail === "admins") document.getElementById("me-email").textContent = auth.currentUser?.email || ""; });
+  document.addEventListener("tabshown", (e) => {
+    if (e.detail !== "admins") return;
+    document.getElementById("me-email").textContent =
+      `${auth.currentUser?.email || ""} (${isMasterMode() ? "마스터 관리자" : "일반 관리자"})`;
+  });
 }
 
 // ── 내 비밀번호 변경 ──
@@ -80,9 +86,10 @@ async function addAdmin() {
     } else {
       authNote = " (Auth 계정 미생성 — 대상자가 로그인하려면 콘솔/재설정 메일로 계정 필요)";
     }
-    // 2) allowlist(admins) 등록.
+    // 2) allowlist(admins) 등록. 역할 부여는 마스터만(규칙에서도 차단).
+    const role = (isMasterMode() && document.getElementById("admin-role").value === "master") ? "master" : "admin";
     await setDoc(doc(db, "admins", email), {
-      email, memo, addedBy: auth.currentUser?.email || "", addedAtMs: Date.now(),
+      email, memo, role, addedBy: auth.currentUser?.email || "", addedAtMs: Date.now(),
     }, { merge: true });
     out.style.color = "#3a3";
     out.textContent = `'${email}' 관리자를 등록했습니다.${authNote}`;
@@ -112,30 +119,41 @@ function subscribe() {
   unsub = onSnapshot(collection(db, "admins"), (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.email.localeCompare(b.email));
     render(list);
-  }, () => { document.getElementById("admin-tbody").innerHTML = `<tr><td colspan="4" class="empty">목록을 불러오지 못했습니다.</td></tr>`; });
+  }, () => { document.getElementById("admin-tbody").innerHTML = `<tr><td colspan="5" class="empty">목록을 불러오지 못했습니다.</td></tr>`; });
 }
 
 function render(list) {
   const tbody = document.getElementById("admin-tbody");
   tbody.innerHTML = "";
   if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="4" class="empty">등록된 관리자가 없습니다. (부트스트랩 관리자는 보안규칙에 고정)</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">등록된 관리자가 없습니다. (부트스트랩 관리자는 보안규칙에 고정)</td></tr>`;
     return;
   }
   for (const a of list) {
     const tr = document.createElement("tr");
     const when = a.addedAtMs ? new Date(a.addedAtMs).toLocaleDateString("ko-KR") : "";
+    const master = isMasterMode();
+    const roleCell = master
+      ? `<select class="a-role">
+           <option value="admin"${a.role !== "master" ? " selected" : ""}>일반 관리자</option>
+           <option value="master"${a.role === "master" ? " selected" : ""}>마스터 관리자</option>
+         </select>`
+      : (a.role === "master" ? "마스터 관리자" : "일반 관리자");
     tr.innerHTML = `
       <td>${escapeHtml(a.email)}</td>
+      <td>${roleCell}</td>
       <td><input class="a-memo" value="${escapeHtml(a.memo || "")}" placeholder="메모"></td>
       <td>${escapeHtml(when)}</td>
       <td class="actions">
-        <button type="button" class="a-save">메모저장</button>
+        <button type="button" class="a-save">저장</button>
         <button type="button" class="a-reset">재설정메일</button>
-        <button type="button" class="del a-del">삭제</button>
+        ${master ? `<button type="button" class="del a-del">삭제</button>` : ""}
       </td>`;
     tr.querySelector(".a-save").addEventListener("click", async () => {
-      try { await updateDoc(doc(db, "admins", a.id), { memo: tr.querySelector(".a-memo").value.trim() }); alert("메모를 저장했습니다."); }
+      const patch = { memo: tr.querySelector(".a-memo").value.trim() };
+      const roleSel = tr.querySelector(".a-role");
+      if (roleSel) patch.role = roleSel.value; // 역할 변경은 마스터만(규칙에서도 차단).
+      try { await updateDoc(doc(db, "admins", a.id), patch); alert("저장했습니다."); }
       catch (e) { alert("저장 실패: " + e.message); }
     });
     tr.querySelector(".a-reset").addEventListener("click", async () => {
@@ -143,7 +161,7 @@ function render(list) {
       try { await sendPasswordResetEmail(auth, a.email); alert("재설정 메일을 보냈습니다."); }
       catch (e) { alert("메일 발송 실패: " + e.message); }
     });
-    tr.querySelector(".a-del").addEventListener("click", async () => {
+    tr.querySelector(".a-del")?.addEventListener("click", async () => {
       // 이메일 대소문자 무관하게 본인 판정(Auth는 가입 시 표기를 보존).
       if ((a.email || "").toLowerCase() === (auth.currentUser?.email || "").toLowerCase()) {
         return alert("본인 계정은 이 목록에서 삭제할 수 없습니다.");

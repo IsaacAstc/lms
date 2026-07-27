@@ -430,6 +430,10 @@
             <label>이메일<input id="admin-email" type="email" placeholder="name@airport.co.kr" /></label>
             <label>초기 비밀번호(선택)<input id="admin-pw" type="password" autocomplete="new-password" placeholder="6자 이상" /></label>
             <label>메모(선택)<input id="admin-memo" placeholder="예: 교육팀 홍길동" /></label>
+            <label id="admin-role-wrap">역할<select id="admin-role">
+              <option value="admin">일반 관리자</option>
+              <option value="master">마스터 관리자</option>
+            </select></label>
           </div>
           <div class="form-actions">
             <button id="admin-add-btn" type="button">관리자 추가</button>
@@ -437,10 +441,10 @@
           <p id="admin-add-msg" class="error"></p>
 
           <h3>관리자 목록</h3>
-          <p class="hint">삭제는 관리자 권한(allowlist)만 회수하며, Auth 계정 완전 삭제는 Firebase 콘솔에서 처리합니다. 부트스트랩 관리자는 보안규칙에 고정되어 목록에 표시되지 않습니다.</p>
+          <p class="hint"><b>마스터 관리자</b>는 관리자 삭제·역할 변경과 ‘데이터 관리’(설문 원문 파기 등)를 사용할 수 있습니다. <b>일반 관리자</b>는 그 두 가지가 제외되며, 나머지 운영 기능은 동일합니다. 삭제는 관리자 권한(allowlist)만 회수하며 Auth 계정 완전 삭제는 Firebase 콘솔에서 처리합니다. 부트스트랩 마스터는 보안규칙에 고정되어 목록에 표시되지 않습니다.</p>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>이메일</th><th>메모</th><th>추가일</th><th>관리</th></tr></thead>
+              <thead><tr><th>이메일</th><th>역할</th><th>메모</th><th>추가일</th><th>관리</th></tr></thead>
               <tbody id="admin-tbody"></tbody>
             </table>
           </div>
