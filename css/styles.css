@@ -302,3 +302,6 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .course-table .actions button { padding: 0.25rem 0.45rem; font-size: 0.75rem; }
 #course-filter { margin-bottom: 0.5rem; }
 #cf-count { margin-left: auto; align-self: center; }
+
+/* 공개 보드 기본 기간 안내 */
+.board-guide { font-size: 0.82rem; color: var(--muted); background: #eef4fb; border: 1px solid #cfe0f2; border-radius: 6px; padding: 0.45rem 0.7rem; margin: 0.5rem 0 0.75rem; }
