@@ -6,6 +6,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db } from "./firebase.js";
+import { BOOTSTRAP_MASTERS } from "./constants.js";
 
 // 관리자 여부 판정: 관리자 전용 문서 읽기를 시도해 보안규칙 허용 여부로 확인.
 // (이메일 목록을 클라이언트에 중복하지 않고 firestore.rules의 판정과 항상 일치.)
@@ -17,6 +18,19 @@ export async function isAdmin() {
   } catch (e) {
     return false;
   }
+}
+
+// 마스터 관리자 여부(화면 표시용 — 실제 차단은 firestore.rules가 담당).
+// 규칙과 동일 기준: 부트스트랩 마스터 목록 또는 admins 문서의 role === 'master'.
+// 부트스트랩 목록은 규칙에 있어 클라이언트가 읽을 수 없으므로 constants에 표시용으로 둔다.
+export async function isMaster() {
+  const email = (auth.currentUser?.email || "").toLowerCase();
+  if (!email) return false;
+  if (BOOTSTRAP_MASTERS.includes(email)) return true;
+  try {
+    const d = await getDoc(doc(db, "admins", email));
+    return d.exists() && d.data().role === "master";
+  } catch { return false; }
 }
 
 // 로그인 상태에 따라 콜백 실행. (관리자 계정은 Firebase 콘솔에서 사전 생성)

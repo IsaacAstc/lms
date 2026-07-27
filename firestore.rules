@@ -23,9 +23,27 @@ service cloud.firestore {
             || exists(/databases/$(database)/documents/admins/$(adminEmail())));
     }
 
-    // 관리자 계정 목록(문서ID=이메일): 관리자만 읽기·쓰기. 여기 등록되면 위 isAdmin()이 허용.
+    // 마스터 관리자: 부트스트랩 목록에 있거나 admins 문서의 role이 'master'.
+    // (role은 아래 규칙에 따라 마스터만 부여·변경할 수 있어 권한 상승이 불가능)
+    function myAdminDoc() {
+      return get(/databases/$(database)/documents/admins/$(adminEmail())).data;
+    }
+    function isMaster() {
+      return request.auth != null
+        && (adminEmail() in adminEmails()
+            || (exists(/databases/$(database)/documents/admins/$(adminEmail()))
+                && myAdminDoc().get('role', 'admin') == 'master'));
+    }
+
+    // 관리자 계정 목록(문서ID=이메일).
+    //  - 읽기: 관리자 공통
+    //  - 생성·수정: 관리자 가능하되 role='master' 부여는 마스터만(권한 상승 차단)
+    //  - 삭제: 마스터만
     match /admins/{email} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow create, update: if isAdmin()
+        && (request.resource.data.get('role', 'admin') != 'master' || isMaster());
+      allow delete: if isMaster();
     }
 
     // 과정·차수 마스터: 읽기·쓰기 모두 관리자 전용.
@@ -54,8 +72,10 @@ service cloud.firestore {
     }
 
     // 기준값 설정(강사료·여비): 관리자 전용.
+    // 단 데이터 보존정책(dataPolicy)은 '데이터 관리' 메뉴 소관이라 마스터만 변경.
     match /settings/{docId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if docId == 'dataPolicy' ? isMaster() : isAdmin();
     }
 
     // 소요경비(월별): 관리자 전용.
@@ -82,7 +102,9 @@ service cloud.firestore {
       allow create: if request.resource.data.expireAt is timestamp
         && request.resource.data.expireAt > request.time + duration.value(178, 'd')
         && request.resource.data.expireAt < request.time + duration.value(182, 'd');
-      allow read, update, delete: if isAdmin();
+      // 원문 파기(삭제)는 되돌릴 수 없으므로 마스터 전용('데이터 관리' 메뉴).
+      allow read, update: if isAdmin();
+      allow delete: if isMaster();
     }
 
     // 집계 데이터(영구 보관): 관리자 전용.
