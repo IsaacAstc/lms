@@ -2,8 +2,8 @@
 import {
   collection,
   addDoc,
-  deleteDoc,
   doc,
+  setDoc,
   onSnapshot,
   query,
   where,
@@ -46,6 +46,7 @@ export function initCourses() {
       return;
     }
     try {
+      let savedId = editingId;
       if (editingId) {
         // 정원·신청·이수 수치 갱신은 트랜잭션으로(동시 편집 시 원자적 read-modify, CLAUDE.md #8).
         const ref = doc(db, "courses", editingId);
@@ -55,8 +56,10 @@ export function initCourses() {
           tx.update(ref, data);
         });
       } else {
-        await addDoc(coursesCol, data);
+        const ref = await addDoc(coursesCol, data);
+        savedId = ref.id;
       }
+      await mirrorBoard(savedId, data); // 공개 현황 보드 갱신.
       resetForm(form, submitBtn, cancelBtn);
     } catch (e) {
       alert("저장 실패: " + e.message);
@@ -142,6 +145,20 @@ function readForm(form) {
   };
 }
 
+// 공개 현황 보드(publicBoard)로 미러링 — 개인정보 없는 수치·일정만.
+export function boardFields(data) {
+  return {
+    code: data.code, name: data.name, courseType: data.courseType || "", round: data.round ?? "",
+    startDate: data.startDate || "", endDate: data.endDate || "", venue: data.venue || "",
+    capacity: data.capacity || 0, appliedCount: data.appliedCount || 0,
+    remaining: Math.max(0, (data.capacity || 0) - (data.appliedCount || 0)),
+    hasEvaluation: !!data.hasEvaluation, updatedAtMs: Date.now(),
+  };
+}
+async function mirrorBoard(id, data) {
+  try { await setDoc(doc(db, "publicBoard", id), boardFields(data)); } catch (e) { console.warn("board mirror:", e.message); }
+}
+
 // 잔여석 = 정원 - 신청건수 (자동 계산). 음수면 0 하한, 경고색은 CSS로.
 function remainingSeats(c) {
   const r = (c.capacity ?? 0) - (c.appliedCount ?? 0);
@@ -224,6 +241,7 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
         const batch = writeBatch(db);
         ss.docs.forEach((d) => batch.delete(d.ref));
         batch.delete(doc(db, "publicSurveys", c.id));
+        batch.delete(doc(db, "publicBoard", c.id));
         batch.delete(doc(db, "courses", c.id));
         await batch.commit();
       } catch (e) {
