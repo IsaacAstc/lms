@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
-import { coursesCache } from "./courses.js";
+import { coursesCache, getHiddenCourseIds } from "./courses.js";
 import { getInstructorById } from "./instructors.js";
 import { getFeeRates, getTravelRates } from "./settings.js";
 import { calcHour, calcFee, applyMonthlyCap, calcTravel } from "./payroll.js";
@@ -23,12 +23,16 @@ export function initExpenses() {
 async function computeAuto(month) {
   const feeRates = getFeeRates();
   const travelRates = getTravelRates();
-  const snap = await getDocs(query(collection(db, "sessions"),
-    where("date", ">=", `${month}-01`), where("date", "<=", `${month}-31`)));
+  const [snap, hiddenIds] = await Promise.all([
+    getDocs(query(collection(db, "sessions"),
+      where("date", ">=", `${month}-01`), where("date", "<=", `${month}-31`))),
+    getHiddenCourseIds(),
+  ]);
   const byInst = {};
   for (const d of snap.docs) {
     const s = d.data();
     if (!s.instructorId) continue;
+    if (hiddenIds.has(s.courseId)) continue; // 숨김 차수 제외.
     const inst = getInstructorById(s.instructorId);
     if (!inst) continue;
     const g = byInst[s.instructorId] = byInst[s.instructorId] || { inst, fee: 0, hours: 0, dates: new Set() };
@@ -69,7 +73,7 @@ async function run() {
     : [];
   // 그 월 시작 차수의 이수인원 합(기본값).
   const completedDefault = coursesCache
-    .filter((c) => (c.startDate || "").slice(0, 7) === month)
+    .filter((c) => (c.startDate || "").slice(0, 7) === month && !c.hidden)
     .reduce((s, c) => s + (c.completedCount || 0), 0);
 
   render(box, {

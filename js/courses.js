@@ -19,6 +19,7 @@ import { escapeHtml } from "./app.js";
 import { onProgramsChange, getProgramById, getPrograms } from "./programs.js";
 import { onRoomsChange, getRooms } from "./rooms.js";
 import { selectCourse } from "./sessions.js";
+import { regenerateSurvey } from "./survey-gen.js";
 
 const coursesCol = collection(db, "courses");
 let unsub = null;
@@ -61,7 +62,8 @@ export function initCourses() {
         const ref = await addDoc(coursesCol, data);
         savedId = ref.id;
       }
-      await mirrorBoard(savedId, data); // 공개 현황 보드 갱신.
+      await mirrorBoard(savedId, data);      // 공개 현황 보드 갱신.
+      await syncSurveyFor(savedId, data);    // 숨김이면 공개 설문 비활성(제거).
       resetForm(form, submitBtn, cancelBtn);
     } catch (e) {
       alert("저장 실패: " + e.message);
@@ -167,6 +169,24 @@ async function mirrorBoard(id, data) {
   } catch (e) { console.warn("board mirror:", e.message); }
 }
 
+// 숨김 처리된 차수 id 집합(집계 제외용). 캐시 상태와 무관하게 직접 조회.
+export async function getHiddenCourseIds() {
+  const snap = await getDocs(coursesCol);
+  return new Set(snap.docs.filter((d) => d.data().hidden).map((d) => d.id));
+}
+
+// 숨김 상태에 따라 공개 설문 동기화: 숨김이면 설문 제거, 해제면 재생성.
+async function syncSurveyFor(id, data) {
+  try {
+    if (data.hidden) {
+      await deleteDoc(doc(db, "publicSurveys", id));
+    } else {
+      const roomId = getRooms().find((r) => r.name === data.venue)?.id || "";
+      await regenerateSurvey({ ...data, id }, roomId);
+    }
+  } catch (e) { console.warn("survey sync:", e.message); }
+}
+
 // 잔여석 = 정원 - 신청건수 (자동 계산). 음수면 0 하한, 경고색은 CSS로.
 function remainingSeats(c) {
   const r = (c.capacity ?? 0) - (c.appliedCount ?? 0);
@@ -221,7 +241,7 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       <td>${escapeHtml(c.endDate ?? "")}</td>
       <td>${escapeHtml(c.venue ?? "")}</td>
       <td>${escapeHtml(getProgramById(c.programId)?.name ?? "")}</td>
-      <td style="text-align:center"><input type="checkbox" class="c-hide"${c.hidden ? " checked" : ""} title="체크 시 공개 보드에 표시되지 않습니다"></td>
+      <td style="text-align:center"><input type="checkbox" class="c-hide"${c.hidden ? " checked" : ""} title="체크 시 공개 보드 미표시 + 설문 비활성 + 강사료·경비 집계 제외"></td>
       <td class="actions">
         <button type="button" class="timetable">시간표</button>
         <button type="button" class="edit">수정</button>
@@ -234,6 +254,7 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       try {
         await updateDoc(doc(db, "courses", c.id), { hidden: on });
         await mirrorBoard(c.id, { ...c, hidden: on });
+        await syncSurveyFor(c.id, { ...c, hidden: on });
       } catch (err) {
         e.target.checked = !on;
         alert("숨김 설정 실패: " + err.message);
