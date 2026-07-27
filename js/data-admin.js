@@ -8,12 +8,65 @@ import { computeAgg, mergeAgg, serializeAgg, deserializeAgg } from "./agg.js";
 const DEFAULT_THRESHOLD = 100000;
 let threshold = DEFAULT_THRESHOLD;
 
+let orphanIds = [];        // 검사로 찾은 고아 세션 문서 id
+let orphanSurveyIds = [];  // 검사로 찾은 고아 공개설문 문서 id
+
 export function initDataAdmin() {
   document.getElementById("raw-refresh").addEventListener("click", refreshStatus);
   document.getElementById("threshold-save").addEventListener("click", saveThreshold);
   document.getElementById("purge-btn").addEventListener("click", purge);
+  document.getElementById("orphan-scan").addEventListener("click", scanOrphans);
+  document.getElementById("orphan-purge").addEventListener("click", purgeOrphans);
   loadThreshold().then(refreshStatus);
   document.addEventListener("tabshown", (e) => { if (e.detail === "data") refreshStatus(); });
+}
+
+// 과정과 연결되지 않은(삭제된 차수의) 시간표 세션·공개설문 검사.
+async function scanOrphans() {
+  const log = document.getElementById("orphan-log");
+  const purgeBtn = document.getElementById("orphan-purge");
+  log.textContent = "검사 중…";
+  purgeBtn.hidden = true;
+  orphanIds = [];
+  try {
+    const [csnap, ssnap, psnap] = await Promise.all([
+      getDocs(collection(db, "courses")),
+      getDocs(collection(db, "sessions")),
+      getDocs(collection(db, "publicSurveys")),
+    ]);
+    const courseIds = new Set(csnap.docs.map((d) => d.id));
+    const orphanSessions = ssnap.docs.filter((d) => !d.data().courseId || !courseIds.has(d.data().courseId));
+    orphanIds = orphanSessions.map((d) => d.id);
+    orphanSurveyIds = psnap.docs.filter((d) => !courseIds.has(d.id)).map((d) => d.id);
+    const total = orphanIds.length + orphanSurveyIds.length;
+    if (!total) { log.textContent = "미연결(고아) 세션이 없습니다."; return; }
+    log.textContent = `미연결 시간표 세션 ${orphanIds.length}건, 미연결 공개설문 ${orphanSurveyIds.length}건 발견.\n'미연결 세션 삭제'로 정리할 수 있습니다.`;
+    purgeBtn.hidden = false;
+  } catch (e) { log.textContent = "검사 실패: " + e.message; }
+}
+
+async function purgeOrphans() {
+  const log = document.getElementById("orphan-log");
+  const total = orphanIds.length + orphanSurveyIds.length;
+  if (!total) return;
+  if (!confirm(`미연결 시간표 세션 ${orphanIds.length}건, 공개설문 ${orphanSurveyIds.length}건을 삭제합니다.\n되돌릴 수 없습니다. 계속할까요?`)) return;
+  const btn = document.getElementById("orphan-purge");
+  btn.disabled = true;
+  try {
+    const refs = [
+      ...orphanIds.map((id) => doc(db, "sessions", id)),
+      ...orphanSurveyIds.map((id) => doc(db, "publicSurveys", id)),
+    ];
+    for (let i = 0; i < refs.length; i += 450) {
+      const batch = writeBatch(db);
+      refs.slice(i, i + 450).forEach((r) => batch.delete(r));
+      await batch.commit();
+    }
+    log.textContent = `완료: 세션 ${orphanIds.length}건, 공개설문 ${orphanSurveyIds.length}건 삭제.`;
+    orphanIds = []; orphanSurveyIds = [];
+    btn.hidden = true;
+  } catch (e) { log.textContent = "삭제 실패: " + e.message; }
+  finally { btn.disabled = false; }
 }
 
 async function loadThreshold() {
