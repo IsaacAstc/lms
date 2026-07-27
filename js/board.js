@@ -18,6 +18,7 @@ function todayStr() {
 function render() {
   const includePast = document.getElementById("board-past").checked;
   const today = todayStr();
+  // 공개 페이지는 시작일 오름차순(임박한 과정 우선). 같은 날짜는 과정명 순.
   const list = items
     .filter((c) => includePast || !c.endDate || c.endDate >= today)
     .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || "") || (a.name || "").localeCompare(b.name || ""));

@@ -200,7 +200,12 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
     tbody.innerHTML = `<tr><td colspan="15" class="empty">등록된 과정이 없습니다.</td></tr>`;
     return;
   }
-  for (const c of coursesCache) {
+  // 목록 표시는 시작일 내림차순(최근 과정 우선). 같은 날짜는 과정코드·차수 순.
+  const rows = [...coursesCache].sort((a, b) =>
+    (b.startDate || "").localeCompare(a.startDate || "")
+    || (a.code || "").localeCompare(b.code || "")
+    || (a.round ?? 0) - (b.round ?? 0));
+  for (const c of rows) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(c.code)}</td>
