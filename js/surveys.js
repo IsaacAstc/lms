@@ -5,7 +5,7 @@ import {
 import { db } from "./firebase.js";
 import { watchCollection, onCollection, getCache } from "./store.js";
 import { escapeHtml } from "./app.js";
-import { fmtKst } from "./time.js";
+import { fmtKst, fmtDot } from "./time.js";
 import { coursesCache } from "./courses.js";
 import { getRooms } from "./rooms.js";
 import { regenerateSurvey } from "./survey-gen.js";
@@ -42,7 +42,7 @@ function render() {
     tr.innerHTML = `
       <td>${escapeHtml(s.courseName)}</td>
       <td>${escapeHtml(s.roomName || "")}</td>
-      <td>${fmtKst(s.openMs)}<br>- ${fmtKst(s.closeMs)}</td>
+      <td>${fmtDot(fmtKst(s.openMs))}<br>- ${fmtDot(fmtKst(s.closeMs))}</td>
       <td style="text-align:right">${(s.instructorTargets || []).length}</td>
       <td class="resp-count" data-course="${s.courseId}">–</td>
       <td class="url-cell"><input readonly value="${escapeHtml(url)}"><button type="button" class="copy url-copy">복사</button></td>

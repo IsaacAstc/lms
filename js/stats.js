@@ -8,6 +8,7 @@ import { escapeHtml } from "./app.js";
 import { coursesCache } from "./courses.js";
 import { getProgramById } from "./programs.js";
 import { deserializeAgg } from "./agg.js";
+import { fmtDot } from "./time.js";
 
 function courseTypeOf(c) {
   if (c?.courseType) return c.courseType; // 차수에 지정된 과정유형 우선.
@@ -153,7 +154,7 @@ async function renderCompare() {
     const rate = denom ? (c.completedCount / denom) * 100 : null;
     rows.push(`<tr>
       <td>${c.round ?? ""}차</td>
-      <td>${escapeHtml(c.startDate || "")}</td>
+      <td>${escapeHtml(fmtDot(c.startDate || ""))}</td>
       <td style="text-align:right">${c.completedCount ?? 0}/${denom || 0}</td>
       <td>${fmt(rate)}% ${bar(rate)}</td>
       <td style="text-align:right">${o.n}</td>

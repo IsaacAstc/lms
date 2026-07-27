@@ -8,6 +8,7 @@ import { escapeHtml } from "./app.js";
 import {
   computeAgg, deserializeAgg, renderEduHTML, renderInstHTML, EDU_ITEMS,
 } from "./agg.js";
+import { fmtDot } from "./time.js";
 
 // 원응답은 버튼 클릭 시에만 표시(불필요한 렌더·오해 방지).
 let rawState = { responses: [], purged: false };
@@ -88,7 +89,7 @@ function renderRaw(responses) {
         .map((it) => `${escapeHtml(it.subject)}/${escapeHtml(it.instructorName)}: ${[0, 1, 2].map((i) => it[`q${i}`] ?? "-").join("·")}`)
         .join("<br>");
       return `<tr>
-        <td>${escapeHtml(when(r))}</td>
+        <td>${escapeHtml(fmtDot(when(r)))}</td>
         <td>${escapeHtml(r.courseType || "")}</td>
         ${edu}
         <td class="raw-inst">${inst || "-"}</td>
