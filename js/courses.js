@@ -85,6 +85,9 @@ export function initCourses() {
   initCourseTypeUi(form);
   loadCourseTypes(form);
 
+  // 목록 필터(기본 올해).
+  initCourseFilter(() => renderTable(tbody, form, submitBtn, cancelBtn));
+
   // 커리큘럼(과정 마스터) 연결 드롭다운 + 과정명 datalist.
   onProgramsChange((programs) => {
     const prev = form.programId.value;
@@ -275,6 +278,23 @@ async function syncSurveyFor(id, data) {
   }
 }
 
+// 교육기간을 한 열로 압축: 같은 날이면 하루, 같은 해면 종료일의 연도 생략.
+function periodText(c) {
+  const s = c.startDate || "";
+  const e = c.endDate || "";
+  if (!s && !e) return "";
+  if (!e || e === s) return escapeHtml(s);
+  const end = (s.slice(0, 4) === e.slice(0, 4)) ? e.slice(5) : e;
+  return `${escapeHtml(s)} ~ ${escapeHtml(end)}`;
+}
+
+// 커리큘럼명이 과정명과 다를 때만 과정명 아래에 작게 표기(열 하나 절약).
+function curriculumNote(c) {
+  const n = getProgramById(c.programId)?.name;
+  if (!n || n === c.name) return "";
+  return `<br><small class="c-sub">${escapeHtml(n)}</small>`;
+}
+
 // 잔여석 = 정원 - 신청건수 (자동 계산). 음수면 0 하한, 경고색은 CSS로.
 function remainingSeats(c) {
   const r = (c.capacity ?? 0) - (c.appliedCount ?? 0);
@@ -302,22 +322,74 @@ function resetForm(form, submitBtn, cancelBtn) {
   cancelBtn.hidden = true;
 }
 
+// ── 목록 필터(기본: 올해) ──
+let filterInit = false;
+function initCourseFilter(rerender) {
+  const yearSel = document.getElementById("cf-year");
+  ["cf-year", "cf-from", "cf-to"].forEach((id) =>
+    document.getElementById(id).addEventListener("change", rerender));
+  document.getElementById("cf-reset").addEventListener("click", () => {
+    document.getElementById("cf-from").value = "";
+    document.getElementById("cf-to").value = "";
+    yearSel.value = String(new Date().getFullYear());
+    rerender();
+  });
+}
+
+// 데이터에 있는 연도로 셀렉트 갱신(선택값 유지, 최초에는 올해 기본 선택).
+function refreshYearOptions() {
+  const sel = document.getElementById("cf-year");
+  const years = [...new Set(coursesCache.map((c) => (c.startDate || "").slice(0, 4)).filter(Boolean))]
+    .sort().reverse();
+  const thisYear = String(new Date().getFullYear());
+  if (!years.includes(thisYear)) years.unshift(thisYear);
+  const prev = filterInit ? sel.value : thisYear;
+  sel.innerHTML = `<option value="">전체 연도</option>` + years.map((y) => `<option>${y}</option>`).join("");
+  sel.value = [...sel.options].some((o) => o.value === prev) ? prev : "";
+  filterInit = true;
+}
+
+// 기간을 지정하면 범위 우선, 아니면 연도 기준. 교육기간이 겹치면 표시.
+function applyFilter(list) {
+  const year = document.getElementById("cf-year").value;
+  const from = document.getElementById("cf-from").value;
+  const to = document.getElementById("cf-to").value;
+  if (from || to) {
+    return list.filter((c) => {
+      const s = c.startDate || "";
+      const e = c.endDate || s;
+      if (from && e && e < from) return false;
+      if (to && s && s > to) return false;
+      return true;
+    });
+  }
+  if (year) return list.filter((c) => (c.startDate || "").slice(0, 4) === year);
+  return list;
+}
+
 function renderTable(tbody, form, submitBtn, cancelBtn) {
   tbody.innerHTML = "";
+  refreshYearOptions();
   if (coursesCache.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="15" class="empty">등록된 과정이 없습니다.</td></tr>`;
+    document.getElementById("cf-count").textContent = "";
+    tbody.innerHTML = `<tr><td colspan="13" class="empty">등록된 과정이 없습니다.</td></tr>`;
     return;
   }
   // 목록 표시는 시작일 내림차순(최근 과정 우선). 같은 날짜는 과정코드·차수 순.
-  const rows = [...coursesCache].sort((a, b) =>
+  const rows = applyFilter([...coursesCache]).sort((a, b) =>
     (b.startDate || "").localeCompare(a.startDate || "")
     || (a.code || "").localeCompare(b.code || "")
     || (a.round ?? 0) - (b.round ?? 0));
+  document.getElementById("cf-count").textContent = `${rows.length} / 전체 ${coursesCache.length}건`;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="13" class="empty">선택한 기간에 등록된 과정이 없습니다. 연도를 바꾸거나 ‘전체 연도’를 선택하세요.</td></tr>`;
+    return;
+  }
   for (const c of rows) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(c.code)}</td>
-      <td>${escapeHtml(c.name)}</td>
+      <td class="c-name">${escapeHtml(c.name)}${curriculumNote(c)}</td>
       <td>${escapeHtml(c.courseType ?? "")}</td>
       <td>${c.round ?? ""}</td>
       <td>${c.capacity ?? ""}</td>
@@ -325,10 +397,8 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       <td>${remainingSeats(c)}</td>
       <td>${c.completedCount ?? 0}</td>
       <td style="text-align:center">${c.hasEvaluation ? "○" : ""}</td>
-      <td>${escapeHtml(c.startDate ?? "")}</td>
-      <td>${escapeHtml(c.endDate ?? "")}</td>
+      <td>${periodText(c)}</td>
       <td>${escapeHtml(c.venue ?? "")}</td>
-      <td>${escapeHtml(getProgramById(c.programId)?.name ?? "")}</td>
       <td style="text-align:center"><input type="checkbox" class="c-hide"${c.hidden ? " checked" : ""} title="체크 시 공개 보드 미표시 + 설문 비활성 + 강사료·경비 집계 제외"></td>
       <td class="actions">
         <button type="button" class="timetable">시간표</button>
