@@ -130,7 +130,7 @@ function renderDraft() {
       (s, idx) => `<tr${idx === editingSubjIndex ? ' class="editing-row"' : ""}>
         <td>${s.dayNo}일차</td>
         <td>${escapeHtml(s.subject)}</td>
-        <td>${s.startTime}~${s.endTime}</td>
+        <td>${s.startTime} - ${s.endTime}</td>
         <td>${escapeHtml(s.teacherKind)}</td>
         <td class="actions">
           <button type="button" data-i="${idx}" class="edit-subj">편집</button>

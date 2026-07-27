@@ -42,7 +42,7 @@ function render() {
     tr.innerHTML = `
       <td>${escapeHtml(s.courseName)}</td>
       <td>${escapeHtml(s.roomName || "")}</td>
-      <td>${fmtKst(s.openMs)}<br>~ ${fmtKst(s.closeMs)}</td>
+      <td>${fmtKst(s.openMs)}<br>- ${fmtKst(s.closeMs)}</td>
       <td style="text-align:right">${(s.instructorTargets || []).length}</td>
       <td class="resp-count" data-course="${s.courseId}">–</td>
       <td class="url-cell"><input readonly value="${escapeHtml(url)}"><button type="button" class="copy url-copy">복사</button></td>

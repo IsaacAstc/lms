@@ -110,7 +110,7 @@ async function purge() {
   const log = document.getElementById("purge-log");
   if (!start || !end) return alert("파기할 시작일과 종료일을 지정하세요.");
   if (end < start) return alert("종료일은 시작일 이후여야 합니다.");
-  if (!confirm(`수집일 ${start} ~ ${end} 범위의 설문 원문을 파기합니다.\n(삭제 전 월별 집계 스냅샷은 보존됩니다)\n되돌릴 수 없습니다. 계속할까요?`)) return;
+  if (!confirm(`수집일 ${start} - ${end} 범위의 설문 원문을 파기합니다.\n(삭제 전 월별 집계 스냅샷은 보존됩니다)\n되돌릴 수 없습니다. 계속할까요?`)) return;
 
   const btn = document.getElementById("purge-btn");
   btn.disabled = true;

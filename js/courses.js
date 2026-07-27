@@ -285,7 +285,7 @@ function periodText(c) {
   if (!s && !e) return "";
   if (!e || e === s) return escapeHtml(s);
   const end = (s.slice(0, 4) === e.slice(0, 4)) ? e.slice(5) : e;
-  return `${escapeHtml(s)} ~ ${escapeHtml(end)}`;
+  return `${escapeHtml(s)} - ${escapeHtml(end)}`;
 }
 
 // 커리큘럼명이 과정명과 다를 때만 과정명 아래에 작게 표기(열 하나 절약).

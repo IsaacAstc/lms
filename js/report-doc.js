@@ -100,7 +100,7 @@ function operationsHTML(month) {
     <td style="text-align:right">${c.appliedCount ?? 0}</td>
     <td style="text-align:right">${c.completedCount ?? 0}</td>
     <td>${escapeHtml(c.venue || "")}</td>
-    <td>${escapeHtml(c.startDate || "")}~${escapeHtml(c.endDate || "")}</td></tr>`).join("");
+    <td>${escapeHtml(c.startDate || "")} - ${escapeHtml(c.endDate || "")}</td></tr>`).join("");
   return `<table><thead><tr><th>과정명</th><th>유형</th><th>차수</th><th>정원</th><th>신청</th><th>이수</th><th>교육장</th><th>교육기간</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
