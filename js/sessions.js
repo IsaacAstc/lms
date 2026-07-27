@@ -113,8 +113,12 @@ async function exportAllTimetables() {
   const btn = document.getElementById("tt-export-all");
   btn.disabled = true;
   try {
-    const snap = await getDocs(sessionsCol);
-    const byId = Object.fromEntries(coursesCache.map((c) => [c.id, c]));
+    // 차수 정보를 직접 조회(캐시 상태와 무관하게 과정코드·과정명·차수 매핑 보장).
+    const [snap, csnap] = await Promise.all([
+      getDocs(sessionsCol),
+      getDocs(collection(db, "courses")),
+    ]);
+    const byId = Object.fromEntries(csnap.docs.map((d) => [d.id, d.data()]));
     const rows = snap.docs.map((d) => d.data());
     if (!rows.length) return alert("등록된 시간표가 없습니다.");
     rows.sort((a, b) => {
