@@ -3,22 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>교육 과정 신청 현황</title>
+    <title>항공보안교육 과정 수강신청 현황</title>
     <link rel="icon" href="favicon.ico" sizes="any" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="css/styles.css" />
   </head>
   <body>
     <main class="board-main">
-      <h1 class="board-title">교육 과정 신청 현황</h1>
+      <h1 class="board-title">항공보안교육 과정 수강신청 현황</h1>
       <p class="board-updated" id="board-updated"></p>
       <div class="board-controls no-print">
         <label class="board-range">기간 <input type="date" id="board-from" /></label>
         <span class="board-range-sep">~</span>
         <label class="board-range"><input type="date" id="board-to" /></label>
-        <button type="button" id="board-reset">초기화</button>
+        <button type="button" id="board-reset">기본(오늘~60일)</button>
         <label><input type="checkbox" id="board-past" /> 지난 과정 포함</label>
       </div>
+      <p class="board-guide no-print">기본적으로 <b>오늘부터 60일 이내</b>에 진행되는 과정만 표시됩니다. 그 밖의 과정을 보려면 위에서 기간을 직접 지정하세요.</p>
       <p class="board-hint no-print" id="board-filter-note"></p>
       <div id="board-root"><p class="empty">현황을 불러오는 중…</p></div>
       <section id="board-apply" class="board-apply" hidden>

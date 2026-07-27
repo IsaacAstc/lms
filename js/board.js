@@ -14,6 +14,20 @@ function esc(v) {
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 }
+// KST 기준 오늘 + n일.
+function dayOffsetStr(n) {
+  const base = new Date(`${todayStr()}T00:00:00+09:00`);
+  base.setDate(base.getDate() + n);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(base);
+}
+
+// 기본 조회 범위: 오늘 ~ +60일.
+const DEFAULT_RANGE_DAYS = 60;
+function applyDefaultRange() {
+  document.getElementById("board-from").value = todayStr();
+  document.getElementById("board-to").value = dayOffsetStr(DEFAULT_RANGE_DAYS);
+  document.getElementById("board-past").checked = false;
+}
 
 // 교육기간이 지정 범위와 겹치면 표시(여러 날 과정이 경계에 걸쳐도 포함).
 function inRange(c, from, to) {
@@ -43,9 +57,10 @@ function render() {
     .filter((c) => (ranged ? inRange(c, from, to) : (includePast || !c.endDate || c.endDate >= today)))
     .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || "") || (a.name || "").localeCompare(b.name || ""));
 
+  const isDefault = ranged && from === todayStr() && to === dayOffsetStr(DEFAULT_RANGE_DAYS);
   note.textContent = ranged
-    ? `${from || "처음"} ~ ${to || "끝"} 기간의 과정 ${list.length}건 (기간 지정 시 '지난 과정 포함'은 적용되지 않습니다)`
-    : "";
+    ? `${from || "처음"} ~ ${to || "끝"}${isDefault ? " (기본 60일)" : ""} · ${list.length}건`
+    : (includePast ? `전체 기간 · ${list.length}건` : `진행 예정·진행 중 · ${list.length}건`);
 
   if (!list.length) {
     root.innerHTML = `<p class="empty">${ranged ? "해당 기간에 교육 과정이 없습니다." : "현재 안내 중인 교육 과정이 없습니다."}</p>`;
@@ -79,6 +94,8 @@ function card(c) {
 }
 
 function main() {
+  applyDefaultRange(); // 최초 조회는 오늘~+60일 범위.
+
   // 신청 안내 텍스트(__config 문서) 구독.
   onSnapshot(doc(db, "publicBoard", "__config"), (snap) => {
     const applyInfo = snap.exists() ? (snap.data().applyInfo || "") : "";
@@ -103,9 +120,7 @@ function main() {
   document.getElementById("board-from").addEventListener("change", render);
   document.getElementById("board-to").addEventListener("change", render);
   document.getElementById("board-reset").addEventListener("click", () => {
-    document.getElementById("board-from").value = "";
-    document.getElementById("board-to").value = "";
-    document.getElementById("board-past").checked = false;
+    applyDefaultRange(); // 기본(오늘~60일)로 복귀.
     render();
   });
 }
