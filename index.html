@@ -46,6 +46,17 @@
             <label>차수 <select id="tt-export-course"><option value="">차수 선택</option></select></label>
             <button id="tt-export-course-btn" type="button">개별</button>
           </div>
+          <fieldset class="load-box" id="ctype-box" hidden>
+            <legend>과정유형 관리 (마스터 전용)</legend>
+            <div id="ctype-list"></div>
+            <div class="load-row">
+              <label>새 과정유형 <input id="ctype-new" placeholder="예: 자격유지" /></label>
+              <button id="ctype-add" type="button">추가</button>
+              <button id="ctype-save" type="button">과정유형 저장</button>
+            </div>
+            <p class="hint">여기서 정한 목록이 아래 <b>과정유형</b> 선택지가 됩니다. 이름을 바꿔도 <b>이미 저장된 차수의 값은 그대로</b> 남으니, 변경 시 해당 차수를 다시 지정하세요.</p>
+          </fieldset>
+
           <form id="course-form" class="entry-form">
             <div class="grid">
               <label>과정코드<input name="code" required /></label>
@@ -59,10 +70,7 @@
               <label>교육종료일<input name="endDate" type="date" required /></label>
               <label>교육장<select name="venue"><option value="">선택</option></select></label>
               <label>커리큘럼 연결<select name="programId"></select></label>
-              <label>과정유형<select name="courseType">
-                <option value="">(미지정)</option>
-                <option>초기</option><option>정기</option><option>특별</option><option>초정기통합</option>
-              </select></label>
+              <label>과정유형<select name="courseType"><option value="">(미지정)</option></select></label>
               <label>운영유형<input name="operationTag" placeholder="예: 초정기통합, 자격유지" /></label>
               <label class="chk" title="공개 보드 미표시 + 설문 비활성 + 강사료·경비 집계 제외">숨김(공개·설문·집계 제외)<input name="hideBoard" type="checkbox" /></label>
             </div>
