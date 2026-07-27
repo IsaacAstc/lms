@@ -30,6 +30,7 @@ const CLOSE_AFTER_MS = 1 * HOUR_MS;
 // 과정+세션으로 공개 설문 정의 객체 생성. roomId 없거나 세션 없으면 null.
 export function buildSurvey(course, sessions, roomId) {
   if (!roomId) return null;
+  if (course?.hidden) return null; // 숨김 차수는 설문 비활성(기존 문서는 호출부에서 제거).
   const sorted = [...sessions].sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
   if (!sorted.length) return null;
   const last = sorted[sorted.length - 1];
