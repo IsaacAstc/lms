@@ -35,7 +35,15 @@
       <main>
         <!-- 차수(운영) 관리 -->
         <section class="tab-panel" data-tab="courses">
-          <h2>차수·시간표 <button class="csv-export" type="button" data-target="#course-tbody" data-name="차수목록">차수목록 CSV</button> <button id="tt-export-all" type="button">전체 시간표 CSV</button></h2>
+          <h2>차수·시간표 <button class="csv-export" type="button" data-target="#course-tbody" data-name="차수목록">차수목록 CSV</button></h2>
+          <div class="load-row" id="tt-export-bar">
+            <span class="hint">시간표 내보내기:</span>
+            <button id="tt-export-all" type="button">전체</button>
+            <label>월 <input id="tt-export-month" type="month" /></label>
+            <button id="tt-export-month-btn" type="button">월별</button>
+            <label>차수 <select id="tt-export-course"><option value="">차수 선택</option></select></label>
+            <button id="tt-export-course-btn" type="button">개별</button>
+          </div>
           <form id="course-form" class="entry-form">
             <div class="grid">
               <label>과정코드<input name="code" required /></label>
@@ -457,10 +465,10 @@
           </div>
           <pre id="purge-log" class="seed-log"></pre>
 
-          <h3>고아 시간표 정리 (미연결 세션)</h3>
+          <h3>미연결 시간표 정리</h3>
           <p class="hint">삭제된 차수에 남아 있는 시간표 세션(과정과 연결되지 않은 세션)과 공개설문을 찾아 정리합니다. 먼저 검사한 뒤 삭제합니다.</p>
           <div class="load-row">
-            <button id="orphan-scan" type="button">고아 세션 검사</button>
+            <button id="orphan-scan" type="button">미연결 세션 검사</button>
             <button id="orphan-purge" type="button" hidden>미연결 세션 삭제</button>
           </div>
           <pre id="orphan-log" class="seed-log"></pre>
