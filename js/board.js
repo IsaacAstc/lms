@@ -11,6 +11,7 @@ let items = [];
 function esc(v) {
   return String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
+const dot = (s) => String(s ?? "").replace(/(\d{4})-(\d{2})-(\d{2})/g, "$1.$2.$3");
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 }
@@ -59,7 +60,7 @@ function render() {
 
   const isDefault = ranged && from === todayStr() && to === dayOffsetStr(DEFAULT_RANGE_DAYS);
   note.textContent = ranged
-    ? `${from || "처음"} - ${to || "끝"}${isDefault ? ` (기본 ${DEFAULT_RANGE_DAYS}일)` : ""} · ${list.length}건`
+    ? `${dot(from) || "처음"} - ${dot(to) || "끝"}${isDefault ? ` (기본 ${DEFAULT_RANGE_DAYS}일)` : ""} · ${list.length}건`
     : (includePast ? `전체 기간 · ${list.length}건` : `진행 예정·진행 중 · ${list.length}건`);
 
   if (!list.length) {
@@ -75,7 +76,7 @@ function card(c) {
   const remaining = c.remaining != null ? c.remaining : Math.max(0, cap - applied);
   const full = cap > 0 && remaining <= 0;
   const pct = cap ? Math.min(100, Math.round((applied / cap) * 100)) : 0;
-  const period = c.startDate ? `${esc(c.startDate)}${c.endDate && c.endDate !== c.startDate ? " - " + esc(c.endDate) : ""}` : "-";
+  const period = c.startDate ? `${esc(dot(c.startDate))}${c.endDate && c.endDate !== c.startDate ? " - " + esc(dot(c.endDate)) : ""}` : "-";
   return `
     <article class="board-card${full ? " full" : ""}">
       <div class="board-card-head">
