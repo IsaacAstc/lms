@@ -15,6 +15,7 @@ import { initReportDoc } from "./report-doc.js";
 import { initFreetext } from "./freetext.js";
 import { initDataAdmin } from "./data-admin.js";
 import { initAdmins } from "./admins.js";
+import { initBoardAdmin } from "./board-admin.js";
 import { initExportButtons } from "./export-csv.js";
 import { initCsvImport } from "./csv-import.js";
 import { initSeed } from "./seed.js";
@@ -40,7 +41,7 @@ const TAB_GROUPS = [
   { id: "survey-result", label: "설문 결과", tabs: [["reports", "설문 집계"], ["freetext", "주관식 원문"]] },
   { id: "stats", label: "통계", tabs: [["stats", ""]] },
   { id: "reportdoc", label: "운영 보고서", tabs: [["reportdoc", ""]] },
-  { id: "admin", label: "설정", tabs: [["settings", "기준값 설정"], ["admins", "관리자 계정"], ["data", "데이터 관리"]] },
+  { id: "admin", label: "설정", tabs: [["settings", "기준값 설정"], ["admins", "관리자 계정"], ["data", "데이터 관리"], ["board", "공개 현황 보드"]] },
 ];
 const groupOfTab = (name) => TAB_GROUPS.find((g) => g.tabs.some(([t]) => t === name));
 
@@ -106,6 +107,7 @@ function initApp() {
   initFreetext();
   initDataAdmin();
   initAdmins();
+  initBoardAdmin();
   initExportButtons();
   initCsvImport();
   initSeed();

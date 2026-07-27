@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>교육 과정 신청 현황</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <main class="board-main">
+      <h1 class="board-title">교육 과정 신청 현황</h1>
+      <p class="board-updated" id="board-updated"></p>
+      <div class="board-controls no-print">
+        <label><input type="checkbox" id="board-past" /> 지난 과정 포함</label>
+      </div>
+      <div id="board-root"><p class="empty">현황을 불러오는 중…</p></div>
+      <section id="board-apply" class="board-apply" hidden>
+        <h2>신청 방법 안내</h2>
+        <div id="board-apply-text" class="report-narr"></div>
+      </section>
+    </main>
+    <script type="module" src="js/board.js"></script>
+  </body>
+</html>
