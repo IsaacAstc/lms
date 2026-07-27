@@ -15,18 +15,18 @@ const dot = (s) => String(s ?? "").replace(/(\d{4})-(\d{2})-(\d{2})/g, "$1.$2.$3
 function todayStr() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 }
-// KST 기준 오늘 + n일.
-function dayOffsetStr(n) {
-  const base = new Date(`${todayStr()}T00:00:00+09:00`);
-  base.setDate(base.getDate() + n);
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(base);
+// 기본 조회 범위 종료일: 다음 달 말일(KST 기준).
+function endOfNextMonthStr() {
+  const [y, m] = todayStr().split("-").map(Number); // m은 1~12
+  // (m+1)월의 0일 = 다음 달(m+1)의 말일. UTC로 계산해 시간대 흔들림 방지.
+  const d = new Date(Date.UTC(y, m + 1, 0));
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
 }
 
-// 기본 조회 범위: 오늘 ~ +N일.
-const DEFAULT_RANGE_DAYS = 30;
 function applyDefaultRange() {
   document.getElementById("board-from").value = todayStr();
-  document.getElementById("board-to").value = dayOffsetStr(DEFAULT_RANGE_DAYS);
+  document.getElementById("board-to").value = endOfNextMonthStr();
   document.getElementById("board-past").checked = false;
 }
 
@@ -58,9 +58,9 @@ function render() {
     .filter((c) => (ranged ? inRange(c, from, to) : (includePast || !c.endDate || c.endDate >= today)))
     .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || "") || (a.name || "").localeCompare(b.name || ""));
 
-  const isDefault = ranged && from === todayStr() && to === dayOffsetStr(DEFAULT_RANGE_DAYS);
+  const isDefault = ranged && from === todayStr() && to === endOfNextMonthStr();
   note.textContent = ranged
-    ? `${dot(from) || "처음"} - ${dot(to) || "끝"}${isDefault ? ` (기본 ${DEFAULT_RANGE_DAYS}일)` : ""} · ${list.length}건`
+    ? `${dot(from) || "처음"} - ${dot(to) || "끝"}${isDefault ? " (기본: 다음 달 말일까지)" : ""} · ${list.length}건`
     : (includePast ? `전체 기간 · ${list.length}건` : `진행 예정·진행 중 · ${list.length}건`);
 
   if (!list.length) {
@@ -95,7 +95,7 @@ function card(c) {
 }
 
 function main() {
-  applyDefaultRange(); // 최초 조회는 오늘~+N일 기본 범위.
+  applyDefaultRange(); // 최초 조회는 오늘 ~ 다음 달 말일.
 
   // 신청 안내 텍스트(__config 문서) 구독.
   onSnapshot(doc(db, "publicBoard", "__config"), (snap) => {
