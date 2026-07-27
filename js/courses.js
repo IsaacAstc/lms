@@ -4,6 +4,8 @@ import {
   addDoc,
   doc,
   setDoc,
+  deleteDoc,
+  updateDoc,
   onSnapshot,
   query,
   where,
@@ -118,7 +120,7 @@ export function initCourses() {
   }, (err) => {
     // 조회 실패(권한 등)를 조용히 감추지 않고 표시.
     console.error("courses onSnapshot:", err);
-    tbody.innerHTML = `<tr><td colspan="14" class="empty">목록을 불러오지 못했습니다: ${escapeHtml(err.code || err.message)}<br>보안규칙 재배포 또는 로그인 계정의 관리자 권한을 확인하세요.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="15" class="empty">목록을 불러오지 못했습니다: ${escapeHtml(err.code || err.message)}<br>보안규칙 재배포 또는 로그인 계정의 관리자 권한을 확인하세요.</td></tr>`;
   });
 }
 
@@ -142,6 +144,8 @@ function readForm(form) {
     appliedCount: form.appliedCount.value ? Number(form.appliedCount.value) : 0,
     completedCount: form.completedCount.value ? Number(form.completedCount.value) : 0,
     hasEvaluation: form.hasEvaluation.checked,
+    // 공개 보드 미표시 여부. (input name은 form.hidden 속성 충돌 회피용 hideBoard)
+    hidden: form.hideBoard.checked,
   };
 }
 
@@ -156,7 +160,11 @@ export function boardFields(data) {
   };
 }
 async function mirrorBoard(id, data) {
-  try { await setDoc(doc(db, "publicBoard", id), boardFields(data)); } catch (e) { console.warn("board mirror:", e.message); }
+  try {
+    // 숨김 처리된 차수는 공개 보드에서 제거(미표시).
+    if (data.hidden) await deleteDoc(doc(db, "publicBoard", id));
+    else await setDoc(doc(db, "publicBoard", id), boardFields(data));
+  } catch (e) { console.warn("board mirror:", e.message); }
 }
 
 // 잔여석 = 정원 - 신청건수 (자동 계산). 음수면 0 하한, 경고색은 CSS로.
@@ -189,7 +197,7 @@ function resetForm(form, submitBtn, cancelBtn) {
 function renderTable(tbody, form, submitBtn, cancelBtn) {
   tbody.innerHTML = "";
   if (coursesCache.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="14" class="empty">등록된 과정이 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="15" class="empty">등록된 과정이 없습니다.</td></tr>`;
     return;
   }
   for (const c of coursesCache) {
@@ -208,12 +216,24 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       <td>${escapeHtml(c.endDate ?? "")}</td>
       <td>${escapeHtml(c.venue ?? "")}</td>
       <td>${escapeHtml(getProgramById(c.programId)?.name ?? "")}</td>
+      <td style="text-align:center"><input type="checkbox" class="c-hide"${c.hidden ? " checked" : ""} title="체크 시 공개 보드에 표시되지 않습니다"></td>
       <td class="actions">
         <button type="button" class="timetable">시간표</button>
         <button type="button" class="edit">수정</button>
         <button type="button" class="del">삭제</button>
       </td>`;
     tr.querySelector(".timetable").addEventListener("click", () => selectCourse(c.id));
+    // 목록에서 바로 숨김 토글 → 저장 + 공개 보드 반영.
+    tr.querySelector(".c-hide").addEventListener("change", async (e) => {
+      const on = e.target.checked;
+      try {
+        await updateDoc(doc(db, "courses", c.id), { hidden: on });
+        await mirrorBoard(c.id, { ...c, hidden: on });
+      } catch (err) {
+        e.target.checked = !on;
+        alert("숨김 설정 실패: " + err.message);
+      }
+    });
     tr.querySelector(".edit").addEventListener("click", () => {
       editingId = c.id;
       form.code.value = c.code ?? "";
@@ -229,6 +249,7 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       form.appliedCount.value = c.appliedCount ?? 0;
       form.completedCount.value = c.completedCount ?? 0;
       form.hasEvaluation.checked = !!c.hasEvaluation;
+      form.hideBoard.checked = !!c.hidden;
       submitBtn.textContent = "수정 저장";
       cancelBtn.hidden = false;
       form.scrollIntoView({ behavior: "smooth" });
