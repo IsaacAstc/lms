@@ -7,6 +7,7 @@ import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import { getFeeRates, getTravelRates } from "./settings.js";
 import { getInstructors, getInstructorById } from "./instructors.js";
+import { getHiddenCourseIds } from "./courses.js";
 
 // ── 순수 계산 함수 (엑셀 '계산' 시트 로직) ──
 
@@ -71,8 +72,10 @@ async function fetchSessions(type, value) {
   const end = type === "year" ? `${value}-12-31` : `${value}-31`;
   const q = query(collection(db, "sessions"),
     where("date", ">=", start), where("date", "<=", end));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const [snap, hiddenIds] = await Promise.all([getDocs(q), getHiddenCourseIds()]);
+  // 숨김 처리된 차수의 세션은 집계에서 제외.
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    .filter((s) => !hiddenIds.has(s.courseId));
 }
 
 async function renderAggregate(type, value) {
