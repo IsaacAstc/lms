@@ -5,7 +5,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
-import { getFeeRates, getTravelRates } from "./settings.js";
+import { getFeeRatesAt, getTravelRatesAt } from "./settings.js";
 import { getInstructors, getInstructorById, resolveInstructorAt } from "./instructors.js";
 import { getHiddenCourseIds } from "./courses.js";
 
@@ -89,9 +89,14 @@ async function fetchSessions(type, value) {
     .filter((s) => !hiddenIds.has(s.courseId));
 }
 
+// 해당 월의 말일(월상한 판정 기준일).
+function monthEnd(ym) {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m, 0));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
 async function renderAggregate(type, value) {
-  const feeRates = getFeeRates();
-  const travelRates = getTravelRates();
   const all = await fetchSessions(type, value);
   const sessions = all.filter((s) => s.instructorId);
 
@@ -111,7 +116,8 @@ async function renderAggregate(type, value) {
     g.sessions += 1;
     g.dates.set(s.date, eff.travelBasis); // 출강일 → 그날의 여비기준
     const ym = s.date.slice(0, 7);
-    g.monthFee[ym] = (g.monthFee[ym] || 0) + calcFee(eff.instructorType, hour, feeRates);
+    // 기준값도 강의 일자에 유효한 개정본으로 계산(규정 개정 소급 방지).
+    g.monthFee[ym] = (g.monthFee[ym] || 0) + calcFee(eff.instructorType, hour, getFeeRatesAt(s.date));
   }
 
   const rows = [];
@@ -119,13 +125,14 @@ async function renderAggregate(type, value) {
   for (const g of Object.values(byKey)) {
     // 월별 월상한 적용 후 합산(해당 유형 기준).
     let cappedFee = 0;
-    for (const [, raw] of Object.entries(g.monthFee)) {
-      cappedFee += applyMonthlyCap(raw, g.type, feeRates);
+    for (const [ym, raw] of Object.entries(g.monthFee)) {
+      // 월상한은 그 달 말일 시점에 유효한 개정본 기준.
+      cappedFee += applyMonthlyCap(raw, g.type, getFeeRatesAt(monthEnd(ym)));
     }
     // 여비: 출강일(고유 일자)마다 1회, 그날 유효한 여비기준으로.
     let travelSum = 0, travelManual = false;
-    for (const basis of g.dates.values()) {
-      const t = calcTravel(basis, travelRates);
+    for (const [date, basis] of g.dates.entries()) {
+      const t = calcTravel(basis, getTravelRatesAt(date));
       if (t.manual) travelManual = true; else travelSum += t.amount;
     }
     totFee += cappedFee;
