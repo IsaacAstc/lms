@@ -3,7 +3,7 @@ import {
   collection, getDocs, getDoc, doc, setDoc, writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
-import { boardFields } from "./courses.js";
+import { boardFields, isBoardExcluded } from "./courses.js";
 
 export function initBoardAdmin() {
   document.getElementById("board-sync").addEventListener("click", () => syncAll(true));
@@ -44,8 +44,8 @@ async function autoSync() {
     ]);
     const boardById = {};
     bsnap.docs.forEach((d) => { if (!d.id.startsWith("__")) boardById[d.id] = d.data(); });
-    // 숨김 차수는 게시 대상에서 제외(보드에 있으면 제거).
-    const visible = csnap.docs.filter((d) => !d.data().hidden);
+    // 숨김 차수·비공개 과정유형은 게시 대상에서 제외(보드에 있으면 제거).
+    const visible = csnap.docs.filter((d) => !isBoardExcluded(d.data()));
     const visibleIds = new Set(visible.map((d) => d.id));
     const toWrite = visible.filter((d) => { const cur = boardById[d.id]; return !cur || boardDiffers(cur, boardFields(d.data())); });
     const stale = bsnap.docs.filter((d) => !d.id.startsWith("__") && !visibleIds.has(d.id));
@@ -59,8 +59,8 @@ async function autoSync() {
       stale.slice(i, i + 450).forEach((d) => batch.delete(d.ref));
       await batch.commit();
     }
-    const hiddenCount = csnap.size - visible.length;
-    log.textContent = `게시 ${visible.length}건` + (hiddenCount ? ` (숨김 ${hiddenCount}건 제외)` : "") +
+    const hiddenCount = csnap.size - visible.length; // 숨김 + 비공개 과정유형
+    log.textContent = `게시 ${visible.length}건` + (hiddenCount ? ` (숨김·비공개유형 ${hiddenCount}건 제외)` : "") +
       (toWrite.length || stale.length ? ` · 자동 반영: 갱신 ${toWrite.length}건${stale.length ? `, 정리 ${stale.length}건` : ""}` : " · 최신 상태");
   } catch (e) { log.textContent = "현황 확인 실패: " + e.message; }
 }
@@ -83,14 +83,14 @@ async function syncAll(force) {
       getDocs(collection(db, "courses")),
       getDocs(collection(db, "publicBoard")),
     ]);
-    // 숨김이 아닌 차수만 게시(미러).
-    const visible = csnap.docs.filter((d) => !d.data().hidden);
+    // 제외 대상이 아닌 차수만 게시(미러).
+    const visible = csnap.docs.filter((d) => !isBoardExcluded(d.data()));
     for (let i = 0; i < visible.length; i += 450) {
       const batch = writeBatch(db);
       visible.slice(i, i + 450).forEach((d) => batch.set(doc(db, "publicBoard", d.id), boardFields(d.data())));
       await batch.commit();
     }
-    // 삭제·숨김된 차수의 잔여 보드 항목 정리(__config 제외).
+    // 삭제·제외된 차수의 잔여 보드 항목 정리(__config 제외).
     const visibleIds = new Set(visible.map((d) => d.id));
     const stale = bsnap.docs.filter((d) => !d.id.startsWith("__") && !visibleIds.has(d.id));
     for (let i = 0; i < stale.length; i += 450) {
@@ -98,8 +98,8 @@ async function syncAll(force) {
       stale.slice(i, i + 450).forEach((d) => batch.delete(d.ref));
       await batch.commit();
     }
-    const hiddenCount = csnap.size - visible.length;
-    log.textContent = `동기화 완료: 게시 ${visible.length}건` + (hiddenCount ? ` (숨김 ${hiddenCount}건 제외)` : "") + (stale.length ? `, 정리 ${stale.length}건` : "");
+    const hiddenCount = csnap.size - visible.length; // 숨김 + 비공개 과정유형
+    log.textContent = `동기화 완료: 게시 ${visible.length}건` + (hiddenCount ? ` (숨김·비공개유형 ${hiddenCount}건 제외)` : "") + (stale.length ? `, 정리 ${stale.length}건` : "");
   } catch (e) { log.textContent = "동기화 실패: " + e.message; }
   finally { btn.disabled = false; }
 }

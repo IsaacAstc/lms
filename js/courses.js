@@ -20,6 +20,7 @@ import { escapeHtml, isMasterMode } from "./app.js";
 import { onProgramsChange, getProgramById, getPrograms } from "./programs.js";
 import { onRoomsChange, getRooms } from "./rooms.js";
 import { selectCourse } from "./sessions.js";
+import { BOARD_EXCLUDED_TYPES } from "./constants.js";
 import { regenerateSurvey } from "./survey-gen.js";
 import { fmtDot } from "./time.js";
 
@@ -178,10 +179,15 @@ export function boardFields(data) {
     hasEvaluation: !!data.hasEvaluation, updatedAtMs: Date.now(),
   };
 }
+// 공개 보드 게시 제외 대상: 숨김 처리했거나, 비공개 운영 과정유형(특별·재교육 등).
+export function isBoardExcluded(data) {
+  return !!data.hidden || BOARD_EXCLUDED_TYPES.includes(data.courseType || "");
+}
+
 // 공개 보드 미러. 실패는 호출부에서 처리(조용히 삼키면 숨김이 안 먹힌 채 노출될 수 있음).
 async function mirrorBoard(id, data) {
-  // 숨김 처리된 차수는 공개 보드에서 제거(미표시).
-  if (data.hidden) await deleteDoc(doc(db, "publicBoard", id));
+  // 제외 대상은 공개 보드에서 제거(미표시).
+  if (isBoardExcluded(data)) await deleteDoc(doc(db, "publicBoard", id));
   else await setDoc(doc(db, "publicBoard", id), boardFields(data));
 }
 
