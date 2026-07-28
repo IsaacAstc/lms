@@ -52,3 +52,19 @@ export const BOOTSTRAP_MASTERS = ["isaac@airport.co.kr"];
 
 // 공개 현황 보드에 게시하지 않을 과정유형(내부 운영용 과정).
 export const BOARD_EXCLUDED_TYPES = ["특별", "재교육"];
+
+// 설문 기본 문항(CLAUDE.md 2-1). 설정에 저장된 문항이 있으면 그것이 우선한다.
+// (settings ↔ survey-gen 순환 import를 피하려고 여기에 둔다.)
+export const DEFAULT_EDU_ITEMS = [
+  "현업(현장) 활용여부",
+  "전문지식 향상여부",
+  "교육내용",
+  "교재/기타 강의자재",
+  "담당직원 교육 준비성",
+  "강의실 쾌적성/청결성",
+];
+export const DEFAULT_INSTRUCTOR_ITEMS = [
+  "강의준비 및 강의능력",
+  "질의응답 성실도",
+  "전반적인 교육만족도",
+];
