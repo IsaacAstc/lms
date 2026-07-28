@@ -41,6 +41,17 @@ export function calcTravel(travelBasis, travelRates) {
   return { amount: r.amount || 0, manual: !!r.manual };
 }
 
+// ── 강사유형 그룹 ──
+// 표시 순서. '사외'는 세부 유형(시내/시외/청탁/비대상 등)을 하나로 묶는다.
+const GROUP_ORDER = ["전임교관", "사내강사", "사외", "기타"];
+function groupOf(instructorType) {
+  const t = instructorType || "";
+  if (t.startsWith("전임")) return "전임교관";
+  if (t.startsWith("사내")) return "사내강사";
+  if (t.startsWith("사외")) return "사외";
+  return "기타";
+}
+
 // ── 집계 UI ──
 
 export function initPayroll() {
@@ -134,17 +145,43 @@ async function renderAggregate(type, value) {
   if (!rows.length) {
     tbody.innerHTML = `<tr><td colspan="7" class="empty">해당 기간에 강사 지정된 시간표가 없습니다.</td></tr>`;
   } else {
-    for (const r of rows) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${escapeHtml(r.name)}</td>
-        <td>${escapeHtml(r.type)}</td>
-        <td style="text-align:right">${r.days}</td>
-        <td style="text-align:right">${r.hours}</td>
-        <td style="text-align:right">${won(r.fee)}</td>
-        <td style="text-align:right">${won(r.travel)}${r.travelManual ? " <span class='warn'>(수동확인)</span>" : ""}</td>
-        <td style="text-align:right"><b>${won(r.total)}</b></td>`;
-      tbody.appendChild(tr);
+    // 강사유형 그룹별로 묶어 표시(전임교관 → 사내강사 → 사외 → 기타).
+    for (const key of GROUP_ORDER) {
+      const list = rows.filter((r) => groupOf(r.type) === key);
+      if (!list.length) continue;
+      const sum = list.reduce((a, r) => ({
+        days: a.days + r.days, hours: a.hours + r.hours,
+        fee: a.fee + r.fee, travel: a.travel + r.travel, total: a.total + r.total,
+      }), { days: 0, hours: 0, fee: 0, travel: 0, total: 0 });
+
+      const head = document.createElement("tr");
+      head.className = "grp-row";
+      head.innerHTML = `<td colspan="7"><b>${escapeHtml(key)}</b> <span class="grp-count">${list.length}명</span></td>`;
+      tbody.appendChild(head);
+
+      for (const r of list) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${escapeHtml(r.name)}</td>
+          <td>${escapeHtml(r.type)}</td>
+          <td style="text-align:right">${r.days}</td>
+          <td style="text-align:right">${r.hours}</td>
+          <td style="text-align:right">${won(r.fee)}</td>
+          <td style="text-align:right">${won(r.travel)}${r.travelManual ? " <span class='warn'>(수동확인)</span>" : ""}</td>
+          <td style="text-align:right"><b>${won(r.total)}</b></td>`;
+        tbody.appendChild(tr);
+      }
+
+      const sub = document.createElement("tr");
+      sub.className = "sum-row";
+      sub.innerHTML = `
+        <td colspan="2"><b>${escapeHtml(key)} 소계</b></td>
+        <td style="text-align:right">${sum.days}</td>
+        <td style="text-align:right">${sum.hours}</td>
+        <td style="text-align:right">${won(sum.fee)}</td>
+        <td style="text-align:right">${won(sum.travel)}</td>
+        <td style="text-align:right"><b>${won(sum.total)}</b></td>`;
+      tbody.appendChild(sub);
     }
   }
   document.getElementById("pay-total").textContent =
