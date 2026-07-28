@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { START_TIMES, END_TIMES } from "./constants.js";
-import { onCoursesChange, coursesCache } from "./courses.js";
+import { onCoursesChange, coursesCache, roomIdOf } from "./courses.js";
 import { onRoomsChange, getRooms } from "./rooms.js";
 import { onProgramsChange, getProgramById } from "./programs.js";
 import { onInstructorsChange, getInstructors } from "./instructors.js";
@@ -364,7 +364,7 @@ async function commitDraft() {
 async function syncSurvey() {
   try {
     if (!selectedCourse) return;
-    const roomId = getRooms().find((r) => r.name === selectedCourse.venue)?.id || "";
+    const roomId = roomIdOf(selectedCourse);
     await regenerateSurvey(selectedCourse, roomId);
   } catch (e) { console.warn("설문 생성 건너뜀:", e.message); }
 }

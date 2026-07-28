@@ -125,6 +125,10 @@ async function submit(e, survey) {
     collectedAt: fmtKst(Date.now()), // 수집 일시(표시용, KST 'YYYY-MM-DD HH:MM')
     edu,
     instructors,
+    // 응답 시점의 문항 스냅샷. 이후 문항이 개정돼도 과거 집계·보고서가 그대로 유지된다.
+    eduItems: survey.eduItems || [],
+    instructorItems: survey.instructorItems || [],
+    scale: survey.scale || 5,
     freeDissatisfied: form.free_dissatisfied.value.trim(),
     freeSuggestion: form.free_suggestion.value.trim(),
   };

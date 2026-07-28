@@ -79,12 +79,14 @@ async function run() {
 // 설문 원응답(raw) — 개별 익명 응답.
 function renderRaw(responses) {
   const box = document.getElementById("rep-raw");
-  const eduHead = EDU_ITEMS.map((_, i) => `<th>교${i + 1}</th>`).join("");
+  // 문항 수는 응답 스냅샷 기준(문항 개정 시 과거 응답이 어긋나지 않도록).
+  const items = responses.find((r) => Array.isArray(r.eduItems) && r.eduItems.length)?.eduItems || EDU_ITEMS;
+  const eduHead = items.map((_, i) => `<th>교${i + 1}</th>`).join("");
   const when = (r) => r.collectedAt || r.collectedDate || "";
   const rows = responses
     .slice().sort((a, b) => when(b).localeCompare(when(a)))
     .map((r) => {
-      const edu = EDU_ITEMS.map((_, i) => `<td>${r.edu?.[`q${i}`] ?? ""}</td>`).join("");
+      const edu = items.map((_, i) => `<td>${r.edu?.[`q${i}`] ?? ""}</td>`).join("");
       const inst = (r.instructors || [])
         .map((it) => `${escapeHtml(it.subject)}/${escapeHtml(it.instructorName)}: ${[0, 1, 2].map((i) => it[`q${i}`] ?? "-").join("·")}`)
         .join("<br>");

@@ -2,7 +2,8 @@
 // 각 행의 키(강사유형/소속지)까지 수정 가능하며, 행 복사·삭제·추가를 지원.
 import { watchCollection, onCollection, getCache, setDocById } from "./store.js";
 import { escapeHtml } from "./app.js";
-import { INSTRUCTOR_TYPES } from "./constants.js";
+import { INSTRUCTOR_TYPES, DEFAULT_EDU_ITEMS, DEFAULT_INSTRUCTOR_ITEMS as DEFAULT_INST_ITEMS } from "./constants.js";
+
 
 function docByName(name) {
   return getCache("settings").find((d) => d.id === name);
@@ -30,6 +31,33 @@ function ratesAt(docName, dateStr) {
 }
 export function getFeeRatesAt(dateStr) { return ratesAt("feeRates", dateStr); }
 export function getTravelRatesAt(dateStr) { return ratesAt("travelRates", dateStr); }
+// ── 설문 문항(교육/강사) — 발효일자 이력 ──
+// settings/surveyItems = { eduItems, instructorItems, history: [{from, eduItems, instructorItems}] }
+export function getSurveyItems() {
+  const d = docByName("surveyItems");
+  return {
+    eduItems: Array.isArray(d?.eduItems) ? d.eduItems : null,
+    instructorItems: Array.isArray(d?.instructorItems) ? d.instructorItems : null,
+  };
+}
+export function getSurveyItemsAt(dateStr) {
+  const d = docByName("surveyItems");
+  const cur = {
+    eduItems: Array.isArray(d?.eduItems) ? d.eduItems : null,
+    instructorItems: Array.isArray(d?.instructorItems) ? d.instructorItems : null,
+  };
+  const hist = (Array.isArray(d?.history) ? d.history : [])
+    .filter((h) => h && h.from)
+    .sort((a, b) => a.from.localeCompare(b.from));
+  if (!hist.length || !dateStr) return cur;
+  let picked = hist[0]; // 첫 개정 이전은 최초 개정본 적용.
+  for (const h of hist) { if (h.from <= dateStr) picked = h; else break; }
+  return {
+    eduItems: Array.isArray(picked.eduItems) && picked.eduItems.length ? picked.eduItems : cur.eduItems,
+    instructorItems: Array.isArray(picked.instructorItems) && picked.instructorItems.length ? picked.instructorItems : cur.instructorItems,
+  };
+}
+
 export function getRateHistory(docName) {
   const d = docByName(docName);
   return (Array.isArray(d?.history) ? d.history : [])
@@ -97,6 +125,99 @@ function renderRevisions(docName, boxId) {
   }));
 }
 
+// ── 설문 문항 편집(마스터 전용 영역은 index.html에서 제어) ──
+function itemListRows(boxId, items) {
+  const box = document.getElementById(boxId);
+  box.innerHTML = items.length
+    ? `<div class="chip-row">${items.map((t, i) =>
+        `<span class="chip"><input class="si-name" data-i="${i}" value="${escapeHtml(t)}" size="18"><button type="button" class="chip-del" data-i="${i}">×</button></span>`).join("")}</div>`
+    : `<p class="empty">문항이 없습니다.</p>`;
+}
+
+let eduDraft = null, instDraft = null;
+function paintSurveyItems() {
+  const cur = getSurveyItems();
+  if (!eduDraft) eduDraft = (cur.eduItems || DEFAULT_EDU_ITEMS).slice();
+  if (!instDraft) instDraft = (cur.instructorItems || DEFAULT_INST_ITEMS).slice();
+  itemListRows("si-edu-list", eduDraft);
+  itemListRows("si-inst-list", instDraft);
+  bindItemEditors("si-edu-list", eduDraft);
+  bindItemEditors("si-inst-list", instDraft);
+  renderItemRevisions();
+}
+function bindItemEditors(boxId, draft) {
+  const box = document.getElementById(boxId);
+  box.querySelectorAll(".si-name").forEach((el) =>
+    el.addEventListener("input", (e) => { draft[+e.target.dataset.i] = e.target.value; }));
+  box.querySelectorAll(".chip-del").forEach((b) =>
+    b.addEventListener("click", () => { draft.splice(+b.dataset.i, 1); paintSurveyItems(); }));
+}
+function collectItems() {
+  return {
+    eduItems: eduDraft.map((t) => t.trim()).filter(Boolean),
+    instructorItems: instDraft.map((t) => t.trim()).filter(Boolean),
+  };
+}
+function renderItemRevisions() {
+  const box = document.getElementById("si-rev-list");
+  if (!box) return;
+  const d = docByName("surveyItems");
+  const hist = (Array.isArray(d?.history) ? d.history : []).filter((h) => h && h.from)
+    .sort((a, b) => a.from.localeCompare(b.from));
+  if (!hist.length) {
+    box.innerHTML = `<p class="hint">등록된 문항 개정 이력이 없습니다. 현재 문항이 <b>이후 생성되는 설문</b>에 적용됩니다.</p>`;
+    return;
+  }
+  box.innerHTML = `<div class="chip-row">${hist.map((h, i) =>
+    `<span class="chip">${escapeHtml(h.from)}부터 (교육 ${h.eduItems?.length ?? 0}·강사 ${h.instructorItems?.length ?? 0})<button type="button" class="chip-del" data-i="${i}">×</button></span>`).join("")}</div>`;
+  box.querySelectorAll(".chip-del").forEach((b) => b.addEventListener("click", async () => {
+    const i = Number(b.dataset.i);
+    if (!confirm(`${hist[i].from}부터 적용되는 문항 개정본을 삭제할까요?`)) return;
+    const next = hist.filter((_, idx) => idx !== i);
+    const latest = next[next.length - 1];
+    try {
+      await setDocById("settings", "surveyItems", latest
+        ? { eduItems: latest.eduItems, instructorItems: latest.instructorItems, history: next }
+        : { ...collectItems(), history: [] });
+    } catch (e) { alert("삭제 실패: " + e.message); }
+  }));
+}
+async function saveSurveyItems() {
+  const items = collectItems();
+  if (!items.eduItems.length || !items.instructorItems.length) return alert("교육·강사 문항을 각각 1개 이상 입력하세요.");
+  const d = docByName("surveyItems");
+  const hist = (Array.isArray(d?.history) ? d.history : []).filter((h) => h && h.from)
+    .sort((a, b) => a.from.localeCompare(b.from));
+  if (hist.length) hist[hist.length - 1] = { ...hist[hist.length - 1], ...items };
+  try {
+    await setDocById("settings", "surveyItems", hist.length ? { ...items, history: hist } : items);
+    alert("설문 문항을 저장했습니다.");
+  } catch (e) { alert("저장 실패: " + e.message); }
+}
+async function addItemRevision() {
+  const from = document.getElementById("si-rev-date").value;
+  if (!from) return alert("개정 발효일자를 선택하세요.");
+  const items = collectItems();
+  if (!items.eduItems.length || !items.instructorItems.length) return alert("교육·강사 문항을 각각 1개 이상 입력하세요.");
+  const d = docByName("surveyItems");
+  const hist = (Array.isArray(d?.history) ? d.history : []).filter((h) => h && h.from)
+    .sort((a, b) => a.from.localeCompare(b.from));
+  if (hist.some((h) => h.from === from)) return alert("같은 발효일자의 개정본이 이미 있습니다.");
+  if (!hist.length) {
+    const cur = getSurveyItems();
+    hist.push({ from: "1900-01-01",
+      eduItems: cur.eduItems || DEFAULT_EDU_ITEMS, instructorItems: cur.instructorItems || DEFAULT_INST_ITEMS });
+  }
+  hist.push({ from, ...items });
+  hist.sort((a, b) => a.from.localeCompare(b.from));
+  const latest = hist[hist.length - 1];
+  try {
+    await setDocById("settings", "surveyItems",
+      { eduItems: latest.eduItems, instructorItems: latest.instructorItems, history: hist });
+    alert(`설문 문항 개정본을 등록했습니다. (${from}부터 생성되는 설문에 적용)`);
+  } catch (e) { alert("등록 실패: " + e.message); }
+}
+
 export function initSettings() {
   watchCollection("settings");
   onCollection("settings", renderAll);
@@ -111,6 +232,12 @@ export function initSettings() {
   document.getElementById("travel-add").addEventListener("click", () =>
     document.getElementById("travel-tbody").appendChild(travelRow("", { amount: 0, manual: false, note: "" }))
   );
+
+  // 설문 문항 편집.
+  document.getElementById("si-edu-add").addEventListener("click", () => { eduDraft.push(""); paintSurveyItems(); });
+  document.getElementById("si-inst-add").addEventListener("click", () => { instDraft.push(""); paintSurveyItems(); });
+  document.getElementById("si-save").addEventListener("click", saveSurveyItems);
+  document.getElementById("si-rev-add").addEventListener("click", addItemRevision);
 }
 
 function renderAll() {
@@ -118,6 +245,7 @@ function renderAll() {
   renderTravel();
   renderRevisions("feeRates", "fee-rev-list");
   renderRevisions("travelRates", "travel-rev-list");
+  paintSurveyItems();
 }
 
 // ── 강사료 기준 ──

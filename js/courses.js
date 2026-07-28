@@ -157,6 +157,8 @@ function readForm(form) {
     startDate: form.startDate.value,
     endDate: form.endDate.value,
     venue: form.venue.value.trim(),
+    // 강의실 ID도 함께 저장 — 이후 강의실 이름이 바뀌어도 설문 URL 연결이 유지된다.
+    venueRoomId: getRooms().find((r) => r.name === form.venue.value.trim())?.id || "",
     round: Number(form.round.value),
     programId: form.programId.value || "",
     courseType: form.courseType.value || "",
@@ -268,6 +270,12 @@ function initCourseTypeUi(form) {
   });
 }
 
+// 차수의 강의실 ID 해석: 저장된 venueRoomId 우선, 없으면 이름으로 조회(기존 데이터 호환).
+export function roomIdOf(course) {
+  if (course?.venueRoomId) return course.venueRoomId;
+  return getRooms().find((r) => r.name === course?.venue)?.id || "";
+}
+
 // 숨김 처리된 차수 id 집합(집계 제외용). 캐시 상태와 무관하게 직접 조회.
 export async function getHiddenCourseIds() {
   const snap = await getDocs(coursesCol);
@@ -280,7 +288,7 @@ async function syncSurveyFor(id, data) {
   if (data.hidden) {
     await deleteDoc(doc(db, "publicSurveys", id));
   } else {
-    const roomId = getRooms().find((r) => r.name === data.venue)?.id || "";
+    const roomId = roomIdOf(data);
     await regenerateSurvey({ ...data, id }, roomId);
   }
 }
