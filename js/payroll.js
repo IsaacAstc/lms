@@ -6,7 +6,7 @@ import {
 import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import { getFeeRates, getTravelRates } from "./settings.js";
-import { getInstructors, getInstructorById } from "./instructors.js";
+import { getInstructors, getInstructorById, resolveInstructorAt } from "./instructors.js";
 import { getHiddenCourseIds } from "./courses.js";
 
 // ── 순수 계산 함수 (엑셀 '계산' 시트 로직) ──
@@ -95,41 +95,44 @@ async function renderAggregate(type, value) {
   const all = await fetchSessions(type, value);
   const sessions = all.filter((s) => s.instructorId);
 
-  // 강사별 집계.
-  const byInstructor = {};
+  // 강사 × 강사유형별 집계.
+  // 유형이 기간 중 바뀐 경우(이력) 강의 일자에 유효한 값으로 계산하고, 유형별로 행을 분리한다.
+  const byKey = {};
   for (const s of sessions) {
     const inst = getInstructorById(s.instructorId);
     if (!inst) continue;
-    const g = (byInstructor[s.instructorId] = byInstructor[s.instructorId] || {
-      inst, dates: new Set(), hours: 0, monthFee: {}, sessions: 0,
+    const eff = resolveInstructorAt(inst, s.date); // 일자 기준 강사유형·여비기준
+    const key = `${s.instructorId}|${eff.instructorType}`;
+    const g = (byKey[key] = byKey[key] || {
+      inst, type: eff.instructorType, dates: new Map(), hours: 0, monthFee: {}, sessions: 0,
     });
     const hour = calcHour(s.startTime, s.endTime);
     g.hours += hour;
     g.sessions += 1;
-    g.dates.add(s.date);
+    g.dates.set(s.date, eff.travelBasis); // 출강일 → 그날의 여비기준
     const ym = s.date.slice(0, 7);
-    g.monthFee[ym] = (g.monthFee[ym] || 0) + calcFee(inst.instructorType, hour, feeRates);
+    g.monthFee[ym] = (g.monthFee[ym] || 0) + calcFee(eff.instructorType, hour, feeRates);
   }
 
   const rows = [];
   let totFee = 0, totTravel = 0;
-  for (const g of Object.values(byInstructor)) {
-    // 월별 월상한 적용 후 합산.
+  for (const g of Object.values(byKey)) {
+    // 월별 월상한 적용 후 합산(해당 유형 기준).
     let cappedFee = 0;
     for (const [, raw] of Object.entries(g.monthFee)) {
-      cappedFee += applyMonthlyCap(raw, g.inst.instructorType, feeRates);
+      cappedFee += applyMonthlyCap(raw, g.type, feeRates);
     }
-    // 여비: 출강일(고유 일자)마다 1회.
+    // 여비: 출강일(고유 일자)마다 1회, 그날 유효한 여비기준으로.
     let travelSum = 0, travelManual = false;
-    for (const _ of g.dates) {
-      const t = calcTravel(g.inst.travelBasis, travelRates);
+    for (const basis of g.dates.values()) {
+      const t = calcTravel(basis, travelRates);
       if (t.manual) travelManual = true; else travelSum += t.amount;
     }
     totFee += cappedFee;
     totTravel += travelSum;
     rows.push({
       name: g.inst.name,
-      type: g.inst.instructorType,
+      type: g.type,
       days: g.dates.size,
       hours: g.hours,
       fee: cappedFee,
