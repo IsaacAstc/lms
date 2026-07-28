@@ -5,7 +5,7 @@ import {
 import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import { coursesCache, getHiddenCourseIds } from "./courses.js";
-import { getInstructorById } from "./instructors.js";
+import { getInstructorById, resolveInstructorAt } from "./instructors.js";
 import { getFeeRates, getTravelRates } from "./settings.js";
 import { calcHour, calcFee, applyMonthlyCap, calcTravel } from "./payroll.js";
 
@@ -28,25 +28,28 @@ async function computeAuto(month) {
       where("date", ">=", `${month}-01`), where("date", "<=", `${month}-31`))),
     getHiddenCourseIds(),
   ]);
-  const byInst = {};
+  // 강사 × 강사유형별 집계. 유형·여비기준이 바뀐 경우 강의 일자에 유효한 값을 사용한다.
+  const byKey = {};
   for (const d of snap.docs) {
     const s = d.data();
     if (!s.instructorId) continue;
     if (hiddenIds.has(s.courseId)) continue; // 숨김 차수 제외.
     const inst = getInstructorById(s.instructorId);
     if (!inst) continue;
-    const g = byInst[s.instructorId] = byInst[s.instructorId] || { inst, fee: 0, hours: 0, dates: new Set() };
+    const eff = resolveInstructorAt(inst, s.date);
+    const key = `${s.instructorId}|${eff.instructorType}`;
+    const g = byKey[key] = byKey[key] || { inst, type: eff.instructorType, fee: 0, hours: 0, dates: new Map() };
     const h = calcHour(s.startTime, s.endTime);
-    g.fee += calcFee(inst.instructorType, h, feeRates);
+    g.fee += calcFee(eff.instructorType, h, feeRates);
     g.hours += h;
-    g.dates.add(s.date);
+    g.dates.set(s.date, eff.travelBasis); // 출강일 → 그날의 여비기준
   }
   const out = { 사내: 0, 사외: 0, travel: 0, detail: [] };
-  for (const g of Object.values(byInst)) {
-    const capped = applyMonthlyCap(g.fee, g.inst.instructorType, feeRates);
-    const t = g.inst.instructorType || "";
+  for (const g of Object.values(byKey)) {
+    const capped = applyMonthlyCap(g.fee, g.type, feeRates);
+    const t = g.type || "";
     let travel = 0;
-    for (const _ of g.dates) { const tr = calcTravel(g.inst.travelBasis, travelRates); if (!tr.manual) travel += tr.amount; }
+    for (const basis of g.dates.values()) { const tr = calcTravel(basis, travelRates); if (!tr.manual) travel += tr.amount; }
     if (t.startsWith("사내")) out.사내 += capped;
     else if (t.startsWith("사외")) out.사외 += capped;
     out.travel += travel;

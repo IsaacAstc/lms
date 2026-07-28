@@ -78,17 +78,22 @@ const TARGETS = {
   },
   instructors: {
     label: "강사", coll: "instructors",
-    headers: ["강사명", "소속", "강사유형", "여비기준", "직책", "경력(년)", "경력상세"],
-    example: ["홍길동", "본사", "사내강사", "본사/김포", "차장", "10", ""],
+    headers: ["강사명", "소속", "강사유형", "여비기준", "직책", "경력(년)", "경력상세", "유형변경일"],
+    example: ["홍길동", "본사", "사내강사", "본사/김포", "차장", "10", "", ""],
     dupKey: (d) => d.name,
     async build(records) {
       const skipped = [], docs = [];
       records.forEach((r, i) => {
         const name = (r["강사명"] || "").trim();
         if (!name) { skipped.push({ line: i + 2, reason: "강사명 없음" }); return; }
-        docs.push({ name, affiliation: (r["소속"] || "").trim(), instructorType: (r["강사유형"] || "").trim(),
-          travelBasis: (r["여비기준"] || "").trim(), position: (r["직책"] || "").trim(),
-          careerYears: num(r["경력(년)"]), careerDetail: (r["경력상세"] || "").trim() });
+        const iType = (r["강사유형"] || "").trim();
+        const iBasis = (r["여비기준"] || "").trim();
+        const from = (r["유형변경일"] || "").trim();
+        docs.push({ name, affiliation: (r["소속"] || "").trim(), instructorType: iType,
+          travelBasis: iBasis, position: (r["직책"] || "").trim(),
+          careerYears: num(r["경력(년)"]), careerDetail: (r["경력상세"] || "").trim(),
+          // 유형변경일이 있으면 그 날짜부터 유효한 이력으로 등록(비우면 이력 없음).
+          ...(from ? { history: [{ from, instructorType: iType, travelBasis: iBasis }] } : {}) });
       });
       return { docs, skipped };
     },

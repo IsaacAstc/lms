@@ -315,3 +315,8 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 /* 강사료 집계: 강사유형 그룹 헤더 */
 .grp-row td { background: #dde6f2; font-size: 0.86rem; }
 .grp-count { color: var(--muted); font-weight: normal; font-size: 0.78rem; }
+
+/* 강사 유형·여비 이력 편집기 */
+.hist-row > td { background: #f7f9fc; }
+.hist-box { padding: 0.25rem 0.25rem 0.5rem; white-space: normal; }
+.hist-box table { margin-top: 0.4rem; }
