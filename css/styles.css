@@ -186,10 +186,12 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .entry-form label.chk { flex-direction: row; align-items: center; gap: 0.4rem; }
 .entry-form label.chk input { width: auto; }
 
-/* URL 셀(강의실·설문 관리) */
-.url-cell { white-space: nowrap; min-width: 240px; }
-.url-cell input { width: 13rem; max-width: 60vw; font-size: 0.75rem; vertical-align: middle; }
-.url-cell button { vertical-align: middle; margin-left: 0.3rem; }
+/* URL 셀(강의실·설문 관리) — 긴 URL 입력창 대신 복사/열기 버튼만 두어 폭을 줄임 */
+.url-cell { white-space: nowrap; }
+.url-cell > * { vertical-align: middle; }
+.url-cell > * + * { margin-left: 0.25rem; }
+.url-cell button, .url-cell .btn-link { padding: 0.25rem 0.5rem; font-size: 0.78rem; }
+.url-open { background: #4a7; }
 .btn-link { display: inline-block; padding: 0.3rem 0.6rem; font-size: 0.8rem; background: var(--primary); color: #fff; border-radius: 5px; text-decoration: none; }
 
 /* 공개 설문 페이지 */
@@ -252,8 +254,7 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
   table { font-size: 0.78rem; }
   th, td { padding: 0.4rem 0.45rem; }
   .table-wrap { -webkit-overflow-scrolling: touch; }
-  .url-cell { min-width: 150px; }
-  .url-cell input { width: 8.5rem; font-size: 0.7rem; }
+
 
   .course-picker { width: 100%; }
   .course-picker select { width: 100%; }

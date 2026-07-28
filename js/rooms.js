@@ -63,7 +63,7 @@ function render(tbody, form, submitBtn, cancelBtn) {
       <td>${escapeHtml(r.name)}</td>
       <td>${r.capacity ?? ""}</td>
       <td>${escapeHtml(r.note ?? "")}</td>
-      <td class="url-cell"><input readonly value="${escapeHtml(url)}"><button type="button" class="copy url-copy">복사</button></td>
+      <td class="url-cell"><button type="button" class="copy url-copy" title="${escapeHtml(url)}">복사</button><a class="btn-link url-open" href="${escapeHtml(url)}" target="_blank" title="${escapeHtml(url)}">열기</a></td>
       <td class="actions">
         <button type="button" class="edit">수정</button>
         <button type="button" class="del">삭제</button>
