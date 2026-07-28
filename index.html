@@ -408,6 +408,7 @@
         <!-- 기준값 설정 -->
         <section class="tab-panel" data-tab="settings" hidden>
           <h2>기준값 설정</h2>
+          <p class="hint">규정 개정으로 기준값이 바뀌면 <b>개정 발효일자</b>를 지정해 개정본으로 등록하세요. 강사료·소요경비는 <b>강의 일자에 유효한 기준값</b>으로 계산되어 개정 전·후가 구분됩니다. 개정 이력이 없으면 현재 기준값이 모든 기간에 적용됩니다.</p>
           <h3>강사료 기준 (강사유형별)</h3>
           <div class="table-wrap">
             <table>
@@ -419,6 +420,11 @@
             <button id="fee-add" type="button">행 추가</button>
             <button id="fee-save" type="button">강사료 기준 저장</button>
           </div>
+          <div class="load-row">
+            <label>개정 발효일자 <input type="date" id="fee-rev-date" /></label>
+            <button id="fee-rev-add" type="button">현재 값을 개정본으로 등록</button>
+          </div>
+          <div id="fee-rev-list"></div>
 
           <h3>여비 기준 (소속지별)</h3>
           <div class="table-wrap">
@@ -431,6 +437,11 @@
             <button id="travel-add" type="button">행 추가</button>
             <button id="travel-save" type="button">여비 기준 저장</button>
           </div>
+          <div class="load-row">
+            <label>개정 발효일자 <input type="date" id="travel-rev-date" /></label>
+            <button id="travel-rev-add" type="button">현재 값을 개정본으로 등록</button>
+          </div>
+          <div id="travel-rev-list"></div>
         </section>
 
         <!-- 관리자 계정 -->

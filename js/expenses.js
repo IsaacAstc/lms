@@ -6,7 +6,7 @@ import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import { coursesCache, getHiddenCourseIds } from "./courses.js";
 import { getInstructorById, resolveInstructorAt } from "./instructors.js";
-import { getFeeRates, getTravelRates } from "./settings.js";
+import { getFeeRatesAt, getTravelRatesAt } from "./settings.js";
 import { calcHour, calcFee, applyMonthlyCap, calcTravel } from "./payroll.js";
 
 let auto = { 사내: 0, 사외: 0, travel: 0, detail: [] }; // 자동 산출값(원) + 강사별 세부
@@ -21,8 +21,6 @@ export function initExpenses() {
 
 // 그 월 시간표에서 강사유형별 강사료·여비 자동 산출 + 강사별 세부.
 async function computeAuto(month) {
-  const feeRates = getFeeRates();
-  const travelRates = getTravelRates();
   const [snap, hiddenIds] = await Promise.all([
     getDocs(query(collection(db, "sessions"),
       where("date", ">=", `${month}-01`), where("date", "<=", `${month}-31`))),
@@ -40,16 +38,16 @@ async function computeAuto(month) {
     const key = `${s.instructorId}|${eff.instructorType}`;
     const g = byKey[key] = byKey[key] || { inst, type: eff.instructorType, fee: 0, hours: 0, dates: new Map() };
     const h = calcHour(s.startTime, s.endTime);
-    g.fee += calcFee(eff.instructorType, h, feeRates);
+    g.fee += calcFee(eff.instructorType, h, getFeeRatesAt(s.date));
     g.hours += h;
     g.dates.set(s.date, eff.travelBasis); // 출강일 → 그날의 여비기준
   }
   const out = { 사내: 0, 사외: 0, travel: 0, detail: [] };
   for (const g of Object.values(byKey)) {
-    const capped = applyMonthlyCap(g.fee, g.type, feeRates);
+    const capped = applyMonthlyCap(g.fee, g.type, getFeeRatesAt(`${month}-01`));
     const t = g.type || "";
     let travel = 0;
-    for (const basis of g.dates.values()) { const tr = calcTravel(basis, travelRates); if (!tr.manual) travel += tr.amount; }
+    for (const [date, basis] of g.dates.entries()) { const tr = calcTravel(basis, getTravelRatesAt(date)); if (!tr.manual) travel += tr.amount; }
     if (t.startsWith("사내")) out.사내 += capped;
     else if (t.startsWith("사외")) out.사외 += capped;
     out.travel += travel;
