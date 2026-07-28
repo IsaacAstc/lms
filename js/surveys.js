@@ -53,6 +53,15 @@ export function initSurveys() {
   document.addEventListener("tabshown", (e) => { if (e.detail === "surveys") loadCounts(); });
 }
 
+// 노출 창 표기: 같은 날이면 '2026.08.27 15:50 - 18:50', 다르면 두 줄로.
+function windowText(s) {
+  const a = fmtDot(fmtKst(s.openMs));
+  const b = fmtDot(fmtKst(s.closeMs));
+  const [ad, at] = a.split(" ");
+  const [bd, bt] = b.split(" ");
+  return ad === bd ? `${ad} ${at} - ${bt}` : `${a}<br>- ${b}`;
+}
+
 // 설문의 교육 종료일(endMs)이 지정 범위 안이면 표시. 범위 미지정이면 전체.
 function inRange(s, from, to) {
   if (!from && !to) return true;
@@ -90,10 +99,10 @@ function render() {
     tr.innerHTML = `
       <td>${escapeHtml(s.courseName)}</td>
       <td>${escapeHtml(s.roomName || "")}</td>
-      <td>${fmtDot(fmtKst(s.openMs))}<br>- ${fmtDot(fmtKst(s.closeMs))}</td>
+      <td>${windowText(s)}</td>
       <td style="text-align:right">${(s.instructorTargets || []).length}</td>
       <td class="resp-count" data-course="${s.courseId}">–</td>
-      <td class="url-cell"><input readonly value="${escapeHtml(url)}"><button type="button" class="copy url-copy">복사</button></td>
+      <td class="url-cell"><button type="button" class="copy url-copy" title="${escapeHtml(url)}">복사</button><a class="btn-link url-open" href="${escapeHtml(url)}" target="_blank" title="${escapeHtml(url)}">열기</a></td>
       <td class="actions">
         <a href="${escapeHtml(previewUrl(s.courseId))}" target="_blank" class="btn-link">미리보기</a>
         <button type="button" class="regen">재생성</button>
