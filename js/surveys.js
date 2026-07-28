@@ -6,7 +6,7 @@ import { db } from "./firebase.js";
 import { watchCollection, onCollection, getCache } from "./store.js";
 import { escapeHtml } from "./app.js";
 import { fmtKst, fmtDot } from "./time.js";
-import { coursesCache } from "./courses.js";
+import { coursesCache, roomIdOf } from "./courses.js";
 import { getRooms } from "./rooms.js";
 import { regenerateSurvey } from "./survey-gen.js";
 
@@ -115,7 +115,7 @@ function render() {
     tr.querySelector(".regen").addEventListener("click", async () => {
       const course = coursesCache.find((c) => c.id === s.courseId);
       if (!course) return alert("해당 차수를 찾을 수 없습니다.");
-      const roomId = getRooms().find((r) => r.name === course.venue)?.id || "";
+      const roomId = roomIdOf(course);
       try {
         const res = await regenerateSurvey(course, roomId);
         alert(res ? "설문을 재생성했습니다." : "생성 조건(교육장·세션)을 확인하세요. 기존 설문은 제거되었습니다.");

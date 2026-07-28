@@ -29,18 +29,39 @@ const sc = () => ({ sum: 0, count: 0 });
 const add = (t, s) => { t.sum += s.sum || 0; t.count += s.count || 0; };
 
 export function emptyAgg() {
-  return { count: 0, edu: { cells: {}, all: {}, nByType: {}, totalAll: sc() }, inst: { groups: {} } };
+  // eduItems/instItems: 집계에 사용된 문항 라벨(응답 스냅샷 우선, 없으면 현행 상수).
+  return {
+    count: 0, eduItems: null, instItems: null,
+    edu: { cells: {}, all: {}, nByType: {}, totalAll: sc() }, inst: { groups: {} },
+  };
 }
+
+// 응답들에서 문항 스냅샷을 찾는다(없으면 현행 상수 — 과거 데이터 하위호환).
+function itemsOf(responses) {
+  const r1 = responses.find((r) => Array.isArray(r.eduItems) && r.eduItems.length);
+  const r2 = responses.find((r) => Array.isArray(r.instructorItems) && r.instructorItems.length);
+  return {
+    eduItems: r1 ? r1.eduItems.slice() : EDU_ITEMS.slice(),
+    instItems: r2 ? r2.instructorItems.slice() : INSTRUCTOR_ITEMS.slice(),
+  };
+}
+
+// 표시용 문항 목록(집계에 저장된 것 우선).
+export function eduItemsOf(a) { return (a?.eduItems?.length ? a.eduItems : EDU_ITEMS); }
+export function instItemsOf(a) { return (a?.instItems?.length ? a.instItems : INSTRUCTOR_ITEMS); }
 
 // 원문 응답 배열 → 집계.
 export function computeAgg(responses) {
   const a = emptyAgg();
+  const snap = itemsOf(responses);
+  a.eduItems = snap.eduItems;
+  a.instItems = snap.instItems;
   for (const r of responses) {
     a.count++;
     const type = courseTypeOf(r.courseId);
     a.edu.cells[type] = a.edu.cells[type] || {};
     a.edu.nByType[type] = (a.edu.nByType[type] || 0) + 1;
-    EDU_ITEMS.forEach((_, i) => {
+    a.eduItems.forEach((_, i) => {
       const v = r.edu?.[`q${i}`];
       if (!Number.isFinite(v)) return;
       (a.edu.cells[type][i] = a.edu.cells[type][i] || sc()).sum += v; a.edu.cells[type][i].count++;
@@ -52,9 +73,9 @@ export function computeAgg(responses) {
       const key = `${it.instructorId}|${r.courseId}|${it.subject}`;
       a.inst.groups[kind] = a.inst.groups[kind] || {};
       const g = a.inst.groups[kind][key] = a.inst.groups[kind][key] ||
-        { name: it.instructorName, affiliation: getInstructorById(it.instructorId)?.affiliation || "", courseName: courseNameOf(r.courseId), subject: it.subject, items: [sc(), sc(), sc()], n: 0 };
+        { name: it.instructorName, affiliation: getInstructorById(it.instructorId)?.affiliation || "", courseName: courseNameOf(r.courseId), subject: it.subject, items: a.instItems.map(() => sc()), n: 0 };
       g.n++;
-      INSTRUCTOR_ITEMS.forEach((_, i) => { const v = it[`q${i}`]; if (Number.isFinite(v)) { g.items[i].sum += v; g.items[i].count++; } });
+      a.instItems.forEach((_, i) => { const v = it[`q${i}`]; if (Number.isFinite(v)) { (g.items[i] = g.items[i] || sc()).sum += v; g.items[i].count++; } });
     }
   }
   return a;
@@ -63,6 +84,8 @@ export function computeAgg(responses) {
 // 두 집계 병합(월별 스냅샷 누적/기간 합산).
 export function mergeAgg(a, b) {
   a.count += b.count || 0;
+  if (!a.eduItems?.length && b.eduItems?.length) a.eduItems = b.eduItems.slice();
+  if (!a.instItems?.length && b.instItems?.length) a.instItems = b.instItems.slice();
   for (const t in b.edu.cells) { a.edu.cells[t] = a.edu.cells[t] || {}; for (const i in b.edu.cells[t]) { a.edu.cells[t][i] = a.edu.cells[t][i] || sc(); add(a.edu.cells[t][i], b.edu.cells[t][i]); } }
   for (const i in b.edu.all) { a.edu.all[i] = a.edu.all[i] || sc(); add(a.edu.all[i], b.edu.all[i]); }
   for (const t in b.edu.nByType) a.edu.nByType[t] = (a.edu.nByType[t] || 0) + b.edu.nByType[t];
@@ -71,8 +94,8 @@ export function mergeAgg(a, b) {
     a.inst.groups[k] = a.inst.groups[k] || {};
     for (const key in b.inst.groups[k]) {
       const bg = b.inst.groups[k][key];
-      const ag = a.inst.groups[k][key] = a.inst.groups[k][key] || { name: bg.name, affiliation: bg.affiliation || "", courseName: bg.courseName, subject: bg.subject, items: [sc(), sc(), sc()], n: 0 };
-      ag.n += bg.n; bg.items.forEach((s, i) => add(ag.items[i], s));
+      const ag = a.inst.groups[k][key] = a.inst.groups[k][key] || { name: bg.name, affiliation: bg.affiliation || "", courseName: bg.courseName, subject: bg.subject, items: bg.items.map(() => sc()), n: 0 };
+      ag.n += bg.n; bg.items.forEach((s, i) => add(ag.items[i] = ag.items[i] || sc(), s));
     }
   }
   return a;
@@ -82,6 +105,8 @@ export function mergeAgg(a, b) {
 export function serializeAgg(a) {
   return {
     count: a.count,
+    eduItems: eduItemsOf(a),
+    instItems: instItemsOf(a),
     eduCells: Object.entries(a.edu.cells).map(([type, items]) => ({
       type, n: a.edu.nByType[type] || 0,
       items: Object.entries(items).map(([i, v]) => ({ i: Number(i), sum: v.sum, count: v.count })),
@@ -97,6 +122,8 @@ export function serializeAgg(a) {
 export function deserializeAgg(d) {
   const a = emptyAgg();
   a.count = d.count || 0;
+  a.eduItems = Array.isArray(d.eduItems) && d.eduItems.length ? d.eduItems : null;
+  a.instItems = Array.isArray(d.instItems) && d.instItems.length ? d.instItems : null;
   for (const c of d.eduCells || []) { a.edu.cells[c.type] = {}; a.edu.nByType[c.type] = c.n || 0; for (const it of c.items) a.edu.cells[c.type][it.i] = { sum: it.sum, count: it.count }; }
   for (const it of d.eduAll || []) a.edu.all[it.i] = { sum: it.sum, count: it.count };
   a.edu.totalAll = d.eduTotalAll || sc();
@@ -112,7 +139,7 @@ export function renderEduHTML(a) {
   if (!a.count) return `<p class="empty">해당 기간 응답이 없습니다.</p>`;
   const types = Object.keys(a.edu.cells).sort();
   const head = `<tr><th>구분</th>${types.map((t) => `<th>${escapeHtml(t)}<br>(n=${a.edu.nByType[t] || 0})</th>`).join("")}<th>전체 평균</th></tr>`;
-  const rows = EDU_ITEMS.map((item, i) => {
+  const rows = eduItemsOf(a).map((item, i) => {
     const tds = types.map((t) => `<td>${fmt(mean100(a.edu.cells[t][i]))}</td>`).join("");
     return `<tr><td>${escapeHtml(item)}</td>${tds}<td>${fmt(mean100(a.edu.all[i]))}</td></tr>`;
   }).join("");
@@ -133,7 +160,7 @@ export function renderInstHTML(a) {
   const affByName = {};
   for (const kind of kinds) for (const g of Object.values(a.inst.groups[kind])) (affByName[g.name] = affByName[g.name] || new Set()).add(g.affiliation || "");
   const dispName = (g) => (affByName[g.name] && affByName[g.name].size > 1 && g.affiliation) ? `${g.name}(${g.affiliation})` : g.name;
-  const head = `<tr><th>교관유형</th><th>강사</th><th>과정명(과목명)</th>${INSTRUCTOR_ITEMS.map((t) => `<th>${escapeHtml(t)}</th>`).join("")}<th>강사별 평균</th><th>n</th></tr>`;
+  const head = `<tr><th>교관유형</th><th>강사</th><th>과정명(과목명)</th>${instItemsOf(a).map((t) => `<th>${escapeHtml(t)}</th>`).join("")}<th>강사별 평균</th><th>n</th></tr>`;
   let body = "";
   for (const kind of kinds) {
     const rows = Object.values(a.inst.groups[kind]).sort((x, y) => x.name.localeCompare(y.name));
