@@ -284,7 +284,16 @@
         <section class="tab-panel" data-tab="surveys" hidden>
           <h2>설문 관리</h2>
           <p class="hint">시간표 등록/수정을 완료하면 그 차수의 공개 설문이 자동 생성됩니다. <b>노출 창(종료 2시간 전 - 종료 후 1시간, KST)</b>에만 강의실 URL에서 응답할 수 있습니다. 강사만족도는 첫·마지막 과목(교육등록/평가/설문/수료)을 제외한 강사×과목별로 생성됩니다.</p>
-          <div class="form-actions"><button id="survey-refresh" type="button">응답 수 새로고침</button></div>
+          <div class="load-row" id="survey-filter">
+            <label>기간 <input type="date" id="sv-from" /></label>
+            <span class="board-range-sep">-</span>
+            <label><input type="date" id="sv-to" /></label>
+            <button id="sv-reset" type="button">기본(±30일)</button>
+            <button id="sv-all" type="button">전체 보기</button>
+            <button id="survey-refresh" type="button">응답 수 새로고침</button>
+            <span id="sv-count" class="hint"></span>
+          </div>
+          <p class="hint">기본적으로 <b>오늘 기준 앞뒤 30일</b>의 설문만 표시됩니다(교육 종료일 기준). 그 밖의 설문은 기간을 지정하거나 <b>전체 보기</b>를 누르세요.</p>
           <div class="table-wrap">
             <table>
               <thead><tr><th>과정(차수)</th><th>강의실</th><th>노출 창(KST)</th><th>강사문항</th><th>응답수</th><th>강의실 설문 URL</th><th>관리</th></tr></thead>
