@@ -20,20 +20,68 @@ function previewUrl(courseId) {
   return `${base}survey.html?preview=1&course=${courseId}`;
 }
 
+// 기본 표시 범위: 오늘 기준 앞뒤 N일(교육 종료일 기준).
+const DEFAULT_SPAN_DAYS = 30;
+function todayStr() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+}
+function dayOffsetStr(n) {
+  const base = new Date(`${todayStr()}T00:00:00+09:00`);
+  base.setDate(base.getDate() + n);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(base);
+}
+function applyDefaultRange() {
+  document.getElementById("sv-from").value = dayOffsetStr(-DEFAULT_SPAN_DAYS);
+  document.getElementById("sv-to").value = dayOffsetStr(DEFAULT_SPAN_DAYS);
+}
+
 export function initSurveys() {
+  // 구독 등록 즉시 render가 1회 호출되므로 기본 범위를 먼저 설정한다.
+  applyDefaultRange();
   watchCollection("publicSurveys");
   onCollection("publicSurveys", render);
   document.getElementById("survey-refresh").addEventListener("click", loadCounts);
+  ["sv-from", "sv-to"].forEach((id) =>
+    document.getElementById(id).addEventListener("change", render));
+  document.getElementById("sv-reset").addEventListener("click", () => { applyDefaultRange(); render(); });
+  document.getElementById("sv-all").addEventListener("click", () => {
+    document.getElementById("sv-from").value = "";
+    document.getElementById("sv-to").value = "";
+    render();
+  });
   // 설문 관리 탭이 표시될 때마다 응답 수 자동 갱신.
   document.addEventListener("tabshown", (e) => { if (e.detail === "surveys") loadCounts(); });
 }
 
+// 설문의 교육 종료일(endMs)이 지정 범위 안이면 표시. 범위 미지정이면 전체.
+function inRange(s, from, to) {
+  if (!from && !to) return true;
+  if (!s.endMs) return true; // 기준 시각이 없으면 숨기지 않음.
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date(s.endMs));
+  if (from && day < from) return false;
+  if (to && day > to) return false;
+  return true;
+}
+
 function render() {
   const tbody = document.getElementById("survey-tbody");
-  const list = [...getCache("publicSurveys")].sort((a, b) => (b.endMs || 0) - (a.endMs || 0));
+  const all = getCache("publicSurveys");
+  const from = document.getElementById("sv-from").value;
+  const to = document.getElementById("sv-to").value;
+  if (from && to && to < from) {
+    document.getElementById("sv-count").textContent = "";
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">종료일자가 시작일자보다 빠릅니다. 기간을 다시 선택하세요.</td></tr>`;
+    return;
+  }
+  const list = all.filter((s) => inRange(s, from, to)).sort((a, b) => (b.endMs || 0) - (a.endMs || 0));
+  document.getElementById("sv-count").textContent = `${list.length} / 전체 ${all.length}건`;
   tbody.innerHTML = "";
-  if (!list.length) {
+  if (!all.length) {
     tbody.innerHTML = `<tr><td colspan="7" class="empty">생성된 설문이 없습니다. 시간표 등록을 완료하면 자동 생성됩니다.</td></tr>`;
+    return;
+  }
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">선택한 기간에 설문이 없습니다. 기간을 바꾸거나 ‘전체 보기’를 누르세요.</td></tr>`;
     return;
   }
   for (const s of list) {
