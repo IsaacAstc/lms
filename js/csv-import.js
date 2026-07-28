@@ -104,8 +104,11 @@ const TARGETS = {
     example: ["검정test", "보안검색요원 정기", "1", "30", "0", "0", "Y", "2026-07-27", "2026-07-27", "CBT실습실", "정기", "", "", ""],
     dupKey: (d) => `${d.code}|${d.round}`,
     async build(records) {
-      const psnap = await getDocs(collection(db, "programs"));
+      const [psnap, rsnap] = await Promise.all([
+        getDocs(collection(db, "programs")), getDocs(collection(db, "rooms")),
+      ]);
       const pByName = Object.fromEntries(psnap.docs.map((d) => [(d.data().name || "").trim(), d.id]));
+      const rByName = Object.fromEntries(rsnap.docs.map((d) => [(d.data().name || "").trim(), d.id]));
       const skipped = [], docs = [];
       records.forEach((r, i) => {
         const code = (r["과정코드"] || "").trim();
@@ -131,7 +134,9 @@ const TARGETS = {
         docs.push({ code, name, round, capacity,
           appliedCount: applied, completedCount: completed, hasEvaluation: bool(r["평가포함"]),
           startDate, endDate,
-          venue: (r["교육장"] || "").trim(), courseType: (r["과정유형"] || "").trim(),
+          venue: (r["교육장"] || "").trim(),
+          venueRoomId: rByName[(r["교육장"] || "").trim()] || "",
+          courseType: (r["과정유형"] || "").trim(),
           operationTag: (r["운영유형"] || "").trim(), programId: cur ? (pByName[cur] || "") : "",
           hidden: bool(r["숨김"]) });
       });
