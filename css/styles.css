@@ -151,7 +151,11 @@ button:hover { background: var(--primary-dark); }
 table { width: 100%; border-collapse: collapse; background: #fff; font-size: 0.85rem; }
 th, td { padding: 0.55rem 0.6rem; border: 1px solid var(--border); text-align: left; white-space: nowrap; }
 th { background: #eef2f7; }
-.actions { display: flex; gap: 0.3rem; }
+/* td에 display:flex를 주면 표 셀이 블록화되어 헤더와 열이 어긋난다.
+   셀은 table-cell로 두고 내부 요소만 한 줄로 배치한다. */
+.actions { white-space: nowrap; }
+.actions > * { vertical-align: middle; }
+.actions > * + * { margin-left: 0.3rem; }
 .empty { text-align: center; color: var(--muted); }
 
 h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
@@ -183,8 +187,9 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .entry-form label.chk input { width: auto; }
 
 /* URL 셀(강의실·설문 관리) */
-.url-cell { display: flex; gap: 0.3rem; min-width: 240px; }
-.url-cell input { flex: 1; font-size: 0.75rem; }
+.url-cell { white-space: nowrap; min-width: 240px; }
+.url-cell input { width: 13rem; max-width: 60vw; font-size: 0.75rem; vertical-align: middle; }
+.url-cell button { vertical-align: middle; margin-left: 0.3rem; }
 .btn-link { display: inline-block; padding: 0.3rem 0.6rem; font-size: 0.8rem; background: var(--primary); color: #fff; border-radius: 5px; text-decoration: none; }
 
 /* 공개 설문 페이지 */
@@ -247,8 +252,8 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
   table { font-size: 0.78rem; }
   th, td { padding: 0.4rem 0.45rem; }
   .table-wrap { -webkit-overflow-scrolling: touch; }
-  .url-cell { flex-direction: column; min-width: 150px; }
-  .url-cell input { font-size: 0.7rem; }
+  .url-cell { min-width: 150px; }
+  .url-cell input { width: 8.5rem; font-size: 0.7rem; }
 
   .course-picker { width: 100%; }
   .course-picker select { width: 100%; }
