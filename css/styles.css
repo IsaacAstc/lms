@@ -311,3 +311,7 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 
 /* 공개 보드 기본 기간 안내 */
 .board-guide { font-size: 0.82rem; color: var(--muted); background: #eef4fb; border: 1px solid #cfe0f2; border-radius: 6px; padding: 0.45rem 0.7rem; margin: 0.5rem 0 0.75rem; }
+
+/* 강사료 집계: 강사유형 그룹 헤더 */
+.grp-row td { background: #dde6f2; font-size: 0.86rem; }
+.grp-count { color: var(--muted); font-weight: normal; font-size: 0.78rem; }
