@@ -49,3 +49,6 @@ export const END_TIMES = buildTimes(9, 0, 18, 0, 10);
 // 부트스트랩 마스터 관리자(표시용 — 실제 권한 판정은 firestore.rules).
 // firestore.rules의 adminEmails()와 동일하게 유지할 것. 소문자로 기재.
 export const BOOTSTRAP_MASTERS = ["isaac@airport.co.kr"];
+
+// 공개 현황 보드에 게시하지 않을 과정유형(내부 운영용 과정).
+export const BOARD_EXCLUDED_TYPES = ["특별", "재교육"];
