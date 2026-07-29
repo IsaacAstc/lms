@@ -320,3 +320,8 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .hist-row > td { background: #f7f9fc; }
 .hist-box { padding: 0.25rem 0.25rem 0.5rem; white-space: normal; }
 .hist-box table { margin-top: 0.4rem; }
+
+/* 기준값 설정: 개정 등록 묶음을 같은 줄 오른쪽에 배치 */
+.form-actions { align-items: center; flex-wrap: wrap; }
+.rev-group { margin-left: auto; display: inline-flex; align-items: center; gap: 0.5rem; }
+.rev-group label { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; color: var(--muted); }
