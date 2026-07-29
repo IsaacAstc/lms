@@ -72,6 +72,7 @@
               <label>커리큘럼 연결<select name="programId"></select></label>
               <label>과정유형<select name="courseType"><option value="">(미지정)</option></select></label>
               <label>운영유형<input name="operationTag" placeholder="예: 초정기통합, 자격유지" /></label>
+              <label>설문 문항 세트<select name="surveySetId"><option value="">(커리큘럼/기본 따름)</option></select></label>
               <label class="chk" title="공개 보드 미표시 + 설문 비활성 + 강사료·경비 집계 제외">숨김(공개·설문·집계 제외)<input name="hideBoard" type="checkbox" /></label>
             </div>
             <datalist id="course-name-list"></datalist>
@@ -161,6 +162,7 @@
               <label>구분<input name="category" placeholder="초기/정기/특별 등" /></label>
               <label>총 일수<input name="totalDays" type="number" min="1" /></label>
               <label>총 시간<input name="totalHours" type="number" min="1" /></label>
+              <label>설문 문항 세트<select name="surveySetId"><option value="">(기본 세트)</option></select></label>
               <label>비고<input name="note" /></label>
             </div>
             <fieldset class="subj-box">
@@ -419,10 +421,10 @@
           <div class="form-actions">
             <button id="fee-add" type="button">행 추가</button>
             <button id="fee-save" type="button">강사료 기준 저장</button>
-          </div>
-          <div class="load-row">
-            <label>개정 발효일자 <input type="date" id="fee-rev-date" /></label>
-            <button id="fee-rev-add" type="button">현재 값을 개정본으로 등록</button>
+            <span class="rev-group">
+              <label>개정 발효일자 <input type="date" id="fee-rev-date" /></label>
+              <button id="fee-rev-add" type="button">현재 값을 개정본으로 등록</button>
+            </span>
           </div>
           <div id="fee-rev-list"></div>
 
@@ -436,15 +438,22 @@
           <div class="form-actions">
             <button id="travel-add" type="button">행 추가</button>
             <button id="travel-save" type="button">여비 기준 저장</button>
-          </div>
-          <div class="load-row">
-            <label>개정 발효일자 <input type="date" id="travel-rev-date" /></label>
-            <button id="travel-rev-add" type="button">현재 값을 개정본으로 등록</button>
+            <span class="rev-group">
+              <label>개정 발효일자 <input type="date" id="travel-rev-date" /></label>
+              <button id="travel-rev-add" type="button">현재 값을 개정본으로 등록</button>
+            </span>
           </div>
           <div id="travel-rev-list"></div>
 
           <h3>설문 문항</h3>
-          <p class="hint">여기서 정한 문항이 <b>이후 생성되는 설문</b>에 적용됩니다. 이미 수집된 응답은 <b>응답 당시 문항</b>으로 집계·표시되므로 과거 보고서는 바뀌지 않습니다. 문항을 개정하면 발효일자를 지정해 개정본으로 등록하세요.</p>
+          <p class="hint">문항을 <b>세트</b>로 여러 벌 만들어 과정(커리큘럼)·차수별로 다르게 연결할 수 있습니다. 적용 우선순위는 <b>차수 지정 &gt; 커리큘럼 지정 &gt; 기본 세트</b>입니다. 여기서 정한 문항은 <b>이후 생성되는 설문</b>에 적용됩니다. 이미 수집된 응답은 <b>응답 당시 문항</b>으로 집계·표시되므로 과거 보고서는 바뀌지 않습니다. 문항을 개정하면 발효일자를 지정해 개정본으로 등록하세요.</p>
+          <div class="load-row">
+            <label>편집할 세트 <select id="si-set"></select></label>
+            <button id="si-set-del" type="button" class="del" hidden>세트 삭제</button>
+            <label>새 세트 이름 <input id="si-set-new" placeholder="예: 특별교육용" /></label>
+            <button id="si-set-add" type="button">세트 추가(현재 문항 복제)</button>
+            <span id="si-set-note" class="hint"></span>
+          </div>
           <p class="hint"><b>교육 만족도 문항</b></p>
           <div id="si-edu-list"></div>
           <p class="hint"><b>강사 만족도 문항</b></p>
@@ -453,10 +462,10 @@
             <button id="si-edu-add" type="button">교육 문항 추가</button>
             <button id="si-inst-add" type="button">강사 문항 추가</button>
             <button id="si-save" type="button">설문 문항 저장</button>
-          </div>
-          <div class="load-row">
-            <label>개정 발효일자 <input type="date" id="si-rev-date" /></label>
-            <button id="si-rev-add" type="button">현재 문항을 개정본으로 등록</button>
+            <span class="rev-group" id="si-rev-group">
+              <label>개정 발효일자 <input type="date" id="si-rev-date" /></label>
+              <button id="si-rev-add" type="button">현재 문항을 개정본으로 등록</button>
+            </span>
           </div>
           <div id="si-rev-list"></div>
         </section>

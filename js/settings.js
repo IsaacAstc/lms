@@ -58,6 +58,27 @@ export function getSurveyItemsAt(dateStr) {
   };
 }
 
+// 추가 문항 세트 목록: [{ id, name, eduItems, instructorItems }]
+export function getSurveySets() {
+  const d = docByName("surveyItems");
+  return (Array.isArray(d?.sets) ? d.sets : []).filter((x) => x && x.id);
+}
+
+// 세트 우선순위로 문항 해석: 차수 지정 > 커리큘럼 지정 > 기본 세트(발효일자 이력).
+export function resolveSurveyItems({ setId, dateStr }) {
+  if (setId) {
+    const set = getSurveySets().find((x) => x.id === setId);
+    if (set) {
+      return {
+        eduItems: set.eduItems?.length ? set.eduItems : null,
+        instructorItems: set.instructorItems?.length ? set.instructorItems : null,
+        setId, setName: set.name || "",
+      };
+    }
+  }
+  return { ...getSurveyItemsAt(dateStr), setId: "", setName: "" };
+}
+
 export function getRateHistory(docName) {
   const d = docByName(docName);
   return (Array.isArray(d?.history) ? d.history : [])
@@ -135,15 +156,99 @@ function itemListRows(boxId, items) {
 }
 
 let eduDraft = null, instDraft = null;
+let editingSetId = "";   // "" = 기본 세트
+let draftLoadedFor = null; // 현재 draft가 어느 세트에서 로드됐는지
+
+// 편집 대상 세트의 문항을 draft로 로드.
+function loadDraftForSet() {
+  if (draftLoadedFor === editingSetId) return;
+  if (editingSetId) {
+    const set = getSurveySets().find((x) => x.id === editingSetId);
+    eduDraft = (set?.eduItems || DEFAULT_EDU_ITEMS).slice();
+    instDraft = (set?.instructorItems || DEFAULT_INST_ITEMS).slice();
+  } else {
+    const cur = getSurveyItems();
+    eduDraft = (cur.eduItems || DEFAULT_EDU_ITEMS).slice();
+    instDraft = (cur.instructorItems || DEFAULT_INST_ITEMS).slice();
+  }
+  draftLoadedFor = editingSetId;
+}
+
+function renderSetSelect() {
+  const sel = document.getElementById("si-set");
+  if (!sel) return;
+  const sets = getSurveySets();
+  sel.innerHTML = `<option value="">기본 세트</option>`
+    + sets.map((x) => `<option value="${escapeHtml(x.id)}"${x.id === editingSetId ? " selected" : ""}>${escapeHtml(x.name || x.id)}</option>`).join("");
+  sel.value = editingSetId;
+  // 개정 이력은 기본 세트에만 적용.
+  document.getElementById("si-rev-group").hidden = !!editingSetId;
+  document.getElementById("si-set-del").hidden = !editingSetId;
+  document.getElementById("si-set-note").textContent = editingSetId
+    ? "추가 세트는 발효일자 이력 없이 현재 문항만 유지됩니다."
+    : "기본 세트는 개정 발효일자 이력으로 관리됩니다.";
+}
+
 function paintSurveyItems() {
-  const cur = getSurveyItems();
-  if (!eduDraft) eduDraft = (cur.eduItems || DEFAULT_EDU_ITEMS).slice();
-  if (!instDraft) instDraft = (cur.instructorItems || DEFAULT_INST_ITEMS).slice();
+  loadDraftForSet();
+  renderSetSelect();
   itemListRows("si-edu-list", eduDraft);
   itemListRows("si-inst-list", instDraft);
   bindItemEditors("si-edu-list", eduDraft);
   bindItemEditors("si-inst-list", instDraft);
   renderItemRevisions();
+}
+
+// 세트 저장/추가/삭제.
+async function saveCurrentSet() {
+  const items = collectItems();
+  if (!items.eduItems.length || !items.instructorItems.length) return alert("교육·강사 문항을 각각 1개 이상 입력하세요.");
+  if (!editingSetId) return saveSurveyItems(); // 기본 세트는 기존 로직(이력 연동).
+  const d = docByName("surveyItems") || {};
+  const sets = getSurveySets().map((x) => (x.id === editingSetId ? { ...x, ...items } : x));
+  try {
+    await setDocById("settings", "surveyItems", {
+      eduItems: d.eduItems || DEFAULT_EDU_ITEMS, instructorItems: d.instructorItems || DEFAULT_INST_ITEMS,
+      history: Array.isArray(d.history) ? d.history : [], sets,
+    });
+    alert("문항 세트를 저장했습니다.");
+  } catch (e) { alert("저장 실패: " + e.message); }
+}
+async function addSet() {
+  const name = (document.getElementById("si-set-new").value || "").trim();
+  if (!name) return alert("새 세트 이름을 입력하세요.");
+  const sets = getSurveySets();
+  if (sets.some((x) => (x.name || "") === name)) return alert("같은 이름의 세트가 이미 있습니다.");
+  const d = docByName("surveyItems") || {};
+  const id = "set-" + Date.now();
+  // 현재 편집 중인 문항을 초기값으로 복제.
+  const items = collectItems();
+  const next = [...sets, { id, name, eduItems: items.eduItems, instructorItems: items.instructorItems }];
+  try {
+    await setDocById("settings", "surveyItems", {
+      eduItems: d.eduItems || DEFAULT_EDU_ITEMS, instructorItems: d.instructorItems || DEFAULT_INST_ITEMS,
+      history: Array.isArray(d.history) ? d.history : [], sets: next,
+    });
+    document.getElementById("si-set-new").value = "";
+    editingSetId = id; draftLoadedFor = null;
+    paintSurveyItems();
+    alert(`'${name}' 세트를 추가했습니다.`);
+  } catch (e) { alert("추가 실패: " + e.message); }
+}
+async function deleteSet() {
+  if (!editingSetId) return;
+  const set = getSurveySets().find((x) => x.id === editingSetId);
+  if (!confirm(`'${set?.name || editingSetId}' 세트를 삭제할까요?\n이 세트를 쓰던 과정·차수는 기본 세트로 되돌아갑니다.`)) return;
+  const d = docByName("surveyItems") || {};
+  const next = getSurveySets().filter((x) => x.id !== editingSetId);
+  try {
+    await setDocById("settings", "surveyItems", {
+      eduItems: d.eduItems || DEFAULT_EDU_ITEMS, instructorItems: d.instructorItems || DEFAULT_INST_ITEMS,
+      history: Array.isArray(d.history) ? d.history : [], sets: next,
+    });
+    editingSetId = ""; draftLoadedFor = null;
+    paintSurveyItems();
+  } catch (e) { alert("삭제 실패: " + e.message); }
 }
 function bindItemEditors(boxId, draft) {
   const box = document.getElementById(boxId);
@@ -190,7 +295,9 @@ async function saveSurveyItems() {
     .sort((a, b) => a.from.localeCompare(b.from));
   if (hist.length) hist[hist.length - 1] = { ...hist[hist.length - 1], ...items };
   try {
-    await setDocById("settings", "surveyItems", hist.length ? { ...items, history: hist } : items);
+    const cur = docByName("surveyItems") || {};
+    await setDocById("settings", "surveyItems",
+      { ...items, history: hist, sets: Array.isArray(cur.sets) ? cur.sets : [] });
     alert("설문 문항을 저장했습니다.");
   } catch (e) { alert("저장 실패: " + e.message); }
 }
@@ -212,8 +319,10 @@ async function addItemRevision() {
   hist.sort((a, b) => a.from.localeCompare(b.from));
   const latest = hist[hist.length - 1];
   try {
+    const cur0 = docByName("surveyItems") || {};
     await setDocById("settings", "surveyItems",
-      { eduItems: latest.eduItems, instructorItems: latest.instructorItems, history: hist });
+      { eduItems: latest.eduItems, instructorItems: latest.instructorItems, history: hist,
+        sets: Array.isArray(cur0.sets) ? cur0.sets : [] });
     alert(`설문 문항 개정본을 등록했습니다. (${from}부터 생성되는 설문에 적용)`);
   } catch (e) { alert("등록 실패: " + e.message); }
 }
@@ -236,7 +345,12 @@ export function initSettings() {
   // 설문 문항 편집.
   document.getElementById("si-edu-add").addEventListener("click", () => { eduDraft.push(""); paintSurveyItems(); });
   document.getElementById("si-inst-add").addEventListener("click", () => { instDraft.push(""); paintSurveyItems(); });
-  document.getElementById("si-save").addEventListener("click", saveSurveyItems);
+  document.getElementById("si-save").addEventListener("click", saveCurrentSet);
+  document.getElementById("si-set").addEventListener("change", (e) => {
+    editingSetId = e.target.value; draftLoadedFor = null; paintSurveyItems();
+  });
+  document.getElementById("si-set-add").addEventListener("click", addSet);
+  document.getElementById("si-set-del").addEventListener("click", deleteSet);
   document.getElementById("si-rev-add").addEventListener("click", addItemRevision);
 }
 
