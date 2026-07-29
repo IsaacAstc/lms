@@ -1,11 +1,11 @@
 // 공개 설문 정의 생성/갱신 (publicSurveys/{courseId}).
 // 서버리스: 시간표 등록/수정 시 이 문서를 만들고, 공개 페이지가 KST 시각으로 노출 여부 판정.
 import {
-  collection, getDocs, query, where, doc, setDoc, deleteDoc,
+  collection, getDocs, getDoc, query, where, doc, setDoc, deleteDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { kstToMs, HOUR_MS } from "./time.js";
-import { getSurveyItemsAt } from "./settings.js";
+import { resolveSurveyItems } from "./settings.js";
 import { DEFAULT_EDU_ITEMS, DEFAULT_INSTRUCTOR_ITEMS } from "./constants.js";
 
 // 교육만족도 6문항 / 강사만족도 3문항 (CLAUDE.md 2-1, 5점 척도).
@@ -89,7 +89,16 @@ export async function regenerateSurvey(course, roomId) {
   // 교육 종료일 기준 문항을 해석해 전달.
   const sorted = [...sessions].sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
   const lastDate = sorted.length ? sorted[sorted.length - 1].date : "";
-  const survey = buildSurvey(course, sessions, roomId, instructorsById, getSurveyItemsAt(lastDate));
+  // 문항 세트 우선순위: 차수 지정 > 커리큘럼 지정 > 기본 세트(발효일자 이력).
+  let setId = course.surveySetId || "";
+  if (!setId && course.programId) {
+    try {
+      const pd = await getDoc(doc(db, "programs", course.programId));
+      if (pd.exists()) setId = pd.data().surveySetId || "";
+    } catch { /* 기본 세트 사용 */ }
+  }
+  const survey = buildSurvey(course, sessions, roomId, instructorsById,
+    resolveSurveyItems({ setId, dateStr: lastDate }));
   if (!survey) {
     // 생성 조건 미충족: 기존 문서 있으면 제거.
     await deleteDoc(doc(db, "publicSurveys", course.id)).catch(() => {});

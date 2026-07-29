@@ -21,6 +21,7 @@ import { onProgramsChange, getProgramById, getPrograms } from "./programs.js";
 import { onRoomsChange, getRooms } from "./rooms.js";
 import { selectCourse } from "./sessions.js";
 import { BOARD_EXCLUDED_TYPES } from "./constants.js";
+import { getSurveySets, onSettingsChange } from "./settings.js";
 import { regenerateSurvey } from "./survey-gen.js";
 import { fmtDot } from "./time.js";
 
@@ -82,6 +83,16 @@ export function initCourses() {
   });
 
   cancelBtn.addEventListener("click", () => resetForm(form, submitBtn, cancelBtn));
+
+  // 설문 문항 세트 셀렉트(설정 변경 시 갱신).
+  onSettingsChange(() => {
+    const sel = form.surveySetId;
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = `<option value="">(커리큘럼/기본 따름)</option>`
+      + getSurveySets().map((x) => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.name || x.id)}</option>`).join("");
+    sel.value = prev;
+  });
 
   // 과정유형 선택지 로드 + (마스터) 편집 UI.
   initCourseTypeUi(form);
@@ -163,6 +174,7 @@ function readForm(form) {
     programId: form.programId.value || "",
     courseType: form.courseType.value || "",
     operationTag: form.operationTag.value.trim(),
+    surveySetId: form.surveySetId.value || "",
     appliedCount: form.appliedCount.value ? Number(form.appliedCount.value) : 0,
     completedCount: form.completedCount.value ? Number(form.completedCount.value) : 0,
     hasEvaluation: form.hasEvaluation.checked,
@@ -454,6 +466,7 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       // 목록에서 삭제·변경된 과거 값도 선택 상태를 유지(저장 시 값이 비워지지 않도록).
       setCourseTypeValue(form, c.courseType ?? "");
       form.operationTag.value = c.operationTag ?? "";
+      form.surveySetId.value = c.surveySetId ?? "";
       form.appliedCount.value = c.appliedCount ?? 0;
       form.completedCount.value = c.completedCount ?? 0;
       form.hasEvaluation.checked = !!c.hasEvaluation;

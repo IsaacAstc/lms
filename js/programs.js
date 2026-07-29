@@ -1,6 +1,7 @@
 // 과정 커리큘럼 마스터 CRUD. 과목(subjects)은 문서 내 배열로 저장.
 import { watchCollection, onCollection, addItem, updateItem, removeItem, getCache } from "./store.js";
 import { escapeHtml } from "./app.js";
+import { getSurveySets } from "./settings.js";
 import { TEACHER_KINDS, START_TIMES, END_TIMES } from "./constants.js";
 
 let editingId = null;
@@ -17,10 +18,21 @@ export function getProgramById(id) {
   return getCache("programs").find((p) => p.id === id) || null;
 }
 
+// 설문 문항 세트 셀렉트 채움(설정 변경 시 갱신).
+function refreshSetSelect(form, emptyLabel) {
+  const sel = form.surveySetId;
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = `<option value="">${emptyLabel}</option>`
+    + getSurveySets().map((x) => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.name || x.id)}</option>`).join("");
+  sel.value = prev;
+}
+
 export function initPrograms() {
   watchCollection("programs");
   const form = document.getElementById("program-form");
   const tbody = document.getElementById("program-tbody");
+  onCollection("settings", () => refreshSetSelect(form, "(기본 세트)"));
   const submitBtn = document.getElementById("program-submit");
   const cancelBtn = document.getElementById("program-cancel");
   const addSubjBtn = document.getElementById("subject-add");
@@ -59,6 +71,7 @@ export function initPrograms() {
     const data = {
       name: form.name.value.trim(),
       category: form.category.value.trim(),
+      surveySetId: form.surveySetId.value || "",
       totalDays: form.totalDays.value ? Number(form.totalDays.value) : null,
       totalHours: form.totalHours.value ? Number(form.totalHours.value) : null,
       note: form.note.value.trim(),
@@ -159,6 +172,7 @@ function loadIntoForm(form, p, submitBtn, cancelBtn, copy) {
   editingId = copy ? null : p.id;
   form.name.value = copy ? `${p.name} (사본)` : (p.name ?? "");
   form.category.value = p.category ?? "";
+  form.surveySetId.value = p.surveySetId ?? "";
   form.totalDays.value = p.totalDays ?? "";
   form.totalHours.value = p.totalHours ?? "";
   form.note.value = p.note ?? "";
