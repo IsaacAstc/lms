@@ -325,3 +325,8 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .form-actions { align-items: center; flex-wrap: wrap; }
 .rev-group { margin-left: auto; display: inline-flex; align-items: center; gap: 0.5rem; }
 .rev-group label { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; color: var(--muted); }
+
+/* 개정 이력 목록(칩·안내 문구)도 오른쪽 정렬 */
+.rev-list { text-align: right; }
+.rev-list .chip-row { justify-content: flex-end; }
+.rev-list .hint { margin-top: 0.2rem; }
