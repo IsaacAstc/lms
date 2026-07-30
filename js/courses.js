@@ -151,7 +151,7 @@ export function initCourses() {
   }, (err) => {
     // 조회 실패(권한 등)를 조용히 감추지 않고 표시.
     console.error("courses onSnapshot:", err);
-    tbody.innerHTML = `<tr><td colspan="15" class="empty">목록을 불러오지 못했습니다: ${escapeHtml(err.code || err.message)}<br>보안규칙 재배포 또는 로그인 계정의 관리자 권한을 확인하세요.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="16" class="empty">목록을 불러오지 못했습니다: ${escapeHtml(err.code || err.message)}<br>보안규칙 재배포 또는 로그인 계정의 관리자 권한을 확인하세요.</td></tr>`;
   });
 }
 
@@ -178,6 +178,8 @@ function readForm(form) {
     appliedCount: form.appliedCount.value ? Number(form.appliedCount.value) : 0,
     completedCount: form.completedCount.value ? Number(form.completedCount.value) : 0,
     hasEvaluation: form.hasEvaluation.checked,
+    // 예정(계획) 차수 — 공개 현황 보드에서 과정명 앞에 (예정) 표기.
+    planned: form.planned.checked,
     // 공개 보드 미표시 여부. (input name은 form.hidden 속성 충돌 회피용 hideBoard)
     hidden: form.hideBoard.checked,
   };
@@ -190,7 +192,7 @@ export function boardFields(data) {
     startDate: data.startDate || "", endDate: data.endDate || "", venue: data.venue || "",
     capacity: data.capacity || 0, appliedCount: data.appliedCount || 0,
     remaining: Math.max(0, (data.capacity || 0) - (data.appliedCount || 0)),
-    hasEvaluation: !!data.hasEvaluation, updatedAtMs: Date.now(),
+    hasEvaluation: !!data.hasEvaluation, planned: !!data.planned, updatedAtMs: Date.now(),
   };
 }
 // 공개 보드 게시 제외 대상: 숨김 처리했거나, 비공개 운영 과정유형(특별·재교육 등).
@@ -400,7 +402,7 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
   refreshYearOptions();
   if (coursesCache.length === 0) {
     document.getElementById("cf-count").textContent = "";
-    tbody.innerHTML = `<tr><td colspan="13" class="empty">등록된 과정이 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" class="empty">등록된 과정이 없습니다.</td></tr>`;
     return;
   }
   // 목록 표시는 시작일 내림차순(최근 과정 우선). 같은 날짜는 과정코드·차수 순.
@@ -410,7 +412,7 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
     || (a.round ?? 0) - (b.round ?? 0));
   document.getElementById("cf-count").textContent = `${rows.length} / 전체 ${coursesCache.length}건`;
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="13" class="empty">선택한 기간에 등록된 과정이 없습니다. 연도를 바꾸거나 ‘전체 연도’를 선택하세요.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" class="empty">선택한 기간에 등록된 과정이 없습니다. 연도를 바꾸거나 ‘전체 연도’를 선택하세요.</td></tr>`;
     return;
   }
   for (const c of rows) {
@@ -427,6 +429,7 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       <td style="text-align:center">${c.hasEvaluation ? "○" : ""}</td>
       <td>${periodText(c)}</td>
       <td>${escapeHtml(c.venue ?? "")}</td>
+      <td style="text-align:center"><input type="checkbox" class="c-plan"${c.planned ? " checked" : ""} title="체크 시 공개 보드에서 과정명 앞에 (예정) 표기"></td>
       <td style="text-align:center"><input type="checkbox" class="c-hide"${c.hidden ? " checked" : ""} title="체크 시 공개 보드 미표시 + 설문 비활성 + 강사료·경비 집계 제외"></td>
       <td class="actions">
         <button type="button" class="timetable">시간표</button>
@@ -434,6 +437,23 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
         <button type="button" class="del">삭제</button>
       </td>`;
     tr.querySelector(".timetable").addEventListener("click", () => selectCourse(c.id));
+    // 목록에서 바로 예정(계획) 토글 → 저장 + 공개 보드 표기 반영.
+    tr.querySelector(".c-plan").addEventListener("change", async (e) => {
+      const on = e.target.checked;
+      try {
+        await updateDoc(doc(db, "courses", c.id), { planned: on });
+      } catch (err) {
+        e.target.checked = !on;
+        alert("예정 설정 실패: " + err.message);
+        return;
+      }
+      try {
+        await mirrorBoard(c.id, { ...c, planned: on });
+      } catch (err) {
+        alert(`예정 설정은 저장했지만 공개 보드 반영에 실패했습니다: ${err.message}\n`
+          + "설정 → 공개 현황 보드에서 '전체 강제 동기화'를 실행하세요.");
+      }
+    });
     // 목록에서 바로 숨김 토글 → 저장 + 공개 보드 반영.
     tr.querySelector(".c-hide").addEventListener("change", async (e) => {
       const on = e.target.checked;
@@ -470,6 +490,7 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       form.appliedCount.value = c.appliedCount ?? 0;
       form.completedCount.value = c.completedCount ?? 0;
       form.hasEvaluation.checked = !!c.hasEvaluation;
+      form.planned.checked = !!c.planned;
       form.hideBoard.checked = !!c.hidden;
       submitBtn.textContent = "수정 저장";
       cancelBtn.hidden = false;
