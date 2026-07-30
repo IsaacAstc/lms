@@ -146,7 +146,9 @@ export function initCourses() {
   const q = query(coursesCol, orderBy("code"));
   unsub = onSnapshot(q, (snap) => {
     coursesCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    renderTable(tbody, form, submitBtn, cancelBtn);
+    // 인라인 수정 중이면 다시 그리지 않는다(입력 중인 값이 지워지는 것 방지).
+    // 저장·취소 시점에 rerender가 호출되므로 갱신은 그때 반영된다.
+    if (!inlineId) renderTable(tbody, form, submitBtn, cancelBtn);
     listeners.forEach((cb) => cb(coursesCache));
   }, (err) => {
     // 조회 실패(권한 등)를 조용히 감추지 않고 표시.
@@ -397,6 +399,122 @@ function applyFilter(list) {
   return list;
 }
 
+// ── 목록 내 인라인 수정 ──
+// 표에 있는 열만 그 자리에서 고치고, 표에 없는 필드(커리큘럼·운영유형·설문 세트)는
+// 기존 값을 그대로 보존한다. 그 필드까지 고칠 때는 '상세'로 상단 폼을 사용.
+let inlineId = null;
+
+function typeOptions(cur) {
+  const list = courseTypes.includes(cur) || !cur ? courseTypes : [cur, ...courseTypes];
+  return `<option value="">(미지정)</option>`
+    + list.map((t) => `<option${t === cur ? " selected" : ""}>${escapeHtml(t)}</option>`).join("");
+}
+
+function venueOptions(cur) {
+  const names = getRooms().map((r) => r.name);
+  const list = !cur || names.includes(cur) ? names : [cur, ...names];
+  return `<option value="">선택</option>`
+    + list.map((n) => `<option${n === cur ? " selected" : ""}>${escapeHtml(n)}</option>`).join("");
+}
+
+function editRowHtml(c) {
+  return `
+    <td><input class="e-code" value="${escapeHtml(c.code ?? "")}" required></td>
+    <td><input class="e-name" list="course-name-list" value="${escapeHtml(c.name ?? "")}" required></td>
+    <td><select class="e-type">${typeOptions(c.courseType ?? "")}</select></td>
+    <td><input class="e-round" type="number" min="1" value="${c.round ?? ""}"></td>
+    <td><input class="e-cap" type="number" min="1" value="${c.capacity ?? ""}"></td>
+    <td><input class="e-applied" type="number" min="0" value="${c.appliedCount ?? 0}"></td>
+    <td class="e-remain">${remainingSeats(c)}</td>
+    <td><input class="e-completed" type="number" min="0" value="${c.completedCount ?? 0}"></td>
+    <td style="text-align:center"><input class="e-eval" type="checkbox"${c.hasEvaluation ? " checked" : ""}></td>
+    <td class="e-period">
+      <input class="e-start" type="date" value="${escapeHtml(c.startDate ?? "")}">
+      <input class="e-end" type="date" value="${escapeHtml(c.endDate ?? "")}">
+    </td>
+    <td><select class="e-venue">${venueOptions(c.venue ?? "")}</select></td>
+    <td style="text-align:center"><input class="e-plan" type="checkbox"${c.planned ? " checked" : ""}></td>
+    <td style="text-align:center"><input class="e-hide" type="checkbox"${c.hidden ? " checked" : ""}></td>
+    <td class="actions">
+      <button type="button" class="save">저장</button>
+      <button type="button" class="cancel">취소</button>
+    </td>`;
+}
+
+// 수정 행의 입력값 읽기. 표에 없는 필드는 기존 문서 값을 유지.
+function readRow(tr, c) {
+  const g = (s) => tr.querySelector(s);
+  const venue = g(".e-venue").value.trim();
+  return {
+    code: g(".e-code").value.trim(),
+    name: g(".e-name").value.trim(),
+    courseType: g(".e-type").value,
+    round: Number(g(".e-round").value),
+    capacity: Number(g(".e-cap").value),
+    appliedCount: Number(g(".e-applied").value || 0),
+    completedCount: Number(g(".e-completed").value || 0),
+    hasEvaluation: g(".e-eval").checked,
+    startDate: g(".e-start").value,
+    endDate: g(".e-end").value,
+    venue,
+    venueRoomId: getRooms().find((r) => r.name === venue)?.id || "",
+    planned: g(".e-plan").checked,
+    hidden: g(".e-hide").checked,
+    programId: c.programId || "",
+    operationTag: c.operationTag || "",
+    surveySetId: c.surveySetId || "",
+  };
+}
+
+function wireEditRow(tr, c, rerender) {
+  // 정원·신청을 고치면 잔여석을 즉시 반영(저장 전 확인용).
+  const live = () => {
+    tr.querySelector(".e-remain").innerHTML = remainingSeats({
+      capacity: Number(tr.querySelector(".e-cap").value),
+      appliedCount: Number(tr.querySelector(".e-applied").value || 0),
+    });
+  };
+  tr.querySelector(".e-cap").addEventListener("input", live);
+  tr.querySelector(".e-applied").addEventListener("input", live);
+  // 과정명을 커리큘럼에서 고르면 커리큘럼 연결도 함께 갱신.
+  tr.querySelector(".e-name").addEventListener("change", (e) => {
+    const match = getPrograms().find((p) => p.name === e.target.value.trim());
+    if (match) c = { ...c, programId: match.id };
+  });
+  tr.querySelector(".cancel").addEventListener("click", () => { inlineId = null; rerender(); });
+  // Enter로 저장, Esc로 취소.
+  tr.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); tr.querySelector(".save").click(); }
+    if (e.key === "Escape") { inlineId = null; rerender(); }
+  });
+  tr.querySelector(".save").addEventListener("click", async () => {
+    const data = readRow(tr, c);
+    const err = validate(data);
+    if (err) return alert(err);
+    const btn = tr.querySelector(".save");
+    btn.disabled = true;
+    try {
+      const ref = doc(db, "courses", c.id);
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new Error("이미 삭제된 과정입니다. 목록을 새로고침하세요.");
+        tx.update(ref, data);
+      });
+    } catch (e) {
+      btn.disabled = false;
+      return alert("저장 실패: " + e.message);
+    }
+    inlineId = null;
+    try {
+      await applyPublicState(c.id, data);
+    } catch (e) {
+      alert(`차수는 저장했지만 공개 보드·설문 반영에 실패했습니다: ${e.message}\n`
+        + "설정 → 공개 현황 보드에서 '전체 강제 동기화'를 실행하세요.");
+    }
+    rerender();
+  });
+}
+
 function renderTable(tbody, form, submitBtn, cancelBtn) {
   tbody.innerHTML = "";
   refreshYearOptions();
@@ -415,8 +533,17 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
     tbody.innerHTML = `<tr><td colspan="14" class="empty">선택한 기간에 등록된 과정이 없습니다. 연도를 바꾸거나 ‘전체 연도’를 선택하세요.</td></tr>`;
     return;
   }
+  const rerender = () => renderTable(tbody, form, submitBtn, cancelBtn);
   for (const c of rows) {
     const tr = document.createElement("tr");
+    // 인라인 수정 중인 행은 입력 폼으로 표시.
+    if (c.id === inlineId) {
+      tr.className = "inline-edit";
+      tr.innerHTML = editRowHtml(c);
+      wireEditRow(tr, c, rerender);
+      tbody.appendChild(tr);
+      continue;
+    }
     tr.innerHTML = `
       <td>${escapeHtml(c.code)}</td>
       <td class="c-name">${escapeHtml(c.name)}${curriculumNote(c)}</td>
@@ -433,7 +560,8 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       <td style="text-align:center"><input type="checkbox" class="c-hide"${c.hidden ? " checked" : ""} title="체크 시 공개 보드 미표시 + 설문 비활성 + 강사료·경비 집계 제외"></td>
       <td class="actions">
         <button type="button" class="timetable">시간표</button>
-        <button type="button" class="edit">수정</button>
+        <button type="button" class="edit" title="이 줄에서 바로 수정">수정</button>
+        <button type="button" class="detail" title="커리큘럼·운영유형·설문 세트까지 수정(상단 폼)">상세</button>
         <button type="button" class="del">삭제</button>
       </td>`;
     tr.querySelector(".timetable").addEventListener("click", () => selectCourse(c.id));
@@ -473,7 +601,15 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
           + "설정 → 공개 현황 보드에서 '전체 강제 동기화'를 실행하세요.");
       }
     });
+    // 이 줄에서 바로 수정(표에 있는 열만).
     tr.querySelector(".edit").addEventListener("click", () => {
+      inlineId = c.id;
+      rerender();
+      tbody.querySelector("tr.inline-edit .e-code")?.focus();
+    });
+    // 상세: 커리큘럼·운영유형·설문 세트까지 수정 — 상단 폼으로.
+    tr.querySelector(".detail").addEventListener("click", () => {
+      inlineId = null;
       editingId = c.id;
       form.code.value = c.code ?? "";
       form.name.value = c.name ?? "";
