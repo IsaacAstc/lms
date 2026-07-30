@@ -417,6 +417,31 @@ function venueOptions(cur) {
     + list.map((n) => `<option${n === cur ? " selected" : ""}>${escapeHtml(n)}</option>`).join("");
 }
 
+// 상세 수정: 표에 없는 필드(커리큘럼·운영유형·설문 세트)까지 고칠 때 상단 폼으로 올린다.
+function openDetail(c, form, submitBtn, cancelBtn) {
+  editingId = c.id;
+  form.code.value = c.code ?? "";
+  form.name.value = c.name ?? "";
+  form.capacity.value = c.capacity ?? "";
+  form.startDate.value = c.startDate ?? "";
+  form.endDate.value = c.endDate ?? "";
+  form.venue.value = c.venue ?? "";
+  form.round.value = c.round ?? "";
+  form.programId.value = c.programId ?? "";
+  // 목록에서 삭제·변경된 과거 값도 선택 상태를 유지(저장 시 값이 비워지지 않도록).
+  setCourseTypeValue(form, c.courseType ?? "");
+  form.operationTag.value = c.operationTag ?? "";
+  form.surveySetId.value = c.surveySetId ?? "";
+  form.appliedCount.value = c.appliedCount ?? 0;
+  form.completedCount.value = c.completedCount ?? 0;
+  form.hasEvaluation.checked = !!c.hasEvaluation;
+  form.planned.checked = !!c.planned;
+  form.hideBoard.checked = !!c.hidden;
+  submitBtn.textContent = "수정 저장";
+  cancelBtn.hidden = false;
+  form.scrollIntoView({ behavior: "smooth" });
+}
+
 function editRowHtml(c) {
   return `
     <td><input class="e-code" value="${escapeHtml(c.code ?? "")}" required></td>
@@ -438,6 +463,7 @@ function editRowHtml(c) {
     <td class="actions">
       <button type="button" class="save">저장</button>
       <button type="button" class="cancel">취소</button>
+      <button type="button" class="detail" title="커리큘럼·운영유형·설문 세트까지 수정(상단 폼)">상세</button>
     </td>`;
 }
 
@@ -466,7 +492,7 @@ function readRow(tr, c) {
   };
 }
 
-function wireEditRow(tr, c, rerender) {
+function wireEditRow(tr, c, rerender, detail) {
   // 정원·신청을 고치면 잔여석을 즉시 반영(저장 전 확인용).
   const live = () => {
     tr.querySelector(".e-remain").innerHTML = remainingSeats({
@@ -482,6 +508,12 @@ function wireEditRow(tr, c, rerender) {
     if (match) c = { ...c, programId: match.id };
   });
   tr.querySelector(".cancel").addEventListener("click", () => { inlineId = null; rerender(); });
+  // 표에 없는 필드까지 고칠 때는 상단 폼으로(인라인 수정은 닫는다).
+  tr.querySelector(".detail").addEventListener("click", () => {
+    inlineId = null;
+    rerender();
+    detail(c);
+  });
   // Enter로 저장, Esc로 취소.
   tr.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); tr.querySelector(".save").click(); }
@@ -540,7 +572,7 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
     if (c.id === inlineId) {
       tr.className = "inline-edit";
       tr.innerHTML = editRowHtml(c);
-      wireEditRow(tr, c, rerender);
+      wireEditRow(tr, c, rerender, (x) => openDetail(x, form, submitBtn, cancelBtn));
       tbody.appendChild(tr);
       continue;
     }
@@ -560,8 +592,7 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       <td style="text-align:center"><input type="checkbox" class="c-hide"${c.hidden ? " checked" : ""} title="체크 시 공개 보드 미표시 + 설문 비활성 + 강사료·경비 집계 제외"></td>
       <td class="actions">
         <button type="button" class="timetable">시간표</button>
-        <button type="button" class="edit" title="이 줄에서 바로 수정">수정</button>
-        <button type="button" class="detail" title="커리큘럼·운영유형·설문 세트까지 수정(상단 폼)">상세</button>
+        <button type="button" class="edit" title="이 줄에서 바로 수정(상세 항목은 수정 중 ‘상세’)">수정</button>
         <button type="button" class="del">삭제</button>
       </td>`;
     tr.querySelector(".timetable").addEventListener("click", () => selectCourse(c.id));
@@ -606,31 +637,6 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
       inlineId = c.id;
       rerender();
       tbody.querySelector("tr.inline-edit .e-code")?.focus();
-    });
-    // 상세: 커리큘럼·운영유형·설문 세트까지 수정 — 상단 폼으로.
-    tr.querySelector(".detail").addEventListener("click", () => {
-      inlineId = null;
-      editingId = c.id;
-      form.code.value = c.code ?? "";
-      form.name.value = c.name ?? "";
-      form.capacity.value = c.capacity ?? "";
-      form.startDate.value = c.startDate ?? "";
-      form.endDate.value = c.endDate ?? "";
-      form.venue.value = c.venue ?? "";
-      form.round.value = c.round ?? "";
-      form.programId.value = c.programId ?? "";
-      // 목록에서 삭제·변경된 과거 값도 선택 상태를 유지(저장 시 값이 비워지지 않도록).
-      setCourseTypeValue(form, c.courseType ?? "");
-      form.operationTag.value = c.operationTag ?? "";
-      form.surveySetId.value = c.surveySetId ?? "";
-      form.appliedCount.value = c.appliedCount ?? 0;
-      form.completedCount.value = c.completedCount ?? 0;
-      form.hasEvaluation.checked = !!c.hasEvaluation;
-      form.planned.checked = !!c.planned;
-      form.hideBoard.checked = !!c.hidden;
-      submitBtn.textContent = "수정 저장";
-      cancelBtn.hidden = false;
-      form.scrollIntoView({ behavior: "smooth" });
     });
     tr.querySelector(".del").addEventListener("click", async () => {
       if (!confirm(`'${c.name}' ${c.round}차수를 삭제하시겠습니까?\n연결된 시간표·공개설문도 함께 삭제됩니다.`)) return;
