@@ -100,8 +100,8 @@ const TARGETS = {
   },
   courses: {
     label: "차수", coll: "courses",
-    headers: ["과정코드", "과정명", "차수", "정원", "신청건수", "이수인원", "평가포함", "교육시작일", "교육종료일", "교육장", "과정유형", "운영유형", "커리큘럼명", "숨김"],
-    example: ["검정test", "보안검색요원 정기", "1", "30", "0", "0", "Y", "2026-07-27", "2026-07-27", "CBT실습실", "정기", "", "", ""],
+    headers: ["과정코드", "과정명", "차수", "정원", "신청건수", "이수인원", "평가포함", "교육시작일", "교육종료일", "교육장", "과정유형", "운영유형", "커리큘럼명", "예정", "숨김"],
+    example: ["검정test", "보안검색요원 정기", "1", "30", "0", "0", "Y", "2026-07-27", "2026-07-27", "CBT실습실", "정기", "", "", "", ""],
     dupKey: (d) => `${d.code}|${d.round}`,
     async build(records) {
       const [psnap, rsnap] = await Promise.all([
@@ -138,7 +138,7 @@ const TARGETS = {
           venueRoomId: rByName[(r["교육장"] || "").trim()] || "",
           courseType: (r["과정유형"] || "").trim(),
           operationTag: (r["운영유형"] || "").trim(), programId: cur ? (pByName[cur] || "") : "",
-          hidden: bool(r["숨김"]) });
+          planned: bool(r["예정"]), hidden: bool(r["숨김"]) });
       });
       return { docs, skipped };
     },

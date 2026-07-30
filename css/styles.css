@@ -280,6 +280,8 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .board-badge { background: var(--primary); color: #fff; border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.75rem; white-space: nowrap; }
 .board-card h3 { font-size: 1rem; margin: 0; }
 .board-card h3 small { color: var(--muted); font-weight: 400; }
+/* 예정(계획) 차수 표기 — 과정명 앞에 붙는다. */
+.board-planned { color: var(--muted); font-weight: 600; }
 .board-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 0.75rem; margin: 0.5rem 0; }
 .board-meta div { display: flex; justify-content: space-between; font-size: 0.85rem; border-bottom: 1px dotted var(--border); padding-bottom: 0.15rem; }
 .board-meta dt { color: var(--muted); margin: 0; }
