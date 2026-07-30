@@ -29,8 +29,10 @@ async function load() {
 
 // 보드 미러 필드 비교(updatedAtMs 제외).
 function boardDiffers(a, b) {
-  const keys = ["code", "name", "courseType", "round", "startDate", "endDate", "venue", "capacity", "appliedCount", "remaining", "hasEvaluation"];
-  return keys.some((k) => (a?.[k] ?? "") !== (b[k] ?? ""));
+  const keys = ["code", "name", "courseType", "round", "startDate", "endDate", "venue", "capacity", "appliedCount", "remaining"];
+  const boolKeys = ["hasEvaluation", "planned"]; // 미설정(undefined)과 false는 같은 값으로 취급.
+  return keys.some((k) => (a?.[k] ?? "") !== (b[k] ?? ""))
+    || boolKeys.some((k) => !!a?.[k] !== !!b[k]);
 }
 
 // 미게시/변경된 차수만 게시 + 삭제분 정리(조용히). 상태 표시.

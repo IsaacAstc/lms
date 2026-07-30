@@ -81,7 +81,7 @@ function card(c) {
     <article class="board-card${full ? " full" : ""}">
       <div class="board-card-head">
         <span class="board-badge">${esc(c.courseType || "과정")}</span>
-        <h3>${esc(c.name || "")}${c.round ? ` <small>${esc(String(c.round))}차수</small>` : ""}</h3>
+        <h3>${c.planned ? `<span class="board-planned">(예정)</span> ` : ""}${esc(c.name || "")}${c.round ? ` <small>${esc(String(c.round))}차수</small>` : ""}</h3>
       </div>
       <dl class="board-meta">
         <div><dt>교육기간</dt><dd>${period}</dd></div>
