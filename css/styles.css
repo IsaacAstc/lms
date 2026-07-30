@@ -305,21 +305,23 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 
 /* 차수 목록: 가로 스크롤 최소화 */
 .course-table th, .course-table td { padding: 0.4rem 0.45rem; }
-.course-table .c-name { white-space: normal; min-width: 9rem; max-width: 16rem; }
+.course-table .c-name { white-space: normal; min-width: 8rem; max-width: 16rem; }
 .course-table .c-sub { color: var(--muted); font-size: 0.72rem; }
-.course-table .actions button { padding: 0.25rem 0.45rem; font-size: 0.75rem; }
+/* 관리 열이 표 폭을 밀어내지 않도록 버튼을 촘촘하게. */
+.course-table .actions { white-space: nowrap; }
+.course-table .actions button { padding: 0.2rem 0.36rem; font-size: 0.72rem; }
 /* 목록 내 인라인 수정 행: 셀 폭을 넘지 않는 작은 입력칸. */
 .inline-edit { background: var(--row-edit, rgba(37, 99, 235, 0.06)); }
 .inline-edit td { padding: 0.25rem 0.3rem; }
 .inline-edit input:not([type="checkbox"]), .inline-edit select {
   width: 100%; min-width: 0; box-sizing: border-box; padding: 0.15rem 0.25rem; font-size: 0.78rem;
 }
-.inline-edit .e-code, .inline-edit .e-name { min-width: 6rem; }
-.inline-edit .e-round, .inline-edit .e-cap, .inline-edit .e-applied, .inline-edit .e-completed { min-width: 3.2rem; }
-.inline-edit .e-period input { display: block; }
+.inline-edit .e-code, .inline-edit .e-name { min-width: 5rem; }
+.inline-edit .e-round, .inline-edit .e-cap, .inline-edit .e-applied, .inline-edit .e-completed { min-width: 2.6rem; }
+.inline-edit .e-period input { display: block; font-size: 0.7rem; }
 .inline-edit .e-period input + input { margin-top: 0.15rem; }
-.inline-edit .e-venue { min-width: 6rem; }
-.inline-edit .e-type { min-width: 4.6rem; } /* 유형 열이 좁아 선택값이 잘리지 않도록 */
+.inline-edit .e-venue { min-width: 5rem; }
+.inline-edit .e-type { min-width: 4.2rem; } /* 유형 열이 좁아 선택값이 잘리지 않도록 */
 #course-filter { margin-bottom: 0.5rem; }
 #cf-count { margin-left: auto; align-self: center; }
 
