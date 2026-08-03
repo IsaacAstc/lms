@@ -53,6 +53,16 @@ export const BOOTSTRAP_MASTERS = ["isaac@airport.co.kr"];
 // 공개 현황 보드에 게시하지 않을 과정유형(내부 운영용 과정).
 export const BOARD_EXCLUDED_TYPES = ["특별", "재교육"];
 
+// 강사료·소요경비 계산에서 제외할 과목(운영 안내 성격 — 강의가 아님).
+export const PAY_EXCLUDED_SUBJECT_PATTERNS = [
+  /교육\s*등록\s*및\s*안내/,
+  /설문\s*및\s*수료/,
+  /평가/, // '평가', '평가 및 설문' 등 평가 진행 과목 전반
+];
+export function isPayExcludedSubject(subject) {
+  return PAY_EXCLUDED_SUBJECT_PATTERNS.some((p) => p.test(subject || ""));
+}
+
 // 설문 기본 문항(CLAUDE.md 2-1). 설정에 저장된 문항이 있으면 그것이 우선한다.
 // (settings ↔ survey-gen 순환 import를 피하려고 여기에 둔다.)
 export const DEFAULT_EDU_ITEMS = [

@@ -8,6 +8,7 @@ import { coursesCache, getHiddenCourseIds } from "./courses.js";
 import { getInstructorById, resolveInstructorAt } from "./instructors.js";
 import { getFeeRatesAt, getTravelRatesAt } from "./settings.js";
 import { calcHour, calcFee, applyMonthlyCap, calcTravel } from "./payroll.js";
+import { isPayExcludedSubject } from "./constants.js";
 
 let auto = { 사내: 0, 사외: 0, travel: 0, detail: [] }; // 자동 산출값(원) + 강사별 세부
 let customItems = []; // 사용자 추가 수동 항목 [{label, amount}]
@@ -32,6 +33,7 @@ async function computeAuto(month) {
     const s = d.data();
     if (!s.instructorId) continue;
     if (hiddenIds.has(s.courseId)) continue; // 숨김 차수 제외.
+    if (isPayExcludedSubject(s.subject)) continue; // 운영 안내·평가 과목은 강사료 계산 제외.
     const inst = getInstructorById(s.instructorId);
     if (!inst) continue;
     const eff = resolveInstructorAt(inst, s.date);

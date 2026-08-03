@@ -8,6 +8,7 @@ import { escapeHtml } from "./app.js";
 import { getFeeRatesAt, getTravelRatesAt } from "./settings.js";
 import { getInstructors, getInstructorById, resolveInstructorAt } from "./instructors.js";
 import { getHiddenCourseIds, coursesCache } from "./courses.js";
+import { isPayExcludedSubject } from "./constants.js";
 import { fmtDot } from "./time.js";
 
 // ── 순수 계산 함수 (엑셀 '계산' 시트 로직) ──
@@ -99,7 +100,8 @@ function monthEnd(ym) {
 
 async function renderAggregate(type, value) {
   const all = await fetchSessions(type, value);
-  const sessions = all.filter((s) => s.instructorId);
+  // 운영 안내 성격 과목(교육등록 및 안내/설문 및 수료/평가 및 설문)은 강사료 계산 제외.
+  const sessions = all.filter((s) => s.instructorId && !isPayExcludedSubject(s.subject));
 
   // 강사 × 강사유형별 집계.
   // 유형이 기간 중 바뀐 경우(이력) 강의 일자에 유효한 값으로 계산하고, 유형별로 행을 분리한다.
