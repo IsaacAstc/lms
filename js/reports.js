@@ -9,6 +9,7 @@ import {
   computeAgg, deserializeAgg, renderEduHTML, renderInstHTML, EDU_ITEMS,
 } from "./agg.js";
 import { fmtDot } from "./time.js";
+import { onCoursesChange } from "./courses.js";
 
 // 원응답은 버튼 클릭 시에만 표시(불필요한 렌더·오해 방지).
 let rawState = { responses: [], purged: false };
@@ -17,6 +18,17 @@ export function initReports() {
   const now = new Date();
   document.getElementById("rep-period").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   document.getElementById("rep-run").addEventListener("click", run);
+  // 과정(차수) 필터 — 최근 시작일 순. 선택값은 목록 갱신 시에도 유지.
+  onCoursesChange((courses) => {
+    const sel = document.getElementById("rep-course");
+    const prev = sel.value;
+    const opts = [...courses]
+      .sort((a, b) => (b.startDate || "").localeCompare(a.startDate || ""))
+      .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name || "")} ${c.round ?? ""}차수 (${escapeHtml(fmtDot(c.startDate || ""))})</option>`)
+      .join("");
+    sel.innerHTML = `<option value="">전체 과정</option>` + opts;
+    sel.value = [...sel.options].some((o) => o.value === prev) ? prev : "";
+  });
   document.getElementById("rep-raw-btn").addEventListener("click", showRaw);
   document.addEventListener("tabshown", (e) => { if (e.detail === "reports") run(); });
 }
@@ -35,6 +47,8 @@ function showRaw() {
 async function run() {
   const type = document.getElementById("rep-period-type").value;
   const month = document.getElementById("rep-period").value;
+  const courseSel = document.getElementById("rep-course");
+  const courseId = courseSel.value;
   const total = document.getElementById("rep-total");
   total.textContent = "조회 중…";
 
@@ -49,12 +63,28 @@ async function run() {
     responses = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   }
 
+  // 과정 필터는 조회 후 클라이언트에서 적용(복합 인덱스 불필요, 기간으로 이미 좁혀짐).
+  const fetched = responses.length;
+  if (courseId) responses = responses.filter((r) => r.courseId === courseId);
+  const courseLabel = courseId
+    ? ` · ${courseSel.options[courseSel.selectedIndex].textContent}` : "";
+
   if (responses.length) {
     const agg = computeAgg(responses);
-    total.textContent = `총 응답 ${responses.length}건 (원문)`;
+    total.textContent = `총 응답 ${responses.length}건 (원문)${courseLabel}`;
     document.getElementById("rep-edu").innerHTML = renderEduHTML(agg);
     document.getElementById("rep-inst").innerHTML = renderInstHTML(agg);
     resetRaw({ responses, purged: false });
+    return;
+  }
+
+  // 과정 필터로 0건이 된 경우(원문 자체는 있음) — 스냅샷으로 넘어가지 않고 명확히 안내.
+  if (courseId && fetched) {
+    total.textContent = `총 응답 0건${courseLabel}`;
+    const msg = `<p class="empty">해당 기간에 선택한 과정의 응답이 없습니다.</p>`;
+    document.getElementById("rep-edu").innerHTML = msg;
+    document.getElementById("rep-inst").innerHTML = msg;
+    resetRaw({ responses: [], purged: false });
     return;
   }
 
@@ -62,6 +92,15 @@ async function run() {
   if (type === "month" && month) {
     const sdoc = await getDoc(doc(db, "surveyAggregates", month));
     if (sdoc.exists()) {
+      // 스냅샷은 월 단위 합산이라 과정별로 나눌 수 없다.
+      if (courseId) {
+        total.textContent = "집계 스냅샷 (원문 파기됨)";
+        const msg = `<p class="empty">이 달의 원문은 파기되어 과정별 집계를 만들 수 없습니다. ‘전체 과정’을 선택하면 월 스냅샷을 표시합니다.</p>`;
+        document.getElementById("rep-edu").innerHTML = msg;
+        document.getElementById("rep-inst").innerHTML = msg;
+        resetRaw({ responses: [], purged: true });
+        return;
+      }
       const agg = deserializeAgg(sdoc.data());
       total.textContent = `집계 스냅샷 (원문 파기됨, 응답 ${agg.count}건 기준)`;
       document.getElementById("rep-edu").innerHTML = renderEduHTML(agg);
@@ -70,7 +109,7 @@ async function run() {
       return;
     }
   }
-  total.textContent = "총 응답 0건";
+  total.textContent = `총 응답 0건${courseLabel}`;
   document.getElementById("rep-edu").innerHTML = `<p class="empty">해당 기간 응답이 없습니다.</p>`;
   document.getElementById("rep-inst").innerHTML = `<p class="empty">해당 기간 응답이 없습니다.</p>`;
   resetRaw({ responses: [], purged: false });
