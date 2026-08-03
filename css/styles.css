@@ -342,6 +342,12 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .rev-group { margin-left: auto; display: inline-flex; align-items: center; gap: 0.5rem; }
 .rev-group label { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; color: var(--muted); }
 
+/* 강사료 집계: 강사별 세부 내역(계산근거) */
+.pay-detail-btn { padding: 0.1rem 0.4rem; font-size: 0.72rem; background: #667; }
+.pay-detail-row > td { background: #fafbfd; }
+.pay-detail { width: auto; min-width: 60%; margin: 0.25rem 0 0.4rem; font-size: 0.8rem; }
+.pay-detail th, .pay-detail td { padding: 0.3rem 0.5rem; }
+
 /* 개정 이력 목록(칩·안내 문구)도 오른쪽 정렬 */
 .rev-list { text-align: right; }
 .rev-list .chip-row { justify-content: flex-end; }
