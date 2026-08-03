@@ -9,7 +9,7 @@ import {
   computeAgg, deserializeAgg, renderEduHTML, renderInstHTML, EDU_ITEMS,
 } from "./agg.js";
 import { fmtDot } from "./time.js";
-import { onCoursesChange } from "./courses.js";
+import { onCoursesChange, coursesCache } from "./courses.js";
 
 // 원응답은 버튼 클릭 시에만 표시(불필요한 렌더·오해 방지).
 let rawState = { responses: [], purged: false };
@@ -18,13 +18,20 @@ export function initReports() {
   const now = new Date();
   document.getElementById("rep-period").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   document.getElementById("rep-run").addEventListener("click", run);
-  // 과정(차수) 필터 — 최근 시작일 순. 선택값은 목록 갱신 시에도 유지.
+  // 과정 필터 — 과정명 단위(모든 차수 포함). 선택값은 목록 갱신 시에도 유지.
   onCoursesChange((courses) => {
     const sel = document.getElementById("rep-course");
     const prev = sel.value;
-    const opts = [...courses]
-      .sort((a, b) => (b.startDate || "").localeCompare(a.startDate || ""))
-      .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name || "")} ${c.round ?? ""}차수 (${escapeHtml(fmtDot(c.startDate || ""))})</option>`)
+    // 같은 과정명은 하나로 묶고, 가장 최근 시작일 기준으로 정렬.
+    const latest = new Map();
+    for (const c of courses) {
+      const name = (c.name || "").trim();
+      if (!name) continue;
+      if ((c.startDate || "") > (latest.get(name) || "")) latest.set(name, c.startDate || "");
+    }
+    const opts = [...latest.keys()]
+      .sort((a, b) => (latest.get(b) || "").localeCompare(latest.get(a) || ""))
+      .map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)
       .join("");
     sel.innerHTML = `<option value="">전체 과정</option>` + opts;
     sel.value = [...sel.options].some((o) => o.value === prev) ? prev : "";
@@ -48,7 +55,11 @@ async function run() {
   const type = document.getElementById("rep-period-type").value;
   const month = document.getElementById("rep-period").value;
   const courseSel = document.getElementById("rep-course");
-  const courseId = courseSel.value;
+  const courseName = courseSel.value;
+  // 과정명 → 해당하는 모든 차수의 courseId 집합(응답은 courseId로 저장됨).
+  const courseIds = courseName
+    ? new Set(coursesCache.filter((c) => (c.name || "").trim() === courseName).map((c) => c.id))
+    : null;
   const total = document.getElementById("rep-total");
   total.textContent = "조회 중…";
 
@@ -65,9 +76,8 @@ async function run() {
 
   // 과정 필터는 조회 후 클라이언트에서 적용(복합 인덱스 불필요, 기간으로 이미 좁혀짐).
   const fetched = responses.length;
-  if (courseId) responses = responses.filter((r) => r.courseId === courseId);
-  const courseLabel = courseId
-    ? ` · ${courseSel.options[courseSel.selectedIndex].textContent}` : "";
+  if (courseIds) responses = responses.filter((r) => courseIds.has(r.courseId));
+  const courseLabel = courseName ? ` · ${courseName}` : "";
 
   if (responses.length) {
     const agg = computeAgg(responses);
@@ -79,7 +89,7 @@ async function run() {
   }
 
   // 과정 필터로 0건이 된 경우(원문 자체는 있음) — 스냅샷으로 넘어가지 않고 명확히 안내.
-  if (courseId && fetched) {
+  if (courseName && fetched) {
     total.textContent = `총 응답 0건${courseLabel}`;
     const msg = `<p class="empty">해당 기간에 선택한 과정의 응답이 없습니다.</p>`;
     document.getElementById("rep-edu").innerHTML = msg;
@@ -93,7 +103,7 @@ async function run() {
     const sdoc = await getDoc(doc(db, "surveyAggregates", month));
     if (sdoc.exists()) {
       // 스냅샷은 월 단위 합산이라 과정별로 나눌 수 없다.
-      if (courseId) {
+      if (courseName) {
         total.textContent = "집계 스냅샷 (원문 파기됨)";
         const msg = `<p class="empty">이 달의 원문은 파기되어 과정별 집계를 만들 수 없습니다. ‘전체 과정’을 선택하면 월 스냅샷을 표시합니다.</p>`;
         document.getElementById("rep-edu").innerHTML = msg;
