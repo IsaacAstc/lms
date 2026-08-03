@@ -7,7 +7,8 @@ import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import { getFeeRatesAt, getTravelRatesAt } from "./settings.js";
 import { getInstructors, getInstructorById, resolveInstructorAt } from "./instructors.js";
-import { getHiddenCourseIds } from "./courses.js";
+import { getHiddenCourseIds, coursesCache } from "./courses.js";
+import { fmtDot } from "./time.js";
 
 // ── 순수 계산 함수 (엑셀 '계산' 시트 로직) ──
 
@@ -117,7 +118,13 @@ async function renderAggregate(type, value) {
     g.dates.set(s.date, eff.travelBasis); // 출강일 → 그날의 여비기준
     const ym = s.date.slice(0, 7);
     // 기준값도 강의 일자에 유효한 개정본으로 계산(규정 개정 소급 방지).
-    g.monthFee[ym] = (g.monthFee[ym] || 0) + calcFee(eff.instructorType, hour, getFeeRatesAt(s.date));
+    const fee = calcFee(eff.instructorType, hour, getFeeRatesAt(s.date));
+    g.monthFee[ym] = (g.monthFee[ym] || 0) + fee;
+    // 세부 내역(계산근거 표시용).
+    (g.items = g.items || []).push({
+      date: s.date, courseId: s.courseId, subject: s.subject || "",
+      startTime: s.startTime || "", endTime: s.endTime || "", hour, fee,
+    });
   }
 
   const rows = [];
@@ -146,6 +153,9 @@ async function renderAggregate(type, value) {
       travel: travelSum,
       travelManual,
       total: cappedFee + travelSum,
+      items: g.items || [],
+      monthFee: g.monthFee,
+      dates: g.dates,
     });
   }
   rows.sort((a, b) => a.name.localeCompare(b.name));
@@ -172,13 +182,14 @@ async function renderAggregate(type, value) {
       for (const r of list) {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td>${escapeHtml(r.name)}</td>
+          <td>${escapeHtml(r.name)} <button type="button" class="pay-detail-btn" title="출강 과정·과목·시간 등 계산근거">세부</button></td>
           <td>${escapeHtml(r.type)}</td>
           <td style="text-align:right">${r.days}</td>
           <td style="text-align:right">${r.hours}</td>
           <td style="text-align:right">${won(r.fee)}</td>
           <td style="text-align:right">${won(r.travel)}${r.travelManual ? " <span class='warn'>(수동확인)</span>" : ""}</td>
           <td style="text-align:right"><b>${won(r.total)}</b></td>`;
+        tr.querySelector(".pay-detail-btn").addEventListener("click", (e) => toggleDetail(tr, r, e.target));
         tbody.appendChild(tr);
       }
 
@@ -200,4 +211,53 @@ async function renderAggregate(type, value) {
 
 function won(n) {
   return (n || 0).toLocaleString("ko-KR") + "원";
+}
+
+// ── 강사별 세부 내역(계산근거) 토글 ──
+function courseLabelOf(courseId) {
+  const c = coursesCache.find((x) => x.id === courseId);
+  return c ? `${c.name || ""}${c.round ? ` ${c.round}차수` : ""}` : "(삭제된 과정)";
+}
+
+function toggleDetail(tr, r, btn) {
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains("pay-detail-row")) {
+    next.remove();
+    btn.textContent = "세부";
+    return;
+  }
+  btn.textContent = "닫기";
+  const items = [...r.items].sort((a, b) =>
+    (a.date + a.startTime).localeCompare(b.date + b.startTime));
+  const body = items.map((it) => `<tr>
+      <td>${escapeHtml(fmtDot(it.date))}</td>
+      <td>${escapeHtml(courseLabelOf(it.courseId))}</td>
+      <td>${escapeHtml(it.subject)}</td>
+      <td>${escapeHtml(it.startTime)}-${escapeHtml(it.endTime)}</td>
+      <td style="text-align:right">${it.hour}</td>
+      <td style="text-align:right">${won(it.fee)}</td>
+    </tr>`).join("");
+  // 월별 강사료: 원금액과 월상한 적용 여부.
+  const feeLines = Object.entries(r.monthFee).sort()
+    .map(([ym, raw]) => {
+      const capped = applyMonthlyCap(raw, r.type, getFeeRatesAt(monthEnd(ym)));
+      return `${ym.replace("-", ".")}월 ${won(raw)}${capped < raw ? ` → 월상한 적용 ${won(capped)}` : ""}`;
+    }).join(" · ");
+  // 여비: 출강일별 기준·금액.
+  const travelLines = [...r.dates.entries()].sort()
+    .map(([date, basis]) => {
+      const t = calcTravel(basis, getTravelRatesAt(date));
+      return `${fmtDot(date)} ${escapeHtml(basis || "(기준없음)")} ${t.manual ? "수동확인" : won(t.amount)}`;
+    }).join(" · ");
+  const detail = document.createElement("tr");
+  detail.className = "pay-detail-row";
+  detail.innerHTML = `<td colspan="7">
+    <table class="pay-detail">
+      <thead><tr><th>일자</th><th>과정</th><th>과목</th><th>시간</th><th>Hour</th><th>강사료</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table>
+    <p class="hint">강사료(월별): ${feeLines || "-"}</p>
+    <p class="hint">여비(출강일별): ${travelLines || "-"}</p>
+  </td>`;
+  tr.after(detail);
 }
