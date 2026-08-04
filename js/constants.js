@@ -54,13 +54,10 @@ export const BOOTSTRAP_MASTERS = ["isaac@airport.co.kr"];
 export const BOARD_EXCLUDED_TYPES = ["특별", "재교육"];
 
 // 강사료·소요경비 계산에서 제외할 과목(운영 안내 성격 — 강의가 아님).
-export const PAY_EXCLUDED_SUBJECT_PATTERNS = [
-  /교육\s*등록\s*및\s*안내/,
-  /설문\s*및\s*수료/,
-  /평가/, // '평가', '평가 및 설문' 등 평가 진행 과목 전반
-];
+// 정확 일치(공백 무시)로만 제외 — '위험평가 기법'처럼 평가가 들어간 실제 강의 과목을 오제외하지 않도록.
+export const PAY_EXCLUDED_SUBJECTS = ["교육등록및안내", "설문및수료", "평가", "평가및설문"];
 export function isPayExcludedSubject(subject) {
-  return PAY_EXCLUDED_SUBJECT_PATTERNS.some((p) => p.test(subject || ""));
+  return PAY_EXCLUDED_SUBJECTS.includes((subject || "").replace(/\s+/g, ""));
 }
 
 // 설문 기본 문항(CLAUDE.md 2-1). 설정에 저장된 문항이 있으면 그것이 우선한다.
