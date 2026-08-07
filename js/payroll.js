@@ -15,10 +15,14 @@ import { fmtDot } from "./time.js";
 
 // 강의시간(시간). 진행시간을 60분 단위로 올림(50분→1시간).
 // 예: 10:00~10:50 → 1, 10:00~11:50 → 2, 10:00~12:50 → 3.
+// 점심시간(12:00-13:00)을 완전히 걸치는 과목은 그 1시간을 차감한다.
+// 예: 11:00~13:50 → (170-60분) → 2.
 export function calcHour(startTime, endTime) {
   if (!startTime || !endTime) return 0;
   const toMin = (t) => parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(3, 5), 10);
-  const diff = toMin(endTime) - toMin(startTime);
+  const start = toMin(startTime), end = toMin(endTime);
+  let diff = end - start;
+  if (start <= 12 * 60 && end >= 13 * 60) diff -= 60; // 점심 1시간 제외
   return diff > 0 ? Math.ceil(diff / 60) : 0;
 }
 
