@@ -366,6 +366,15 @@ function initCourseFilter(rerender) {
     yearSel.value = String(new Date().getFullYear());
     rerender();
   });
+  // 향후 30일: 오늘부터 30일 이내에 진행되는(기간이 겹치는) 과정만.
+  document.getElementById("cf-30d").addEventListener("click", () => {
+    const d = new Date();
+    const iso = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+    document.getElementById("cf-from").value = iso(d);
+    d.setDate(d.getDate() + 30);
+    document.getElementById("cf-to").value = iso(d);
+    rerender();
+  });
 }
 
 // 데이터에 있는 연도로 셀렉트 갱신(선택값 유지, 최초에는 올해 기본 선택).
