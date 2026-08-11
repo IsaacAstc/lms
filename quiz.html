@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Quiz Battle — 실시간 퀴즈 게임</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+  :root {
+    --purple: #46178f;
+    --purple-dark: #2e0f5e;
+    --red: #e21b3c;
+    --blue: #1368ce;
+    --yellow: #d89e00;
+    --green: #26890c;
+    --card: #ffffff;
+    --text: #333333;
+    --text2: #6e6e6e;
+    --radius: 8px;
+    --shadow: 0 4px 12px rgba(0,0,0,0.25);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    background: linear-gradient(160deg, var(--purple) 0%, var(--purple-dark) 100%);
+    color: #fff; min-height: 100vh;
+  }
+  .view { display: none; min-height: 100vh; flex-direction: column; }
+  .view.active { display: flex; }
+  .center { align-items: center; justify-content: center; padding: 20px; }
+
+  h1.logo { font-size: 42px; font-weight: 900; letter-spacing: -1px; text-shadow: 0 3px 0 rgba(0,0,0,0.3); }
+  h1.logo span { color: #ffd54f; }
+  .tagline { opacity: 0.8; margin-top: 6px; font-size: 14px; }
+
+  .card {
+    background: var(--card); color: var(--text); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 24px; width: 100%; max-width: 420px;
+  }
+  .card h2 { font-size: 18px; margin-bottom: 14px; color: var(--purple); }
+
+  button { cursor: pointer; border: none; border-radius: var(--radius); font-family: inherit; font-weight: 700; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-big {
+    display: block; width: 100%; padding: 15px; font-size: 17px; color: #fff;
+    background: var(--purple); box-shadow: 0 3px 0 rgba(0,0,0,0.25); margin-top: 10px;
+    transition: transform 0.06s;
+  }
+  .btn-big:active:not(:disabled) { transform: translateY(2px); box-shadow: none; }
+  .btn-big.green { background: var(--green); }
+  .btn-big.gray { background: #888; }
+  .btn-sm { padding: 7px 14px; font-size: 13px; background: #eee; color: var(--text); }
+  .btn-sm.primary { background: var(--purple); color: #fff; }
+  .btn-sm.danger { background: #fdecee; color: var(--red); }
+
+  input[type=text], input[type=number], select {
+    width: 100%; padding: 12px; font-size: 16px; border: 2px solid #ccc; border-radius: var(--radius);
+    font-family: inherit; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--purple); }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; font-weight: 700; color: var(--text2); margin-bottom: 5px; }
+
+  .notice { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.3);
+    border-radius: var(--radius); padding: 12px 16px; font-size: 13px; line-height: 1.6; max-width: 420px; }
+  .notice a { color: #ffd54f; }
+  .notice code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+  /* ===== 편집기 ===== */
+  #view-editor { background: #f2f2f2; color: var(--text); }
+  .ed-header { background: var(--purple); color: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .ed-header .title-input { flex: 1; min-width: 160px; }
+  .ed-header input { border: none; padding: 9px 12px; font-size: 15px; }
+  .ed-body { flex: 1; display: flex; overflow: hidden; }
+  .ed-side { width: 220px; min-width: 180px; background: #fff; border-right: 1px solid #ddd; overflow-y: auto; padding: 10px; }
+  .ed-side .q-item { padding: 10px; border-radius: 6px; border: 2px solid #eee; margin-bottom: 8px; cursor: pointer; font-size: 13px; position: relative; }
+  .ed-side .q-item.sel { border-color: var(--purple); background: #f5f0fc; }
+  .ed-side .q-item .q-num { font-weight: 700; color: var(--purple); font-size: 11px; }
+  .ed-side .q-item .q-preview { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ed-main { flex: 1; overflow-y: auto; padding: 24px; }
+  .ed-panel { background: #fff; border-radius: var(--radius); box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 20px; max-width: 720px; margin: 0 auto; }
+  .ed-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .ed-row .field { flex: 1; min-width: 140px; }
+  .choice-edit { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .choice-edit .shape { width: 42px; height: 42px; flex-shrink: 0; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; }
+  .choice-edit input[type=radio] { width: 20px; height: 20px; accent-color: var(--green); flex-shrink: 0; }
+  .q-actions { display: flex; gap: 6px; margin-top: 4px; }
+  .q-actions button { flex: 1; }
+
+  /* ===== 퀴즈 목록 ===== */
+  .quiz-item { background: #fff; color: var(--text); border-radius: var(--radius); padding: 14px 16px;
+    display: flex; align-items: center; gap: 10px; margin-bottom: 10px; box-shadow: var(--shadow); }
+  .quiz-item .qi-info { flex: 1; min-width: 0; }
+  .quiz-item .qi-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .quiz-item .qi-meta { font-size: 12px; color: var(--text2); }
+
+  /* ===== 호스트 게임 ===== */
+  .pin-banner { background: #fff; color: var(--text); border-radius: var(--radius); padding: 14px 30px; text-align: center; box-shadow: var(--shadow); }
+  .pin-banner .pin-label { font-size: 13px; color: var(--text2); font-weight: 700; }
+  .pin-banner .pin { font-size: 52px; font-weight: 900; letter-spacing: 8px; color: var(--purple); font-variant-numeric: tabular-nums; }
+  .pin-banner .join-url { font-size: 12px; color: var(--text2); }
+  .player-chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-width: 700px; margin-top: 20px; }
+  .player-chip { background: rgba(255,255,255,0.92); color: var(--purple-dark); padding: 8px 16px; border-radius: 20px;
+    font-weight: 700; font-size: 15px; animation: pop 0.3s; }
+  @keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
+
+  .host-topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; font-weight: 700; font-size: 15px; flex-wrap: wrap; gap: 8px; }
+  .timer-wrap { flex: 1; display: flex; justify-content: center; }
+  .timer-circle { width: 64px; height: 64px; border-radius: 50%; background: var(--purple-dark);
+    border: 4px solid #ffd54f; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 900; }
+  .q-text-big { font-size: clamp(20px, 4vw, 34px); font-weight: 800; text-align: center; padding: 10px 24px;
+    background: #fff; color: var(--text); border-radius: var(--radius); box-shadow: var(--shadow);
+    max-width: 860px; margin: 0 auto; min-height: 70px; display: flex; align-items: center; justify-content: center; }
+  .answer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 16px; max-width: 900px; margin: 0 auto; width: 100%; flex: 1; align-content: end; }
+  .answer-grid.ox { grid-template-columns: 1fr 1fr; }
+  .ans-tile { border-radius: var(--radius); padding: 18px 16px; color: #fff; font-size: clamp(15px, 2.5vw, 22px);
+    font-weight: 700; display: flex; align-items: center; gap: 12px; min-height: 76px; box-shadow: 0 3px 0 rgba(0,0,0,0.25); position: relative; }
+  .ans-tile .shape { font-size: 22px; flex-shrink: 0; }
+  .ans-tile.dim { opacity: 0.25; }
+  .ans-tile .mark { position: absolute; right: 14px; font-size: 26px; }
+  .c0 { background: var(--red); } .c1 { background: var(--blue); }
+  .c2 { background: var(--yellow); } .c3 { background: var(--green); }
+
+  .countdown-num { font-size: 120px; font-weight: 900; text-shadow: 0 6px 0 rgba(0,0,0,0.3); animation: pop 0.5s; }
+  .answered-count { text-align: center; font-size: 15px; opacity: 0.85; padding: 6px; }
+
+  /* 결과 분포 막대 */
+  .dist-wrap { display: flex; gap: 14px; align-items: flex-end; justify-content: center; height: 200px; padding: 34px 20px 10px; max-width: 700px; margin: 0 auto; width: 100%; }
+  .dist-col { flex: 1; max-width: 120px; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+  .dist-bar { width: 100%; border-radius: 6px 6px 0 0; min-height: 6px; transition: height 0.6s; position: relative; }
+  .dist-bar .cnt { position: absolute; top: -24px; width: 100%; text-align: center; font-weight: 900; font-size: 17px; }
+  .dist-shape { width: 40px; height: 40px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+  .dist-shape.correct { outline: 3px solid #ffd54f; outline-offset: 2px; }
+
+  /* 리더보드 */
+  .board { width: 100%; max-width: 560px; margin: 14px auto; }
+  .board-row { background: rgba(255,255,255,0.94); color: var(--text); border-radius: var(--radius);
+    padding: 12px 18px; display: flex; align-items: center; gap: 14px; margin-bottom: 8px; font-weight: 700; animation: slideIn 0.4s backwards; }
+  .board-row:nth-child(1) { animation-delay: 0.4s; } .board-row:nth-child(2) { animation-delay: 0.3s; }
+  .board-row:nth-child(3) { animation-delay: 0.2s; } .board-row:nth-child(4) { animation-delay: 0.1s; }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  .board-row .rank { width: 30px; font-size: 18px; color: var(--purple); }
+  .board-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .board-row .score { font-variant-numeric: tabular-nums; }
+  .board-row.gold { background: #ffd54f; } .board-row.silver { background: #e3e6ea; } .board-row.bronze { background: #e8b98a; }
+
+  /* 시상대 */
+  .podium { display: flex; align-items: flex-end; gap: 12px; justify-content: center; margin-top: 24px; }
+  .pod { width: 130px; text-align: center; }
+  .pod .pod-name { font-weight: 800; font-size: 16px; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pod .pod-score { font-size: 13px; opacity: 0.85; margin-bottom: 8px; }
+  .pod .pod-block { border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: center; font-size: 34px; font-weight: 900; color: rgba(0,0,0,0.55); animation: rise 0.8s backwards; transform-origin: bottom; }
+  @keyframes rise { from { transform: scaleY(0); opacity: 0; } }
+  .pod.p1 .pod-block { height: 150px; background: #ffd54f; animation-delay: 0.9s; }
+  .pod.p2 .pod-block { height: 110px; background: #e3e6ea; animation-delay: 0.5s; }
+  .pod.p3 .pod-block { height: 80px; background: #e8b98a; animation-delay: 0.1s; }
+
+  /* ===== 참가자 ===== */
+  .player-header { background: rgba(0,0,0,0.25); padding: 10px 16px; display: flex; justify-content: space-between; font-weight: 700; font-size: 14px; }
+  .big-btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px; flex: 1; width: 100%; max-width: 640px; margin: 0 auto; }
+  .p-ans-btn { border-radius: var(--radius); color: #fff; display: flex; flex-direction: column; gap: 8px;
+    align-items: center; justify-content: center; font-size: 34px; box-shadow: 0 4px 0 rgba(0,0,0,0.3); min-height: 110px; }
+  .p-ans-btn .lbl { font-size: 14px; font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis; padding: 0 8px; }
+  .p-ans-btn:active { transform: translateY(3px); box-shadow: none; }
+  .result-splash { text-align: center; }
+  .result-splash .rs-icon { font-size: 76px; }
+  .result-splash h2 { font-size: 30px; margin: 8px 0; color: #fff; }
+  .result-splash .rs-points { font-size: 20px; background: rgba(0,0,0,0.3); border-radius: 20px; padding: 8px 22px; display: inline-block; }
+  .timer-bar-wrap { height: 10px; background: rgba(0,0,0,0.3); width: 100%; }
+  .timer-bar { height: 100%; background: #ffd54f; transition: width 0.2s linear; }
+
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.85);
+    color: #fff; padding: 12px 22px; border-radius: 24px; font-size: 14px; z-index: 99; display: none; max-width: 90vw; }
+
+  @media (max-width: 560px) {
+    .answer-grid, .big-btn-grid { grid-template-columns: 1fr; }
+    .pin-banner .pin { font-size: 38px; letter-spacing: 5px; }
+    .ed-body { flex-direction: column; }
+    .ed-side { width: 100%; max-height: 150px; border-right: none; border-bottom: 1px solid #ddd; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ 홈 ============ -->
+<div id="view-home" class="view center active" style="gap:22px;">
+  <div style="text-align:center;">
+    <h1 class="logo">Quiz<span>!</span> Battle</h1>
+    <div class="tagline">카훗 스타일 실시간 퀴즈 게임</div>
+  </div>
+  <div id="fb-warning" class="notice" style="display:none;">
+    ⚠️ <b>Firebase가 아직 설정되지 않았습니다.</b><br>
+    실시간 게임(방 만들기·입장)을 하려면 <code>index.html</code> 상단의
+    <code>FIREBASE_CONFIG</code>에 본인의 Firebase 프로젝트 설정을 붙여넣어 주세요.
+    (자세한 방법은 README 참고) 퀴즈 만들기는 지금도 가능합니다.
+  </div>
+  <div class="card">
+    <h2>🎮 게임 참가하기</h2>
+    <div class="field"><label>게임 PIN</label>
+      <input type="text" id="join-pin" inputmode="numeric" maxlength="6" placeholder="6자리 숫자"></div>
+    <div class="field"><label>닉네임</label>
+      <input type="text" id="join-name" maxlength="12" placeholder="닉네임 (최대 12자)"></div>
+    <button class="btn-big green" id="btn-join">입장하기</button>
+  </div>
+  <div class="card">
+    <h2>📝 퀴즈 만들기 / 진행하기</h2>
+    <button class="btn-big" id="btn-goto-quizzes">내 퀴즈 목록</button>
+  </div>
+</div>
+
+<!-- ============ 퀴즈 목록 ============ -->
+<div id="view-quizzes" class="view center" style="justify-content:flex-start; padding-top:40px;">
+  <div style="width:100%; max-width:560px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+      <h1 style="font-size:24px;">📚 내 퀴즈</h1>
+      <button class="btn-sm" id="btn-back-home">← 홈으로</button>
+    </div>
+    <div id="quiz-list"></div>
+    <button class="btn-big" id="btn-new-quiz">＋ 새 퀴즈 만들기</button>
+    <div style="display:flex; gap:8px; margin-top:10px;">
+      <button class="btn-big gray" id="btn-import" style="margin-top:0;">📂 JSON 가져오기</button>
+      <input type="file" id="import-file" accept=".json" style="display:none;">
+    </div>
+  </div>
+</div>
+
+<!-- ============ 퀴즈 편집기 ============ -->
+<div id="view-editor" class="view">
+  <div class="ed-header">
+    <button class="btn-sm" id="btn-ed-back">← 목록</button>
+    <div class="title-input"><input type="text" id="ed-title" maxlength="40" placeholder="퀴즈 제목"></div>
+    <button class="btn-sm" id="btn-export">💾 JSON 내보내기</button>
+    <button class="btn-sm primary" id="btn-ed-save">저장</button>
+    <button class="btn-sm primary" id="btn-ed-host" style="background:var(--green);">▶ 게임 시작</button>
+  </div>
+  <div class="ed-body">
+    <div class="ed-side">
+      <div id="ed-qlist"></div>
+      <button class="btn-sm primary" id="btn-add-q" style="width:100%;">＋ 문제 추가</button>
+    </div>
+    <div class="ed-main">
+      <div class="ed-panel" id="ed-panel">
+        <div class="ed-row">
+          <div class="field"><label>문제 유형</label>
+            <select id="ed-type">
+              <option value="mc">4지선다</option>
+              <option value="ox">OX 퀴즈</option>
+            </select></div>
+          <div class="field"><label>제한시간 (초)</label>
+            <select id="ed-time">
+              <option>5</option><option>10</option><option selected>20</option>
+              <option>30</option><option>60</option>
+            </select></div>
+        </div>
+        <div class="field"><label>문제</label>
+          <input type="text" id="ed-qtext" maxlength="120" placeholder="문제를 입력하세요"></div>
+        <div class="field"><label>보기 (정답에 체크)</label>
+          <div id="ed-choices"></div></div>
+        <div class="q-actions">
+          <button class="btn-sm" id="btn-q-up">▲ 위로</button>
+          <button class="btn-sm" id="btn-q-down">▼ 아래로</button>
+          <button class="btn-sm danger" id="btn-q-del">🗑 문제 삭제</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 호스트: 대기실 ============ -->
+<div id="view-lobby" class="view center" style="gap:18px;">
+  <div class="pin-banner">
+    <div class="pin-label">게임 PIN</div>
+    <div class="pin" id="lobby-pin">000000</div>
+    <div class="join-url" id="lobby-url"></div>
+  </div>
+  <div style="font-size:17px; font-weight:700;">👥 참가자 <span id="lobby-count">0</span>명</div>
+  <div class="player-chips" id="lobby-players"></div>
+  <button class="btn-big green" id="btn-start-game" style="max-width:300px;" disabled>게임 시작</button>
+  <button class="btn-sm" id="btn-cancel-game">게임 취소</button>
+</div>
+
+<!-- ============ 호스트: 카운트다운 ============ -->
+<div id="view-countdown" class="view center">
+  <div style="font-size:22px; font-weight:700; margin-bottom:10px;" id="cd-label"></div>
+  <div class="countdown-num" id="cd-num">3</div>
+</div>
+
+<!-- ============ 호스트: 문제 ============ -->
+<div id="view-hq" class="view">
+  <div class="host-topbar">
+    <div id="hq-progress">1 / 10</div>
+    <div class="timer-wrap"><div class="timer-circle" id="hq-timer">20</div></div>
+    <button class="btn-sm" id="btn-hq-skip">넘어가기 ▶</button>
+  </div>
+  <div class="q-text-big" id="hq-text"></div>
+  <div class="answered-count"><span id="hq-answered">0</span> / <span id="hq-total">0</span> 명 응답</div>
+  <div class="answer-grid" id="hq-grid"></div>
+</div>
+
+<!-- ============ 호스트: 결과 (분포+정답) ============ -->
+<div id="view-hr" class="view">
+  <div class="host-topbar">
+    <div id="hr-progress"></div>
+    <button class="btn-sm primary" id="btn-hr-next">다음 ▶</button>
+  </div>
+  <div class="q-text-big" id="hr-text"></div>
+  <div class="dist-wrap" id="hr-dist"></div>
+  <div class="answer-grid" id="hr-grid" style="flex:initial;"></div>
+</div>
+
+<!-- ============ 호스트: 리더보드 ============ -->
+<div id="view-hb" class="view center">
+  <h1 style="font-size:30px;">🏆 리더보드</h1>
+  <div class="board" id="hb-board"></div>
+  <button class="btn-big" id="btn-hb-next" style="max-width:300px;">다음 문제 ▶</button>
+</div>
+
+<!-- ============ 호스트: 최종 결과 ============ -->
+<div id="view-hf" class="view center">
+  <h1 style="font-size:34px;">🎉 최종 결과</h1>
+  <div class="podium" id="hf-podium"></div>
+  <div class="board" id="hf-board" style="margin-top:28px;"></div>
+  <button class="btn-big" id="btn-hf-done" style="max-width:300px;">끝내기</button>
+</div>
+
+<!-- ============ 참가자: 대기 ============ -->
+<div id="view-pwait" class="view">
+  <div class="player-header"><span id="pw-name"></span><span id="pw-score"></span></div>
+  <div class="center" style="flex:1; display:flex; flex-direction:column; gap:14px;">
+    <div style="font-size:52px;" id="pw-icon">🙌</div>
+    <div style="font-size:19px; font-weight:700; text-align:center; padding:0 20px;" id="pw-msg">입장 완료! 게임 시작을 기다리는 중...</div>
+  </div>
+</div>
+
+<!-- ============ 참가자: 답변 ============ -->
+<div id="view-pq" class="view">
+  <div class="player-header"><span id="pq-name"></span><span id="pq-progress"></span></div>
+  <div class="timer-bar-wrap"><div class="timer-bar" id="pq-timerbar"></div></div>
+  <div class="big-btn-grid" id="pq-grid"></div>
+</div>
+
+<!-- ============ 참가자: 결과 ============ -->
+<div id="view-pr" class="view center">
+  <div class="result-splash">
+    <div class="rs-icon" id="pr-icon">✅</div>
+    <h2 id="pr-title">정답!</h2>
+    <div class="rs-points" id="pr-points">+800점</div>
+    <div style="margin-top:14px; opacity:0.85;" id="pr-rank"></div>
+  </div>
+</div>
+
+<!-- ============ 참가자: 최종 ============ -->
+<div id="view-pf" class="view center">
+  <div class="result-splash">
+    <div class="rs-icon" id="pf-icon">🏅</div>
+    <h2 id="pf-title"></h2>
+    <div class="rs-points" id="pf-score"></div>
+    <button class="btn-big" id="btn-pf-home" style="max-width:260px; margin:24px auto 0;">홈으로</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ================================================================
+ *  Firebase 설정 — 본인의 Firebase 프로젝트 설정으로 교체하세요!
+ *  (Firebase 콘솔 → 프로젝트 설정 → 일반 → 내 앱 → SDK 설정)
+ *  databaseURL이 반드시 포함되어야 합니다.
+ * ================================================================ */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDQp5zFbxPvxIh5WdYB5CPmCXMU5nNrDrQ",
+  authDomain: "quiz-battle-1645a.firebaseapp.com",
+  databaseURL: "https://quiz-battle-1645a-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "quiz-battle-1645a",
+  storageBucket: "quiz-battle-1645a.firebasestorage.app",
+  messagingSenderId: "67573040998",
+  appId: "1:67573040998:web:29098619e191533be1eaa7"
+};
+
+const COLORS = ["c0","c1","c2","c3"];
+const SHAPES = ["▲","◆","●","■"];
+const SHAPE_BG = ["var(--red)","var(--blue)","var(--yellow)","var(--green)"];
+const OX_LABELS = ["O 맞다","X 아니다"];
+const GAME_TTL = 24*60*60*1000; // 24시간 지난 게임은 입장 불가
+const LS_KEY = "qb_quizzes";
+
+let db = null;
+const fbReady = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseURL);
+if (fbReady) {
+  firebase.initializeApp(FIREBASE_CONFIG);
+  db = firebase.database();
+} else {
+  document.getElementById("fb-warning").style.display = "block";
+}
+
+/* ---------------- 공통 유틸 ---------------- */
+const $ = id => document.getElementById(id);
+function show(viewId) {
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  $(viewId).classList.add("active");
+}
+let toastTimer;
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = "none", 2600);
+}
+function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }
+function uid() { return Math.random().toString(36).slice(2, 10); }
+function choicesOf(q) { return q.type === "ox" ? OX_LABELS : q.choices; }
+
+/* ---------------- 효과음 (Web Audio) ---------------- */
+let audioCtx = null;
+function beep(freq, dur, type = "square", vol = 0.08, delay = 0) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const t = audioCtx.currentTime + delay;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t + dur);
+  } catch (e) { /* 사운드는 실패해도 무시 */ }
+}
+const sfx = {
+  tick: () => beep(880, 0.1),
+  go: () => beep(1320, 0.35, "square", 0.1),
+  correct: () => { beep(660, 0.12, "sine", 0.12); beep(880, 0.12, "sine", 0.12, 0.12); beep(1320, 0.25, "sine", 0.12, 0.24); },
+  wrong: () => beep(180, 0.45, "sawtooth", 0.1),
+  fanfare: () => [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.3, "triangle", 0.12, i * 0.18)),
+};
+
+/* ---------------- 퀴즈 저장소 (localStorage) ---------------- */
+function loadQuizzes() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch (e) { return []; }
+}
+function saveQuizzes(list) { localStorage.setItem(LS_KEY, JSON.stringify(list)); }
+function newQuestion() {
+  return { type: "mc", text: "", choices: ["", "", "", ""], answer: 0, timeLimit: 20 };
+}
+function validateQuiz(quiz) {
+  if (!quiz.title.trim()) return "퀴즈 제목을 입력하세요.";
+  if (!quiz.questions.length) return "문제가 최소 1개 필요합니다.";
+  for (let i = 0; i < quiz.questions.length; i++) {
+    const q = quiz.questions[i];
+    if (!q.text.trim()) return `${i + 1}번 문제의 내용이 비어 있습니다.`;
+    if (q.type === "mc" && q.choices.some(c => !c.trim())) return `${i + 1}번 문제의 보기를 모두 입력하세요.`;
+  }
+  return null;
+}
+
+/* ================================================================
+ *  퀴즈 목록 화면
+ * ================================================================ */
+function renderQuizList() {
+  const list = loadQuizzes();
+  const el = $("quiz-list");
+  el.innerHTML = list.length ? "" : `<div class="notice" style="margin-bottom:12px;">아직 만든 퀴즈가 없습니다. 새 퀴즈를 만들어 보세요!</div>`;
+  list.forEach(quiz => {
+    const div = document.createElement("div");
+    div.className = "quiz-item";
+    div.innerHTML = `
+      <div class="qi-info">
+        <div class="qi-title">${esc(quiz.title)}</div>
+        <div class="qi-meta">문제 ${quiz.questions.length}개</div>
+      </div>
+      <button class="btn-sm primary" data-act="edit">편집</button>
+      <button class="btn-sm primary" data-act="host" style="background:var(--green);" ${fbReady ? "" : "disabled"}>▶ 시작</button>
+      <button class="btn-sm danger" data-act="del">삭제</button>`;
+    div.querySelector('[data-act=edit]').onclick = () => openEditor(quiz.id);
+    div.querySelector('[data-act=host]').onclick = () => hostGame(quiz);
+    div.querySelector('[data-act=del]').onclick = () => {
+      if (!confirm(`'${quiz.title}' 퀴즈를 삭제할까요?`)) return;
+      saveQuizzes(loadQuizzes().filter(x => x.id !== quiz.id));
+      renderQuizList();
+    };
+    el.appendChild(div);
+  });
+}
+$("btn-goto-quizzes").onclick = () => { renderQuizList(); show("view-quizzes"); };
+$("btn-back-home").onclick = () => show("view-home");
+$("btn-new-quiz").onclick = () => openEditor(null);
+
+/* JSON 내보내기/가져오기 */
+$("btn-import").onclick = () => $("import-file").click();
+$("import-file").onchange = e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      const quizzes = Array.isArray(data) ? data : [data];
+      const list = loadQuizzes();
+      let n = 0;
+      quizzes.forEach(q => {
+        if (!q || !q.title || !Array.isArray(q.questions)) return;
+        list.push({ id: uid(), title: String(q.title).slice(0, 40),
+          questions: q.questions.map(x => ({
+            type: x.type === "ox" ? "ox" : "mc",
+            text: String(x.text || "").slice(0, 120),
+            choices: (Array.isArray(x.choices) ? x.choices : ["","","",""]).slice(0, 4).map(c => String(c).slice(0, 60)),
+            answer: Math.max(0, Math.min(3, x.answer | 0)),
+            timeLimit: [5,10,20,30,60].includes(x.timeLimit) ? x.timeLimit : 20,
+          })) });
+        n++;
+      });
+      saveQuizzes(list); renderQuizList();
+      toast(n ? `퀴즈 ${n}개를 가져왔습니다.` : "가져올 수 있는 퀴즈가 없습니다.");
+    } catch (err) { toast("JSON 파일을 읽을 수 없습니다."); }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+};
+
+/* ================================================================
+ *  퀴즈 편집기
+ * ================================================================ */
+let edQuiz = null;   // 편집 중인 퀴즈 (작업 사본)
+let edIdx = 0;       // 선택된 문제 인덱스
+
+function openEditor(quizId) {
+  const found = quizId && loadQuizzes().find(q => q.id === quizId);
+  edQuiz = found ? JSON.parse(JSON.stringify(found))
+                 : { id: uid(), title: "", questions: [newQuestion()] };
+  edIdx = 0;
+  $("ed-title").value = edQuiz.title;
+  renderEditor();
+  show("view-editor");
+}
+function renderEditor() {
+  const listEl = $("ed-qlist");
+  listEl.innerHTML = "";
+  edQuiz.questions.forEach((q, i) => {
+    const item = document.createElement("div");
+    item.className = "q-item" + (i === edIdx ? " sel" : "");
+    item.innerHTML = `<div class="q-num">${i + 1}. ${q.type === "ox" ? "OX" : "4지선다"} · ${q.timeLimit}초</div>
+      <div class="q-preview">${esc(q.text) || "<i>(내용 없음)</i>"}</div>`;
+    item.onclick = () => { edIdx = i; renderEditor(); };
+    listEl.appendChild(item);
+  });
+  renderQuestionPanel();
+}
+function renderQuestionPanel() {
+  const q = edQuiz.questions[edIdx];
+  $("ed-type").value = q.type;
+  $("ed-time").value = q.timeLimit;
+  $("ed-qtext").value = q.text;
+  const wrap = $("ed-choices");
+  wrap.innerHTML = "";
+  const labels = choicesOf(q);
+  labels.forEach((label, i) => {
+    const row = document.createElement("div");
+    row.className = "choice-edit";
+    const isOx = q.type === "ox";
+    row.innerHTML = `
+      <div class="shape" style="background:${SHAPE_BG[i]}">${isOx ? (i === 0 ? "O" : "X") : SHAPES[i]}</div>
+      ${isOx ? `<div style="flex:1; font-weight:700;">${label}</div>`
+             : `<input type="text" maxlength="60" placeholder="보기 ${i + 1}" value="${esc(q.choices[i])}">`}
+      <input type="radio" name="ed-answer" title="정답" ${q.answer === i ? "checked" : ""}>`;
+    if (!isOx) row.querySelector('input[type=text]').oninput = e => { q.choices[i] = e.target.value; };
+    row.querySelector('input[type=radio]').onchange = () => { q.answer = i; };
+    wrap.appendChild(row);
+  });
+}
+$("ed-type").onchange = e => {
+  const q = edQuiz.questions[edIdx];
+  q.type = e.target.value;
+  if (q.type === "ox" && q.answer > 1) q.answer = 0;
+  renderQuestionPanel();
+};
+$("ed-time").onchange = e => { edQuiz.questions[edIdx].timeLimit = +e.target.value; };
+$("ed-qtext").oninput = e => { edQuiz.questions[edIdx].text = e.target.value; };
+$("ed-title").oninput = e => { edQuiz.title = e.target.value; };
+$("btn-add-q").onclick = () => {
+  edQuiz.questions.push(newQuestion());
+  edIdx = edQuiz.questions.length - 1;
+  renderEditor();
+};
+$("btn-q-del").onclick = () => {
+  if (edQuiz.questions.length <= 1) return toast("문제는 최소 1개 필요합니다.");
+  edQuiz.questions.splice(edIdx, 1);
+  edIdx = Math.min(edIdx, edQuiz.questions.length - 1);
+  renderEditor();
+};
+$("btn-q-up").onclick = () => moveQ(-1);
+$("btn-q-down").onclick = () => moveQ(1);
+function moveQ(d) {
+  const j = edIdx + d;
+  if (j < 0 || j >= edQuiz.questions.length) return;
+  const qs = edQuiz.questions;
+  [qs[edIdx], qs[j]] = [qs[j], qs[edIdx]];
+  edIdx = j;
+  renderEditor();
+}
+function saveEditorQuiz() {
+  const err = validateQuiz(edQuiz);
+  if (err) { toast(err); return false; }
+  const list = loadQuizzes();
+  const i = list.findIndex(q => q.id === edQuiz.id);
+  if (i >= 0) list[i] = edQuiz; else list.push(edQuiz);
+  saveQuizzes(list);
+  return true;
+}
+$("btn-ed-save").onclick = () => { if (saveEditorQuiz()) toast("저장했습니다."); };
+$("btn-ed-back").onclick = () => { renderQuizList(); show("view-quizzes"); };
+$("btn-export").onclick = () => {
+  const blob = new Blob([JSON.stringify(edQuiz, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = (edQuiz.title.trim() || "quiz") + ".json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+};
+$("btn-ed-host").onclick = () => {
+  if (!saveEditorQuiz()) return;
+  hostGame(edQuiz);
+};
+
+/* ================================================================
+ *  호스트
+ * ================================================================ */
+const host = { pin: null, ref: null, quiz: null, players: {}, answers: {}, qIdx: -1, timer: null, revealed: false, unsub: [] };
+
+function hostCleanup(removeGame) {
+  host.unsub.forEach(fn => fn()); host.unsub = [];
+  clearInterval(host.timer);
+  if (removeGame && host.ref) host.ref.remove();
+  host.ref = null; host.pin = null; host.players = {}; host.answers = {}; host.qIdx = -1;
+}
+async function hostGame(quiz) {
+  if (!fbReady) return toast("Firebase 설정이 필요합니다. README를 참고하세요.");
+  const err = validateQuiz(quiz);
+  if (err) return toast(err);
+  hostCleanup(false);
+  // 사용 중이지 않은 PIN 찾기
+  let pin, ref;
+  for (let tries = 0; tries < 8; tries++) {
+    pin = String(Math.floor(100000 + Math.random() * 900000));
+    ref = db.ref("games/" + pin);
+    const snap = await ref.get();
+    if (!snap.exists() || (snap.val().createdAt || 0) < Date.now() - GAME_TTL) break;
+    pin = null;
+  }
+  if (!pin) return toast("PIN 생성에 실패했습니다. 다시 시도해 주세요.");
+  host.pin = pin; host.ref = ref; host.quiz = quiz; host.qIdx = -1;
+  await ref.set({
+    status: "lobby",
+    createdAt: firebase.database.ServerValue.TIMESTAMP,
+    currentQ: -1,
+    quiz: { title: quiz.title, questions: quiz.questions },
+  });
+  ref.onDisconnect().remove(); // 호스트가 나가면 방 제거
+
+  $("lobby-pin").textContent = pin;
+  $("lobby-url").textContent = location.host ? location.host + location.pathname : "";
+  // 참가자 구독
+  const pRef = ref.child("players");
+  const onPlayers = pRef.on("value", snap => {
+    host.players = snap.val() || {};
+    const names = Object.values(host.players).map(p => p.name);
+    $("lobby-count").textContent = names.length;
+    $("lobby-players").innerHTML = names.map(n => `<div class="player-chip">${esc(n)}</div>`).join("");
+    $("btn-start-game").disabled = names.length === 0;
+    $("hq-total").textContent = names.length;
+  });
+  host.unsub.push(() => pRef.off("value", onPlayers));
+  show("view-lobby");
+}
+$("btn-cancel-game").onclick = () => {
+  if (!confirm("게임을 취소할까요? 참가자들이 모두 내보내집니다.")) return;
+  hostCleanup(true);
+  renderQuizList(); show("view-quizzes");
+};
+$("btn-start-game").onclick = () => hostNextQuestion();
+$("btn-hb-next").onclick = () => hostNextQuestion();
+
+function hostNextQuestion() {
+  host.qIdx++;
+  if (host.qIdx >= host.quiz.questions.length) return hostFinish();
+  const q = host.quiz.questions[host.qIdx];
+  // 3-2-1 카운트다운 (호스트 화면 로컬, 참가자는 '준비' 화면)
+  host.ref.update({ status: "countdown", currentQ: host.qIdx });
+  $("cd-label").textContent = `${host.qIdx + 1}번 문제`;
+  show("view-countdown");
+  let n = 3;
+  $("cd-num").textContent = n;
+  sfx.tick();
+  const cd = setInterval(() => {
+    n--;
+    if (n > 0) { $("cd-num").textContent = n; $("cd-num").style.animation = "none"; void $("cd-num").offsetWidth; $("cd-num").style.animation = ""; sfx.tick(); }
+    else { clearInterval(cd); sfx.go(); hostShowQuestion(q); }
+  }, 900);
+}
+function hostShowQuestion(q) {
+  host.revealed = false;
+  host.answers = {};
+  const startAt = Date.now();
+  host.ref.update({ status: "question", questionStartAt: startAt });
+
+  $("hq-progress").textContent = `${host.qIdx + 1} / ${host.quiz.questions.length}`;
+  $("hq-text").textContent = q.text;
+  $("hq-answered").textContent = "0";
+  const grid = $("hq-grid");
+  grid.className = "answer-grid" + (q.type === "ox" ? " ox" : "");
+  grid.innerHTML = choicesOf(q).map((c, i) => `
+    <div class="ans-tile ${COLORS[i]}">
+      <span class="shape">${q.type === "ox" ? (i === 0 ? "O" : "X") : SHAPES[i]}</span>
+      <span>${esc(c)}</span>
+    </div>`).join("");
+  show("view-hq");
+
+  // 답변 구독
+  const aRef = host.ref.child("answers/" + host.qIdx);
+  const onAns = aRef.on("value", snap => {
+    host.answers = snap.val() || {};
+    const cnt = Object.keys(host.answers).length;
+    $("hq-answered").textContent = cnt;
+    const total = Object.keys(host.players).length;
+    if (total > 0 && cnt >= total) hostReveal(q); // 전원 응답 시 조기 종료
+  });
+  host.unsub.push(() => aRef.off("value", onAns));
+
+  // 타이머
+  clearInterval(host.timer);
+  const endAt = startAt + q.timeLimit * 1000;
+  $("hq-timer").textContent = q.timeLimit;
+  host.timer = setInterval(() => {
+    const left = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+    $("hq-timer").textContent = left;
+    if (left <= 0) hostReveal(q);
+  }, 200);
+  $("btn-hq-skip").onclick = () => hostReveal(q);
+}
+function hostReveal(q) {
+  if (host.revealed) return;
+  host.revealed = true;
+  clearInterval(host.timer);
+
+  // 점수 계산 & 기록
+  const startAt = Date.now() - q.timeLimit * 1000; // fallback
+  host.ref.child("questionStartAt").get().then(s => {
+    const qStart = s.val() || startAt;
+    const limitMs = q.timeLimit * 1000;
+    const updates = {};
+    Object.entries(host.answers).forEach(([pid, a]) => {
+      const correct = a.choice === q.answer;
+      const remain = Math.max(0, limitMs - Math.max(0, (a.at || qStart) - qStart));
+      const points = correct ? Math.round(500 + 500 * remain / limitMs) : 0;
+      updates[`answers/${host.qIdx}/${pid}/correct`] = correct;
+      updates[`answers/${host.qIdx}/${pid}/points`] = points;
+      if (points && host.players[pid]) {
+        updates[`players/${pid}/score`] = (host.players[pid].score || 0) + points;
+      }
+    });
+    updates["status"] = "reveal";
+    return host.ref.update(updates);
+  }).then(() => hostShowReveal(q));
+}
+function hostShowReveal(q) {
+  const labels = choicesOf(q);
+  const counts = labels.map(() => 0);
+  Object.values(host.answers).forEach(a => { if (a.choice >= 0 && a.choice < counts.length) counts[a.choice]++; });
+  const maxC = Math.max(1, ...counts);
+
+  $("hr-progress").textContent = `${host.qIdx + 1} / ${host.quiz.questions.length} — 정답 공개`;
+  $("hr-text").textContent = q.text;
+  $("hr-dist").innerHTML = labels.map((c, i) => `
+    <div class="dist-col">
+      <div class="dist-bar ${COLORS[i]}" style="height:${8 + 78 * counts[i] / maxC}%"><div class="cnt">${counts[i]}</div></div>
+      <div class="dist-shape ${COLORS[i]} ${i === q.answer ? "correct" : ""}">${q.type === "ox" ? (i === 0 ? "O" : "X") : SHAPES[i]}</div>
+    </div>`).join("");
+  const grid = $("hr-grid");
+  grid.className = "answer-grid" + (q.type === "ox" ? " ox" : "");
+  grid.innerHTML = labels.map((c, i) => `
+    <div class="ans-tile ${COLORS[i]} ${i === q.answer ? "" : "dim"}">
+      <span class="shape">${q.type === "ox" ? (i === 0 ? "O" : "X") : SHAPES[i]}</span>
+      <span>${esc(c)}</span>
+      ${i === q.answer ? '<span class="mark">✔</span>' : ""}
+    </div>`).join("");
+  sfx.correct();
+  show("view-hr");
+  $("btn-hr-next").onclick = () => hostShowBoard();
+}
+function rankedPlayers() {
+  return Object.entries(host.players)
+    .map(([pid, p]) => ({ pid, name: p.name, score: p.score || 0 }))
+    .sort((a, b) => b.score - a.score);
+}
+function boardRowsHtml(list, limit) {
+  const medals = ["gold", "silver", "bronze"];
+  return list.slice(0, limit).map((p, i) => `
+    <div class="board-row ${medals[i] || ""}">
+      <span class="rank">${i + 1}</span><span class="name">${esc(p.name)}</span>
+      <span class="score">${p.score.toLocaleString()}점</span>
+    </div>`).join("");
+}
+function hostShowBoard() {
+  const isLast = host.qIdx >= host.quiz.questions.length - 1;
+  if (isLast) return hostFinish();
+  $("hb-board").innerHTML = boardRowsHtml(rankedPlayers(), 5);
+  show("view-hb");
+}
+function hostFinish() {
+  const ranked = rankedPlayers();
+  host.ref.update({ status: "finished" });
+  sfx.fanfare();
+  // 시상대 (1~3위)
+  const pods = [
+    { cls: "p2", p: ranked[1], n: 2 },
+    { cls: "p1", p: ranked[0], n: 1 },
+    { cls: "p3", p: ranked[2], n: 3 },
+  ].filter(x => x.p);
+  $("hf-podium").innerHTML = pods.map(x => `
+    <div class="pod ${x.cls}">
+      <div class="pod-name">${esc(x.p.name)}</div>
+      <div class="pod-score">${x.p.score.toLocaleString()}점</div>
+      <div class="pod-block">${x.n}</div>
+    </div>`).join("");
+  $("hf-board").innerHTML = boardRowsHtml(ranked.slice(3), 7);
+  show("view-hf");
+  $("btn-hf-done").onclick = () => {
+    hostCleanup(true);
+    renderQuizList(); show("view-quizzes");
+  };
+}
+
+/* ================================================================
+ *  참가자
+ * ================================================================ */
+const player = { pin: null, id: null, name: "", ref: null, quiz: null, lastState: null, answeredQ: -1, timer: null, unsub: null };
+
+function playerCleanup() {
+  if (player.ref && player.unsub) player.ref.off("value", player.unsub);
+  clearInterval(player.timer);
+  player.ref = null; player.unsub = null; player.pin = null; player.id = null; player.quiz = null;
+  player.lastState = null; player.answeredQ = -1;
+}
+$("btn-join").onclick = async () => {
+  if (!fbReady) return toast("Firebase 설정이 필요합니다. README를 참고하세요.");
+  const pin = $("join-pin").value.trim();
+  const name = $("join-name").value.trim();
+  if (!/^\d{6}$/.test(pin)) return toast("6자리 PIN을 입력하세요.");
+  if (!name) return toast("닉네임을 입력하세요.");
+  $("btn-join").disabled = true;
+  try {
+    const gRef = db.ref("games/" + pin);
+    const snap = await gRef.get();
+    const game = snap.val();
+    if (!game || (game.createdAt || 0) < Date.now() - GAME_TTL) throw new Error("게임을 찾을 수 없습니다. PIN을 확인하세요.");
+    if (game.status !== "lobby") throw new Error("이미 시작된 게임입니다.");
+    const dup = Object.values(game.players || {}).some(p => p.name === name);
+    if (dup) throw new Error("이미 사용 중인 닉네임입니다.");
+
+    const pRef = gRef.child("players").push();
+    await pRef.set({ name, score: 0, joinedAt: firebase.database.ServerValue.TIMESTAMP });
+    pRef.onDisconnect().remove(); // 대기실 이탈 시 자동 제거 (시작 후 해제)
+
+    playerCleanup();
+    player.pin = pin; player.id = pRef.key; player.name = name; player.ref = gRef;
+    $("pw-name").textContent = name; $("pq-name").textContent = name;
+    $("pw-score").textContent = ""; $("pw-icon").textContent = "🙌";
+    $("pw-msg").textContent = "입장 완료! 게임 시작을 기다리는 중...";
+    show("view-pwait");
+
+    player.unsub = gRef.on("value", s => playerOnState(s.val(), pRef));
+  } catch (e) {
+    toast(e.message || "입장에 실패했습니다.");
+  } finally {
+    $("btn-join").disabled = false;
+  }
+};
+function playerOnState(game, pRef) {
+  if (!game) { // 호스트가 방을 제거함
+    playerCleanup();
+    toast("호스트가 게임을 종료했습니다.");
+    show("view-home");
+    return;
+  }
+  player.quiz = game.quiz;
+  const me = (game.players || {})[player.id];
+  const myScore = me ? (me.score || 0) : 0;
+  $("pw-score").textContent = myScore ? myScore.toLocaleString() + "점" : "";
+  const state = game.status + ":" + game.currentQ;
+  if (state === player.lastState) {
+    // 같은 상태 내 갱신 (참가자 수 변화 등) — 화면 전환 없음
+    return;
+  }
+  player.lastState = state;
+
+  if (game.status === "countdown") {
+    pRef.onDisconnect().cancel(); // 게임 시작 후에는 새로고침해도 점수 유지
+    $("pw-icon").textContent = "👀";
+    $("pw-msg").textContent = `${game.currentQ + 1}번 문제가 곧 시작됩니다!`;
+    show("view-pwait");
+  } else if (game.status === "question") {
+    playerShowQuestion(game);
+  } else if (game.status === "reveal") {
+    playerShowResult(game, myScore);
+  } else if (game.status === "finished") {
+    playerShowFinal(game, myScore);
+  }
+}
+function playerShowQuestion(game) {
+  const qi = game.currentQ;
+  const q = game.quiz.questions[qi];
+  if (player.answeredQ === qi) return; // 이미 답함 (새로고침 등)
+  $("pq-progress").textContent = `${qi + 1} / ${game.quiz.questions.length}`;
+  const grid = $("pq-grid");
+  grid.innerHTML = "";
+  choicesOf(q).forEach((label, i) => {
+    const b = document.createElement("button");
+    b.className = "p-ans-btn " + COLORS[i];
+    b.innerHTML = `<span>${q.type === "ox" ? (i === 0 ? "O" : "X") : SHAPES[i]}</span><span class="lbl">${esc(label)}</span>`;
+    b.onclick = () => playerAnswer(qi, i);
+    grid.appendChild(b);
+  });
+  // 타이머 바
+  clearInterval(player.timer);
+  const limitMs = q.timeLimit * 1000;
+  const startAt = game.questionStartAt || Date.now();
+  const bar = $("pq-timerbar");
+  player.timer = setInterval(() => {
+    const remain = Math.max(0, limitMs - (Date.now() - startAt));
+    bar.style.width = (100 * remain / limitMs) + "%";
+    if (remain <= 0) {
+      clearInterval(player.timer);
+      if (player.answeredQ !== qi) {
+        $("pw-icon").textContent = "⏰";
+        $("pw-msg").textContent = "시간 종료! 결과를 기다리는 중...";
+        show("view-pwait");
+      }
+    }
+  }, 150);
+  show("view-pq");
+}
+function playerAnswer(qi, choice) {
+  if (player.answeredQ === qi) return;
+  player.answeredQ = qi;
+  clearInterval(player.timer);
+  player.ref.child(`answers/${qi}/${player.id}`).set({ choice, at: Date.now() });
+  $("pw-icon").textContent = "🤞";
+  $("pw-msg").textContent = "답변 완료! 다른 참가자를 기다리는 중...";
+  show("view-pwait");
+}
+function playerShowResult(game, myScore) {
+  clearInterval(player.timer);
+  const qi = game.currentQ;
+  const my = ((game.answers || {})[qi] || {})[player.id];
+  const ranked = Object.values(game.players || {})
+    .map(p => ({ name: p.name, score: p.score || 0 }))
+    .sort((a, b) => b.score - a.score);
+  const myRank = ranked.findIndex(p => p.name === player.name) + 1;
+
+  if (my && my.correct) {
+    $("pr-icon").textContent = "✅"; $("pr-title").textContent = "정답!";
+    $("pr-points").textContent = `+${(my.points || 0).toLocaleString()}점`;
+    sfx.correct();
+  } else if (my) {
+    $("pr-icon").textContent = "❌"; $("pr-title").textContent = "오답...";
+    $("pr-points").textContent = "+0점";
+    sfx.wrong();
+  } else {
+    $("pr-icon").textContent = "⏰"; $("pr-title").textContent = "시간 초과";
+    $("pr-points").textContent = "+0점";
+  }
+  $("pr-rank").textContent = `현재 ${myRank}위 · ${myScore.toLocaleString()}점`;
+  show("view-pr");
+}
+function playerShowFinal(game, myScore) {
+  const ranked = Object.values(game.players || {})
+    .map(p => ({ name: p.name, score: p.score || 0 }))
+    .sort((a, b) => b.score - a.score);
+  const myRank = ranked.findIndex(p => p.name === player.name) + 1;
+  const icons = ["🥇", "🥈", "🥉"];
+  $("pf-icon").textContent = icons[myRank - 1] || "🏅";
+  $("pf-title").textContent = `최종 ${myRank}위!`;
+  $("pf-score").textContent = `${myScore.toLocaleString()}점`;
+  if (myRank <= 3) sfx.fanfare();
+  show("view-pf");
+}
+$("btn-pf-home").onclick = () => { playerCleanup(); show("view-home"); };
+
+/* URL 해시로 PIN 미리 채우기 (#123456) */
+if (/^#\d{6}$/.test(location.hash)) $("join-pin").value = location.hash.slice(1);
+</script>
+</body>
+</html>

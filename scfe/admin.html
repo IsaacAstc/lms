@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>관리자 | 항공보안 히어로 미션</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700&family=Noto+Sans+KR:wght@400;500;700&family=Space+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/admin.css" />
+</head>
+<body>
+
+<!-- 로그인 -->
+<div class="login-box" id="loginBox">
+  <h1>관리자 로그인</h1>
+  <div class="field">
+    <label class="field-label" for="loginEmail">아이디 또는 이메일</label>
+    <input type="text" id="loginEmail" placeholder="admin 또는 admin@example.com" autocomplete="username" />
+  </div>
+  <div class="field">
+    <label class="field-label" for="loginPw">비밀번호</label>
+    <input type="password" id="loginPw" placeholder="비밀번호" autocomplete="current-password" />
+  </div>
+  <button class="btn btn-primary" id="btnLogin">로그인</button>
+  <div class="error" id="loginError"></div>
+  <p style="font-size:11px;color:var(--text-muted);margin-top:14px">
+    계정이 없다면 README.md의 "관리자 계정 생성" 절차를 먼저 진행하세요.
+  </p>
+</div>
+
+<!-- 대시보드 -->
+<div class="admin-app" id="adminApp" style="display:none">
+  <div class="admin-topbar">
+    <div class="brand">AVSEC HERO 관리자<small id="currentAdmin">한국공항공사 항공보안교육센터</small></div>
+    <button class="btn btn-ghost" id="btnLogout" style="width:auto;margin:0;padding:8px 14px;font-size:12px">로그아웃</button>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card"><div class="num" id="statTotal">0</div><div class="lbl">총 참가자</div></div>
+    <div class="stat-card"><div class="num" id="statCompleted">0</div><div class="lbl">전체 미션 완료</div></div>
+    <div class="stat-card"><div class="num" id="statReward">0</div><div class="lbl">기념품 지급</div></div>
+    <div class="stat-card"><div class="num" id="statRate">0%</div><div class="lbl">완료율</div></div>
+  </div>
+
+  <div class="section-title">
+    <span>행사(세션) 관리</span>
+  </div>
+  <div class="toolbar">
+    <label class="field-label" for="eventFilter" style="margin:0">보기 대상</label>
+    <select id="eventFilter"></select>
+    <span id="eventFilterMeta" style="font-size:12px;color:var(--text-muted)"></span>
+  </div>
+  <details class="site-url-box">
+    <summary>접속 주소 설정 <span id="siteUrlPreview"></span></summary>
+    <label class="field-label" for="siteUrlInput">참가자용 페이지 URL (GitHub Pages 배포 주소)</label>
+    <input type="text" id="siteUrlInput" placeholder="https://your-id.github.io/repo-name/" />
+    <p style="font-size:12px;color:var(--text-muted);margin:8px 0 0">
+      현재 관리자 페이지 주소에서 자동으로 채워집니다. 로컬에서 열어 실제 배포용 QR을 만들 때만 수정하세요.
+      <button class="btn btn-ghost" id="btnGenBaseQr" style="width:auto;padding:6px 12px;font-size:12px;margin:8px 0 0">기본 주소 QR 보기</button>
+    </p>
+  </details>
+  <div class="table-wrap">
+    <table class="participants events-table">
+      <thead>
+        <tr>
+          <th>행사명</th>
+          <th>시작</th>
+          <th>종료</th>
+          <th>진행중 노출</th>
+          <th>미션 구성</th>
+          <th>참가자</th>
+          <th>관리</th>
+        </tr>
+      </thead>
+      <tbody id="eventsBody"></tbody>
+    </table>
+  </div>
+  <div class="toolbar" style="margin-top:12px">
+    <input type="text" id="newEventName" placeholder="새 행사명 (예: 2026 항공보안의 날)" />
+    <input type="datetime-local" id="newEventStart" title="시작 일시(선택)" />
+    <input type="datetime-local" id="newEventEnd" title="종료 일시(선택)" />
+    <button class="btn btn-secondary" id="btnAddEvent" style="width:auto">행사 추가</button>
+  </div>
+
+  <div class="section-title">
+    <span>참가자 관리</span>
+  </div>
+  <div class="toolbar">
+    <input type="text" id="searchInput" placeholder="닉네임/인증코드 검색" />
+    <button class="btn btn-secondary" id="btnExportCsv" style="width:auto">CSV 다운로드</button>
+    <button class="btn btn-danger" id="btnDeleteSelected" style="width:auto;display:none">선택 삭제 (<span id="selectedCount">0</span>건)</button>
+    <div class="spacer"></div>
+  </div>
+  <div class="table-wrap">
+    <table class="participants">
+      <thead>
+        <tr>
+          <th style="width:36px"><input type="checkbox" id="checkAll" title="전체 선택" /></th>
+          <th>닉네임</th>
+          <th>인증코드</th>
+          <th>보안검색(M1)</th>
+          <th>폭발물처리(M2)</th>
+          <th>직업커넥트(M3)</th>
+          <th>총점</th>
+          <th>총시간(s)</th>
+          <th>완료시각</th>
+          <th>기념품지급</th>
+        </tr>
+      </thead>
+      <tbody id="participantsBody"></tbody>
+    </table>
+  </div>
+
+  <div class="section-title">
+    <span>미션 설정</span>
+  </div>
+  <p style="font-size:12px;color:var(--text-muted);margin:0 0 12px">
+    문구·항목·제한시간을 코드 배포 없이 수정할 수 있습니다. 배점 공식은 점수 일관성을 위해 코드에 고정되어 있습니다.
+    문구에는 <code>&lt;strong&gt;강조&lt;/strong&gt;</code> 태그를 쓸 수 있습니다.
+  </p>
+  <div id="missionEditor"></div>
+  <div class="toolbar">
+    <button class="btn btn-secondary" id="btnSaveMissions" style="width:auto">미션 설정 저장</button>
+    <button class="btn btn-ghost" id="btnResetMissions" style="width:auto">기본값으로 되돌리기</button>
+    <span id="missionSaveMsg" style="font-size:12px;color:var(--text-muted)"></span>
+  </div>
+
+  <div class="section-title">
+    <span>관리자 계정</span>
+  </div>
+  <p style="font-size:12px;color:var(--text-muted);margin:0 0 12px">
+    계정 자체는 보안상 Firebase 콘솔(Authentication &gt; 사용자 추가)에서 만들고,
+    여기서는 <strong>관리자 권한</strong>만 부여·회수합니다. 권한 명단 수정은 소유자 계정만 가능합니다.
+  </p>
+  <div class="table-wrap">
+    <table class="participants events-table">
+      <thead>
+        <tr>
+          <th>계정(이메일 또는 아이디)</th>
+          <th>메모</th>
+          <th>등록</th>
+          <th>관리</th>
+        </tr>
+      </thead>
+      <tbody id="adminsBody"></tbody>
+    </table>
+  </div>
+  <div class="toolbar" id="adminAddRow" style="margin-top:12px">
+    <input type="text" id="newAdminId" placeholder="아이디 또는 이메일 (예: staff1)" />
+    <input type="text" id="newAdminNote" placeholder="메모 (예: 현장 운영 담당)" />
+    <button class="btn btn-secondary" id="btnAddAdmin" style="width:auto">권한 부여</button>
+  </div>
+
+  <div class="danger-zone">
+    <h3>⚠ 데이터 초기화</h3>
+    <p>현재 <strong>보기 대상</strong>으로 선택한 행사의 참가자 기록을 영구 삭제합니다. ("전체"를 선택하면 모든 행사의 기록이 삭제됩니다.) 행사 시작 전 테스트 데이터 정리용으로만 사용하세요. 되돌릴 수 없습니다.</p>
+    <button class="btn" id="btnReset">선택한 행사의 참가자 데이터 삭제</button>
+  </div>
+</div>
+
+<!-- QR 팝업 -->
+<div class="qr-modal" id="qrModal" style="display:none">
+  <div class="qr-modal-inner">
+    <h3 id="qrModalTitle">행사 QR</h3>
+    <div id="qrCanvasHolder"></div>
+    <p class="qr-modal-url" id="qrModalUrl"></p>
+    <div class="qr-modal-actions">
+      <button class="btn btn-secondary" id="btnCopyQrUrl">링크 복사</button>
+      <button class="btn btn-ghost" id="btnCloseQr">닫기</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/qrcode.min.js"></script>
+<script type="module" src="js/admin.js"></script>
+</body>
+</html>
