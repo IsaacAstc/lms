@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>항공보안 히어로 미션 | 한국공항공사 항공보안교육센터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700&family=Noto+Sans+KR:wght@400;500;700&family=Space+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<!-- PWA -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b1220">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AVSEC HERO">
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand">AVSEC HERO<small>한국공항공사 항공보안교육센터</small></div>
+    <div class="pill" id="topbarPill">MISSION</div>
+  </div>
+
+  <!-- 0-A. 행사 선택 (동시에 여러 행사가 진행 중일 때만 표시) -->
+  <section class="screen" id="screen-event-select">
+    <h1 class="title" style="font-size:22px">참여할 행사를 선택하세요</h1>
+    <p class="subtitle">현재 진행 중인 행사입니다</p>
+    <div class="event-choice-list" id="eventChoiceList"></div>
+  </section>
+
+  <!-- 0. 시작 화면 -->
+  <section class="screen active" id="screen-start">
+    <div class="radar"><div class="blip" style="top:30%;left:60%"></div><div class="blip" style="top:65%;left:35%"></div></div>
+    <h1 class="title">항공보안 히어로 미션</h1>
+    <p class="subtitle">3가지 항공보안 직무를 체험하고<br/>나만의 인증서를 획득하세요</p>
+    <p class="event-name" id="eventName" style="display:none"></p>
+    <p class="event-notice" id="eventNotice" style="display:none"></p>
+    <label class="field-label" for="nicknameInput">닉네임 (개인정보 입력 불필요)</label>
+    <input type="text" id="nicknameInput" maxlength="12" placeholder="예: 보안요원123" autocomplete="off" />
+    <button class="btn btn-primary" id="btnStart">미션 시작하기</button>
+    <button class="btn btn-ghost" id="btnGoLeaderboardFromStart">전체 순위 보기</button>
+  </section>
+
+  <!-- 1. 미션 메뉴 -->
+  <section class="screen" id="screen-menu">
+    <h1 class="title" style="font-size:22px">미션 선택</h1>
+    <div class="runway-progress" id="runwayProgress">
+      <div class="light" data-m="1"></div>
+      <div class="light" data-m="2"></div>
+      <div class="light" data-m="3"></div>
+    </div>
+    <div class="mission-list">
+      <div class="mission-card" data-mission="1" id="card-1">
+        <div class="icon">🛡️</div>
+        <div class="info"><div class="name" id="cardName-1">보안검색요원</div><div class="desc" id="cardDesc-1">위험물품을 찾아 제거하라</div></div>
+        <div class="score" id="score-1">-</div>
+      </div>
+      <div class="mission-card" data-mission="2" id="card-2">
+        <div class="icon">🧨</div>
+        <div class="info"><div class="name" id="cardName-2">폭발물처리요원</div><div class="desc" id="cardDesc-2">해체 시퀀스를 기억하라</div></div>
+        <div class="score" id="score-2">-</div>
+      </div>
+      <div class="mission-card" data-mission="3" id="card-3">
+        <div class="icon">🧩</div>
+        <div class="info"><div class="name" id="cardName-3">공항 직업 커넥트</div><div class="desc" id="cardDesc-3">직업과 설명을 짝지어라</div></div>
+        <div class="score" id="score-3">-</div>
+      </div>
+    </div>
+    <button class="btn btn-primary cert-cta" id="btnCertImageMenu" style="display:none">인증서 이미지 저장/공유</button>
+    <button class="btn btn-secondary" id="btnGoLeaderboard">실시간 순위 보기</button>
+    <button class="btn btn-ghost go-home">처음으로</button>
+  </section>
+
+  <!-- 2. 미션1 사전 안내 -->
+  <section class="screen" id="screen-pre1">
+    <div class="pre-icon">🛡️</div>
+    <div class="pre-mission-no">MISSION 01</div>
+    <h2 class="pre-title" id="preTitle-1">위험물을 찾아라!</h2>
+    <div class="pre-desc-box">
+      <p id="preLine1-1">기내 반입 금지물품(위험물)만 빠르게 탭하세요.</p>
+      <p id="preLine2-1">안전한 물품을 누르면 <strong>감점</strong>됩니다.</p>
+    </div>
+    <div class="pre-meta">
+      <div class="pre-meta-item">⏱ 제한시간 <strong id="preTime-1">20초</strong></div>
+    </div>
+    <div class="pre-btn-area">
+      <button class="btn btn-primary" id="btnStartM1">시작하기</button>
+    </div>
+  </section>
+
+  <!-- 3. 미션2 사전 안내 -->
+  <section class="screen" id="screen-pre2">
+    <div class="pre-icon">🧨</div>
+    <div class="pre-mission-no">MISSION 02</div>
+    <h2 class="pre-title" id="preTitle-2">해체 순서를 기억하라!</h2>
+    <div class="pre-desc-box">
+      <p id="preLine1-2">화면에 표시되는 배선 순서를 기억한 뒤,</p>
+      <p id="preLine2-2">같은 순서로 정확히 눌러 해체하세요.</p>
+    </div>
+    <div class="pre-btn-area">
+      <button class="btn btn-primary" id="btnStartM2">시작하기</button>
+    </div>
+  </section>
+
+  <!-- 4. 미션3 사전 안내 -->
+  <section class="screen" id="screen-pre3">
+    <div class="pre-icon">🧩</div>
+    <div class="pre-mission-no">MISSION 03</div>
+    <h2 class="pre-title" id="preTitle-3">직업을 짝지어라!</h2>
+    <div class="pre-desc-box">
+      <p id="preLine1-3">직업 아이콘과 그 직업의 설명을 짝지어 모두 연결하세요.</p>
+      <p id="preLine2-3">같은 짝을 찾아 <strong>두 번 탭</strong>하면 매칭됩니다.</p>
+    </div>
+    <div class="pre-meta">
+      <div class="pre-meta-item">⏱ 제한시간 <strong id="preTime-3">60초</strong></div>
+    </div>
+    <div class="pre-btn-area">
+      <button class="btn btn-primary" id="btnStartM3">시작하기</button>
+    </div>
+  </section>
+
+  <!-- 5. 카운트다운 (미션 1·2 공용) -->
+  <section class="screen" id="screen-countdown">
+    <div class="countdown-wrap">
+      <div class="countdown-num" id="countdownNum">3</div>
+      <div class="countdown-label">준비하세요!</div>
+    </div>
+  </section>
+
+  <!-- 6. 미션1: 위험물 찾기 -->
+  <section class="screen" id="screen-m1">
+    <div class="game-header"><div class="game-name">🛡️ 위험물 찾아라!</div><div id="m1-timeLabel" class="pill">20s</div></div>
+    <div class="timer-wrap"><div class="timer-bar" id="m1-timerBar"></div></div>
+    <div class="game-instructions">기내 반입 금지물품(위험물)만 빠르게 탭하세요. 안전한 물품을 누르면 감점됩니다.</div>
+    <div class="item-grid" id="m1-grid"></div>
+  </section>
+
+  <!-- 3. 미션2: 해체 시퀀스 -->
+  <section class="screen" id="screen-m2">
+    <div class="game-header"><div class="game-name">🧨 해체 시뮬레이션</div><div id="m2-roundLabel" class="pill">ROUND 1</div></div>
+    <div class="game-instructions">화면에 표시되는 배선 순서를 기억한 뒤, 같은 순서로 정확히 눌러 해체하세요.</div>
+    <div class="wire-pad">
+      <button class="wire-btn" data-c="red">RED</button>
+      <button class="wire-btn" data-c="yellow">YELLOW</button>
+      <button class="wire-btn" data-c="blue">BLUE</button>
+      <button class="wire-btn" data-c="green">GREEN</button>
+    </div>
+    <div class="sequence-status" id="m2-status">순서를 기억하세요...</div>
+  </section>
+
+  <!-- 4. 미션3: 직업 커넥트 -->
+  <section class="screen" id="screen-m3">
+    <div class="game-header"><div class="game-name">🧩 공항 직업 커넥트</div><div id="m3-timeLabel" class="pill">60s</div></div>
+    <div class="timer-wrap"><div class="timer-bar" id="m3-timerBar"></div></div>
+    <div class="game-instructions">직업 아이콘과 그 직업의 설명을 짝지어 모두 연결하세요. 같은 짝을 찾아 두 번 탭하면 매칭됩니다.</div>
+    <div class="match-label" id="m3-roundLabel">남은 짝: 5</div>
+    <div class="match-grid" id="m3-grid"></div>
+  </section>
+
+  <!-- 5. 미션 결과 (단일 미션 클리어 후) -->
+  <section class="screen" id="screen-result">
+    <h1 class="title" id="resultTitle">미션 클리어!</h1>
+    <div class="score-summary">
+      <div class="item"><div class="num" id="resultScore">0</div><div class="lbl">SCORE</div></div>
+      <div class="item"><div class="num" id="resultTime">0.0s</div><div class="lbl">TIME</div></div>
+    </div>
+    <button class="btn btn-primary" id="btnBackToMenu">다음 미션으로</button>
+    <button class="btn btn-ghost go-home">처음으로</button>
+  </section>
+
+  <!-- 6. 전체 완료 / 인증서 -->
+  <section class="screen" id="screen-complete">
+    <div class="cert-capture" id="certCapture">
+      <div class="cert">
+        <div class="badge">🏅</div>
+        <div class="cert-title">항공보안 전문가 인증서</div>
+        <div class="cert-name" id="certNickname">-</div>
+        <div class="cert-code" id="certCode">CODE: -</div>
+      </div>
+      <div class="score-summary">
+        <div class="item"><div class="num" id="totalScoreDisplay">0</div><div class="lbl">TOTAL SCORE</div></div>
+        <div class="item"><div class="num" id="totalTimeDisplay">0.0s</div><div class="lbl">TOTAL TIME</div></div>
+      </div>
+    </div>
+    <p class="subtitle">이 화면을 부스 운영진에게 보여주고<br/>기념품을 받아가세요!</p>
+    <button class="btn btn-primary cert-cta" id="btnCertImage">인증서 이미지 저장/공유</button>
+    <p class="cert-help" id="certHelp" style="display:none">저장하려면 공유 창에서 <strong>사진에 저장</strong>을 선택하세요.</p>
+    <button class="btn btn-secondary" id="btnGoLeaderboardFromComplete">전체 순위 보기</button>
+    <button class="btn btn-ghost go-home">처음으로</button>
+  </section>
+
+  <!-- 7. 리더보드 -->
+  <section class="screen" id="screen-leaderboard">
+    <h1 class="title" style="font-size:22px">실시간 순위</h1>
+    <div id="leaderboardList"></div>
+    <button class="btn btn-primary cert-cta" id="btnCertImageLb" style="display:none">인증서 이미지 저장/공유</button>
+    <button class="btn btn-ghost" id="btnBackFromLeaderboard">뒤로</button>
+  </section>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="js/html2canvas.min.js"></script>
+<script type="module" src="js/app.js"></script>
+<script>
+  // 서비스 워커 등록 (PWA). app.js와 독립적으로 동작해 등록 실패가 앱에 영향 없음.
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch((e) => console.warn("SW 등록 실패", e));
+    });
+  }
+</script>
+</body>
+</html>
