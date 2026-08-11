@@ -14,6 +14,9 @@
       <form id="login-form" class="login-box">
         <h1>교육 운영관리 시스템</h1>
         <p class="subtitle">관리자 로그인</p>
+        <label data-org-wrap hidden>기관
+          <select id="login-org"><option value="">기본 기관</option></select>
+        </label>
         <label>이메일<input type="email" name="email" required autocomplete="username" /></label>
         <label>비밀번호<input type="password" name="password" required autocomplete="current-password" /></label>
         <button type="submit">로그인</button>
@@ -31,6 +34,10 @@
           <a href="scfe/admin.html" target="_blank" rel="noopener" title="항공보안 히어로 미션 관리자(별도 로그인)">히어로 미션</a>
         </nav>
         <div class="user-box">
+          <span id="org-label" class="org-label"></span>
+          <label data-org-wrap hidden class="topbar-org">기관
+            <select id="topbar-org"><option value="">기본 기관</option></select>
+          </label>
           <span id="user-email"></span>
           <button id="logout-btn" type="button">로그아웃</button>
         </div>
@@ -581,6 +588,30 @@
           <textarea id="board-apply-input" rows="4" placeholder="예: 수강 신청은 소속 부서를 통해 접수합니다. 잔여석 확인 후 담당자(내선 0000)에게 연락 바랍니다."></textarea>
           <div class="form-actions"><button id="board-apply-save" type="button">안내 문구 저장</button></div>
         </section>
+
+        <!-- 기관 관리 (마스터 전용, 허브에서만 편집) -->
+        <section class="tab-panel" data-tab="orgs" hidden>
+          <h2>기관 관리</h2>
+          <p class="hint">교육기관 단위로 시스템을 분리 운영합니다. 각 기관은 <b>별도의 Firebase 프로젝트</b>를 사용해 차수·시간표·마스터·설문 데이터가 완전히 격리됩니다.
+            신규 기관 절차: ① Firebase 콘솔에서 프로젝트 생성(Firestore·Authentication 활성화, <code>firestore.rules</code> 게시, 관리자 계정 생성) ② 아래에 설정값(config) 등록.
+            등록된 기관은 로그인 화면·상단바의 기관 선택에 나타납니다.</p>
+          <p id="org-note" class="warn"></p>
+          <form id="org-form" class="entry-form" hidden>
+            <div class="grid">
+              <label>기관 ID (URL용, 영문 소문자)<input name="orgId" placeholder="예: busan" required /></label>
+              <label>기관명<input name="orgName" placeholder="예: 부산교육센터" required /></label>
+            </div>
+            <label style="display:block;margin-top:0.6rem;font-size:0.85rem">Firebase 설정값 (콘솔의 firebaseConfig 객체 붙여넣기)
+              <textarea name="orgConfig" rows="7" required style="width:100%;font-family:monospace;font-size:0.8rem" placeholder='{ "apiKey": "...", "authDomain": "...", "projectId": "...", "storageBucket": "...", "messagingSenderId": "...", "appId": "..." }'></textarea>
+            </label>
+            <div class="form-actions">
+              <button type="submit">기관 저장</button>
+              <button id="org-cancel" type="button">초기화</button>
+            </div>
+          </form>
+          <div class="table-wrap" id="org-list"></div>
+        </section>
+
       </main>
     </div>
 

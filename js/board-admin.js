@@ -4,6 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { boardFields, isBoardExcluded } from "./courses.js";
+import { orgQuery } from "./orgs.js";
 
 export function initBoardAdmin() {
   document.getElementById("board-sync").addEventListener("click", () => syncAll(true));
@@ -17,8 +18,8 @@ export function initBoardAdmin() {
 
 async function load() {
   const base = location.origin + location.pathname.replace(/[^/]*$/, "");
-  document.getElementById("board-url").value = `${base}board.html`;
-  document.getElementById("board-open").href = `${base}board.html`;
+  document.getElementById("board-url").value = `${base}board.html${orgQuery(true)}`;
+  document.getElementById("board-open").href = `${base}board.html${orgQuery(true)}`;
   try {
     const d = await getDoc(doc(db, "publicBoard", "__config"));
     document.getElementById("board-apply-input").value = d.exists() ? (d.data().applyInfo || "") : "";

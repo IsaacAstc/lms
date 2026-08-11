@@ -119,3 +119,27 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
 3. **배포 Secret 추가**: 저장소 Settings → Secrets → Actions 에
    `FIREBASE_DATABASE_URL` = RTDB 주소(`https://…firebasedatabase.app`) 추가 후 재배포.
    로컬 `js/firebase-config.js`에도 `databaseURL` 필드 추가.
+
+## 기관(테넌트) 분리 운영
+
+코드는 이 저장소 하나를 공유하고, **기관별로 별도 Firebase 프로젝트**를 사용해
+차수·시간표·마스터·설문 데이터를 완전히 격리한다(방안2). 기관 목록은 허브(기본
+기관) 프로젝트의 `orgs/{orgId}` 컬렉션에 저장되며, 로그인 화면·상단바의 기관
+선택과 공개 페이지의 `?org=` 파라미터가 이를 참조한다.
+
+### 신규 기관 추가 절차
+1. **Firebase 콘솔에서 새 프로젝트 생성**
+   - Firestore Database 활성화(프로덕션 모드, `asia-northeast3` 권장)
+   - Authentication → 이메일/비밀번호 활성화, 가입(신규 생성) 차단, 관리자 계정 생성
+   - Firestore 규칙 탭에 이 저장소의 `firestore.rules` 게시
+   - Authentication → Settings → 승인된 도메인에 `<계정>.github.io` 추가
+   - (선택) 퀴즈를 기관별로 쓰려면 Realtime Database + `rtdb.rules.json` — 현재
+     동거 앱(퀴즈·히어로 미션)은 기본 기관 전용이다.
+2. **기관 등록**: 기본 기관에 마스터로 로그인 → 설정 → **기관 관리** →
+   기관 ID(영문)·기관명·firebaseConfig(콘솔 복사값) 저장.
+3. 이후 로그인 화면에서 기관을 선택해 접속한다. 공개 현황 보드·설문 URL은
+   해당 기관으로 접속한 상태에서 복사하면 `?org=` 파라미터가 자동으로 붙는다.
+
+주의: 기관 레지스트리(`orgs`)의 config는 공개값이며, 실제 접근 통제는 각
+프로젝트의 보안규칙·Auth가 담당한다. 허브 규칙에 `orgs` 블록이 포함되도록
+`firestore.rules`를 재배포해야 한다.

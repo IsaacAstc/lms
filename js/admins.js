@@ -12,7 +12,7 @@ import {
 import {
   collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { db, auth, firebaseConfig } from "./firebase.js";
+import { db, auth, activeConfig } from "./firebase.js";
 import { escapeHtml, isMasterMode } from "./app.js";
 
 let unsub = null;
@@ -99,7 +99,8 @@ async function addAdmin() {
 
 // 보조 앱 인스턴스로 Auth 사용자 생성. 반환: 신규생성 true / 이미존재 false. (다른 오류는 throw)
 async function createAuthUser(email, pw) {
-  const secondary = initializeApp(firebaseConfig, "admin-create-" + Date.now());
+  // 현재 접속 중인 기관의 프로젝트에 계정 생성(기관 전환 시에도 올바른 프로젝트 대상).
+  const secondary = initializeApp(activeConfig, "admin-create-" + Date.now());
   const secAuth = getAuth(secondary);
   try {
     await createUserWithEmailAndPassword(secAuth, email, pw);

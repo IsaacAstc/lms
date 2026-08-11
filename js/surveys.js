@@ -9,15 +9,16 @@ import { fmtKst, fmtDot } from "./time.js";
 import { coursesCache, roomIdOf } from "./courses.js";
 import { getRooms } from "./rooms.js";
 import { regenerateSurvey } from "./survey-gen.js";
+import { orgQuery } from "./orgs.js";
 
 // 공개 페이지 기본 경로 (…/survey.html).
 function surveyUrl(roomId) {
   const base = location.origin + location.pathname.replace(/[^/]*$/, "");
-  return `${base}survey.html?room=${roomId}`;
+  return `${base}survey.html?room=${roomId}${orgQuery()}`;
 }
 function previewUrl(courseId) {
   const base = location.origin + location.pathname.replace(/[^/]*$/, "");
-  return `${base}survey.html?preview=1&course=${courseId}`;
+  return `${base}survey.html?preview=1&course=${courseId}${orgQuery()}`;
 }
 
 // 기본 표시 범위: 오늘 기준 앞뒤 N일(교육 종료일 기준).
