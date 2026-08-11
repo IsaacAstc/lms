@@ -1,70 +1,12 @@
-rules_version = '2';
-
 // =====================================================================
-// 적용 방법: Firebase 콘솔 > Firestore Database > 규칙 탭에 이 내용을 붙여넣고 게시
-// ⚠ 확인 필요: 게시 전 "규칙 플레이그라운드"에서 read/create/update 3가지 시나리오를
-//             직접 테스트해 의도대로 동작하는지 검증할 것 (특히 update 분기)
+// (구) scfe 전용 Firebase 프로젝트의 규칙 파일 — 더 이상 사용하지 않음.
+//
+// LMS 통합(같은 Firebase 프로젝트 사용) 이후, scfe 컬렉션 규칙은
+// 저장소 루트의 firestore.rules 에 병합되었다:
+//   - events         (행사)                — 공개 읽기 / 관리자 쓰기
+//   - scfeSettings   (미션 설정, 구 settings) — 공개 읽기 / 관리자 쓰기
+//   - participants   (참가자: 닉네임·점수만)  — 공개 읽기 / 검증된 생성 / 제한된 수정
+//   - admins         — LMS와 공유(LMS 관리자 = scfe 관리자)
+//
+// 배포는 루트 firestore.rules 하나만 LMS Firebase 콘솔에 게시하면 된다.
 // =====================================================================
-
-service cloud.firestore {
-  match /databases/{database}/documents {
-
-    // 소유자(최상위 관리자) — 코드에 고정된 계정.
-    // admins 컬렉션이 비어도 잠기지 않도록 하는 최후 수단이며,
-    // 관리자 명단(admins)을 수정할 수 있는 것도 소유자뿐이다.
-    function isOwner() {
-      return request.auth != null
-             && request.auth.token.email in ['admin@kac.astc', 'isaac@airport.co.kr'];
-    }
-
-    // 관리자 = 소유자 이거나, admins 컬렉션에 이메일로 등록된 계정
-    // (가입 차단과 별개의 이중 방어 — 다른 경로로 인증된 계정이 생겨도 권한 없음)
-    function isAdmin() {
-      return isOwner()
-             || (request.auth != null
-                 && exists(/databases/$(database)/documents/admins/$(request.auth.token.email)));
-    }
-
-    // 관리자 명단: 관리자는 조회 가능, 추가·삭제는 소유자만 가능(권한 상승 방지)
-    match /admins/{adminEmail} {
-      allow read: if isAdmin();
-      allow write: if isOwner();
-    }
-
-    // 행사(세션): 참가자 앱이 행사명·일정을 읽어야 하므로 공개 읽기, 쓰기는 관리자만
-    match /events/{eventId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // 미션 설정(문구·항목·제한시간): 참가자 앱이 읽어야 하므로 공개 읽기, 쓰기는 관리자만
-    match /settings/{docId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /participants/{docId} {
-
-      // 리더보드/관리자 화면 모두 닉네임·점수만 노출되므로 공개 읽기 허용
-      allow read: if true;
-
-      // 참가자 최초 생성: 닉네임·행사 형식만 검증, rewardGiven은 항상 false로 시작
-      allow create: if request.resource.data.nickname is string
-                    && request.resource.data.nickname.size() > 0
-                    && request.resource.data.nickname.size() <= 20
-                    && request.resource.data.eventId is string
-                    && request.resource.data.eventId.size() > 0
-                    && request.resource.data.eventId.size() <= 64
-                    && request.resource.data.rewardGiven == false;
-
-      // 수정: 지정된 관리자 계정(isAdmin)은 전체 허용.
-      // 비로그인 참가자는 자신의 미션 진행 데이터는 갱신 가능하나
-      // rewardGiven(기념품 지급 여부) 필드는 변경할 수 없음.
-      allow update: if isAdmin()
-                    || !("rewardGiven" in request.resource.data.diff(resource.data).affectedKeys());
-
-      // 삭제(데이터 초기화)는 관리자만 가능
-      allow delete: if isAdmin();
-    }
-  }
-}

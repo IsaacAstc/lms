@@ -1,0 +1,23 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "games": {
+      "$pin": {
+        ".read": true,
+
+        "players": {
+          "$pid": { ".write": true }
+        },
+        "answers": {
+          "$q": {
+            "$pid": { ".write": true }
+          }
+        },
+
+        ".write": "auth != null"
+      }
+    }
+  }
+}
