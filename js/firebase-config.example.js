@@ -8,4 +8,6 @@ export const firebaseConfig = {
   storageBucket: "YOUR_PROJECT.appspot.com",
   messagingSenderId: "YOUR_SENDER_ID",
   appId: "YOUR_APP_ID",
+  // 퀴즈 배틀(quiz.html)용 Realtime Database URL. RTDB 미사용 시 빈 문자열.
+  databaseURL: "https://YOUR_PROJECT-default-rtdb.REGION.firebasedatabase.app",
 };
