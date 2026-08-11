@@ -19,6 +19,7 @@ import { initBoardAdmin } from "./board-admin.js";
 import { initExportButtons } from "./export-csv.js";
 import { initCsvImport } from "./csv-import.js";
 import { initSeed } from "./seed.js";
+import { initOrgSelectors, initOrgAdmin } from "./orgs.js";
 
 // 공용 유틸: HTML 이스케이프 (XSS 방지).
 export function escapeHtml(v) {
@@ -41,10 +42,10 @@ const TAB_GROUPS = [
   { id: "survey-result", label: "설문 결과", tabs: [["reports", "설문 집계"], ["freetext", "주관식 원문"]] },
   { id: "stats", label: "통계", tabs: [["stats", ""]] },
   { id: "reportdoc", label: "운영 보고서", tabs: [["reportdoc", ""]] },
-  { id: "admin", label: "설정", tabs: [["settings", "기준값 설정"], ["admins", "관리자 계정"], ["data", "데이터 관리"], ["board", "공개 현황 보드"]] },
+  { id: "admin", label: "설정", tabs: [["settings", "기준값 설정"], ["admins", "관리자 계정"], ["data", "데이터 관리"], ["board", "공개 현황 보드"], ["orgs", "기관 관리"]] },
 ];
 // 마스터 전용 탭(일반 관리자에게는 숨김 — 실제 차단은 firestore.rules).
-const MASTER_ONLY_TABS = new Set(["data"]);
+const MASTER_ONLY_TABS = new Set(["data", "orgs"]);
 let masterMode = false;
 export function isMasterMode() { return masterMode; }
 
@@ -117,6 +118,7 @@ function initApp() {
   initReportDoc();
   initFreetext();
   if (masterMode) initDataAdmin(); // 데이터 관리는 마스터 전용(불필요한 조회도 방지).
+  if (masterMode) initOrgAdmin(); // 기관 관리(마스터 전용, 편집은 허브에서만).
   initAdmins();
   initBoardAdmin();
   initExportButtons();
@@ -142,6 +144,9 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("logout-btn").addEventListener("click", () => logout());
+
+  // 기관 선택(로그인 화면·상단바) — 등록된 기관이 있을 때만 표시.
+  initOrgSelectors();
 
   watchAuth(
     async (user) => {
