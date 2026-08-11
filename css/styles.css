@@ -57,6 +57,14 @@ body {
 }
 .topbar h1 { font-size: 1.05rem; margin: 0; }
 .user-box { display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; }
+/* 상단바 바로가기(동거 앱·공개 보드). 제목 오른쪽, 사용자 영역 왼쪽에 배치. */
+.quick-links { display: flex; gap: 0.35rem; margin-left: 0.5rem; margin-right: auto; flex-wrap: wrap; }
+.quick-links a {
+  color: #fff; text-decoration: none; font-size: 0.78rem;
+  border: 1px solid rgba(255, 255, 255, 0.45); border-radius: 999px; padding: 0.15rem 0.6rem;
+  white-space: nowrap;
+}
+.quick-links a:hover { background: rgba(255, 255, 255, 0.15); }
 
 /* 탭 */
 .tabs {
