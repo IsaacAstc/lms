@@ -41,7 +41,6 @@ const db = getFirestore(app);
 
 let allRows = [];
 let allEvents = [];
-let allAdmins = [];
 let selectedEventId = "all"; // "all" | 행사 문서 ID | LEGACY_EVENT_ID
 let unsubscribe = null;
 let unsubscribeEvents = null;
