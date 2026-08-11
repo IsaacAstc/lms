@@ -1,0 +1,17 @@
+{
+  "name": "항공보안 히어로 미션",
+  "short_name": "AVSEC HERO",
+  "description": "한국공항공사 항공보안교육센터 · 항공보안 직무를 체험하는 미션 게임",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

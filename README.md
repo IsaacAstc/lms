@@ -99,3 +99,14 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
 
 성명·소속·연락처·사번 등 개인 식별정보 입력 필드를 어떤 화면에도 두지 않는다.
 실제 Firebase 키·실명 데이터는 커밋하지 않는다(public repo).
+
+## 동거 프로젝트 (별도 백엔드)
+
+이 저장소는 LMS 외에 아래 정적 앱을 같은 GitHub Pages에서 함께 서빙한다.
+**LMS의 Firebase 프로젝트·보안규칙과는 무관하며, 각자 자체 백엔드를 쓴다.**
+
+- `scfe/` — 항공보안 히어로 미션(박람회 부스 이벤트 앱). 자체 Firebase 프로젝트
+  (Firestore + Auth + App Check) 사용. 규칙은 `scfe/firestore.rules`(해당 프로젝트
+  콘솔에 배포하는 파일이며 LMS의 `firestore.rules`와 별개). 상세는 `scfe/README.md`.
+- `quiz.html` — Quiz! Battle(실시간 퀴즈, 카훗 스타일). 단일 파일 앱.
+  자체 Firebase Realtime Database 사용(설정값은 파일 상단에 포함).
