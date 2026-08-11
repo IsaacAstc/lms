@@ -41,6 +41,12 @@ jobs:
             databaseURL: "${{ secrets.FIREBASE_DATABASE_URL }}",
           };
           EOF
+          # Secret 설정 여부 진단(값은 노출하지 않음).
+          if [ -z "${{ secrets.FIREBASE_DATABASE_URL }}" ]; then
+            echo "::warning::FIREBASE_DATABASE_URL secret이 비어 있습니다 — quiz.html 실시간 게임이 비활성화됩니다."
+          else
+            echo "FIREBASE_DATABASE_URL secret: 설정됨"
+          fi
 
       - uses: actions/configure-pages@v5
 
