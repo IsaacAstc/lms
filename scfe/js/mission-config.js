@@ -6,7 +6,8 @@
 // (배점 공식은 점수 일관성을 위해 코드에 고정 — missions.js 참고)
 // =====================================================================
 
-export const MISSION_SETTINGS_PATH = { collection: "settings", docId: "missions" };
+// LMS 통합: LMS의 관리자 전용 settings 컬렉션과 충돌하지 않도록 별도 컬렉션 사용.
+export const MISSION_SETTINGS_PATH = { collection: "scfeSettings", docId: "missions" };
 
 export const DEFAULT_MISSION_CONFIG = {
   mission1: {

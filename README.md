@@ -100,13 +100,22 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
 성명·소속·연락처·사번 등 개인 식별정보 입력 필드를 어떤 화면에도 두지 않는다.
 실제 Firebase 키·실명 데이터는 커밋하지 않는다(public repo).
 
-## 동거 프로젝트 (별도 백엔드)
+## 동거 앱 (LMS Firebase 프로젝트로 통합)
 
-이 저장소는 LMS 외에 아래 정적 앱을 같은 GitHub Pages에서 함께 서빙한다.
-**LMS의 Firebase 프로젝트·보안규칙과는 무관하며, 각자 자체 백엔드를 쓴다.**
+이 저장소는 LMS 외에 아래 정적 앱을 같은 GitHub Pages에서 서빙하며,
+**둘 다 LMS의 Firebase 프로젝트를 사용한다. LMS 관리자 로그인이 그대로 통한다**
+(같은 프로젝트·같은 도메인이라 로그인 세션 공유).
 
-- `scfe/` — 항공보안 히어로 미션(박람회 부스 이벤트 앱). 자체 Firebase 프로젝트
-  (Firestore + Auth + App Check) 사용. 규칙은 `scfe/firestore.rules`(해당 프로젝트
-  콘솔에 배포하는 파일이며 LMS의 `firestore.rules`와 별개). 상세는 `scfe/README.md`.
-- `quiz.html` — Quiz! Battle(실시간 퀴즈, 카훗 스타일). 단일 파일 앱.
-  자체 Firebase Realtime Database 사용(설정값은 파일 상단에 포함).
+- `scfe/` — 항공보안 히어로 미션(부스 이벤트 앱). Firestore 컬렉션
+  `events`/`scfeSettings`/`participants` 사용, 규칙은 루트 `firestore.rules`에 병합.
+  App Check는 통합 시 제거. 관리자 권한 관리는 LMS 관리자 화면에서 일원화.
+- `quiz.html` — Quiz! Battle(실시간 퀴즈). Realtime Database 사용,
+  퀴즈 만들기·진행은 관리자 로그인 필수(참가자는 로그인 없이 PIN 입장).
+
+### 통합 후 1회 설정 (Firebase 콘솔)
+1. **Firestore 규칙 재배포**: 루트 `firestore.rules`를 콘솔에 게시(scfe 컬렉션 규칙 포함).
+2. **Realtime Database 활성화**: 빌드 → Realtime Database → 데이터베이스 만들기
+   (위치 자유, 프로덕션 모드) → 규칙 탭에 `rtdb.rules.json` 내용 게시.
+3. **배포 Secret 추가**: 저장소 Settings → Secrets → Actions 에
+   `FIREBASE_DATABASE_URL` = RTDB 주소(`https://…firebasedatabase.app`) 추가 후 재배포.
+   로컬 `js/firebase-config.js`에도 `databaseURL` 필드 추가.

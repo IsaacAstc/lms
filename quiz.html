@@ -6,6 +6,7 @@
 <title>Quiz Battle — 실시간 퀴즈 게임</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <style>
   :root {
     --purple: #46178f;
@@ -192,9 +193,8 @@
   </div>
   <div id="fb-warning" class="notice" style="display:none;">
     ⚠️ <b>Firebase가 아직 설정되지 않았습니다.</b><br>
-    실시간 게임(방 만들기·입장)을 하려면 <code>index.html</code> 상단의
-    <code>FIREBASE_CONFIG</code>에 본인의 Firebase 프로젝트 설정을 붙여넣어 주세요.
-    (자세한 방법은 README 참고) 퀴즈 만들기는 지금도 가능합니다.
+    LMS의 <code>js/firebase-config.js</code>에 <code>databaseURL</code>(Realtime Database)이
+    포함돼야 실시간 게임이 동작합니다. (배포 Secrets의 <code>FIREBASE_DATABASE_URL</code> 확인)
   </div>
   <div class="card">
     <h2>🎮 게임 참가하기</h2>
@@ -205,8 +205,22 @@
     <button class="btn-big green" id="btn-join">입장하기</button>
   </div>
   <div class="card">
-    <h2>📝 퀴즈 만들기 / 진행하기</h2>
+    <h2>📝 퀴즈 만들기 / 진행하기 <small style="font-size:12px;color:#888;">(관리자)</small></h2>
     <button class="btn-big" id="btn-goto-quizzes">내 퀴즈 목록</button>
+  </div>
+</div>
+
+<!-- ============ 관리자 로그인 (LMS 계정 공유) ============ -->
+<div id="view-login" class="view center">
+  <div class="card" style="max-width:420px;">
+    <h2>🔐 관리자 로그인</h2>
+    <div class="notice" style="margin-bottom:12px;">퀴즈 만들기·진행은 <b>LMS 관리자 계정</b>으로 로그인해야 합니다.<br>LMS 관리자 화면에 이미 로그인돼 있으면 이 화면은 나오지 않습니다.</div>
+    <div class="field"><label>이메일</label>
+      <input type="email" id="login-email" autocomplete="username"></div>
+    <div class="field"><label>비밀번호</label>
+      <input type="password" id="login-pw" autocomplete="current-password"></div>
+    <button class="btn-big" id="btn-login">로그인</button>
+    <button class="btn-big gray" id="btn-login-back">← 홈으로</button>
   </div>
 </div>
 
@@ -363,22 +377,14 @@
 
 <div class="toast" id="toast"></div>
 
-<script>
+<script type="module">
 "use strict";
 /* ================================================================
- *  Firebase 설정 — 본인의 Firebase 프로젝트 설정으로 교체하세요!
- *  (Firebase 콘솔 → 프로젝트 설정 → 일반 → 내 앱 → SDK 설정)
- *  databaseURL이 반드시 포함되어야 합니다.
+ *  Firebase 설정 — LMS 통합: LMS 프로젝트 설정을 그대로 사용한다.
+ *  (js/firebase-config.js 는 배포 시 Secrets 로 생성, databaseURL 포함)
+ *  로그인 세션은 LMS 관리자 화면과 공유된다(같은 프로젝트·같은 도메인).
  * ================================================================ */
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDQp5zFbxPvxIh5WdYB5CPmCXMU5nNrDrQ",
-  authDomain: "quiz-battle-1645a.firebaseapp.com",
-  databaseURL: "https://quiz-battle-1645a-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "quiz-battle-1645a",
-  storageBucket: "quiz-battle-1645a.firebasestorage.app",
-  messagingSenderId: "67573040998",
-  appId: "1:67573040998:web:29098619e191533be1eaa7"
-};
+import { firebaseConfig as FIREBASE_CONFIG } from "./js/firebase-config.js";
 
 const COLORS = ["c0","c1","c2","c3"];
 const SHAPES = ["▲","◆","●","■"];
@@ -387,11 +393,12 @@ const OX_LABELS = ["O 맞다","X 아니다"];
 const GAME_TTL = 24*60*60*1000; // 24시간 지난 게임은 입장 불가
 const LS_KEY = "qb_quizzes";
 
-let db = null;
+let db = null, auth = null;
 const fbReady = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseURL);
 if (fbReady) {
   firebase.initializeApp(FIREBASE_CONFIG);
   db = firebase.database();
+  auth = firebase.auth();
 } else {
   document.getElementById("fb-warning").style.display = "block";
 }
@@ -478,7 +485,33 @@ function renderQuizList() {
     el.appendChild(div);
   });
 }
-$("btn-goto-quizzes").onclick = () => { renderQuizList(); show("view-quizzes"); };
+/* ---- 관리자 로그인 게이트 (LMS와 세션 공유, 가입 차단된 프로젝트라 로그인 계정 = 관리자) ---- */
+let afterLogin = null;
+function requireAdmin(next) {
+  if (!fbReady) { toast("Firebase가 설정되지 않았습니다."); return; }
+  if (auth.currentUser) { next(); return; }
+  afterLogin = next;
+  show("view-login");
+}
+$("btn-login").onclick = async () => {
+  const email = $("login-email").value.trim();
+  const pw = $("login-pw").value;
+  if (!email || !pw) return toast("이메일과 비밀번호를 입력하세요.");
+  $("btn-login").disabled = true;
+  try {
+    await auth.signInWithEmailAndPassword(email, pw);
+    $("login-pw").value = "";
+    const next = afterLogin; afterLogin = null;
+    if (next) next(); else show("view-home");
+  } catch (e) {
+    toast("로그인 실패: 이메일 또는 비밀번호를 확인하세요.");
+  } finally {
+    $("btn-login").disabled = false;
+  }
+};
+$("btn-login-back").onclick = () => { afterLogin = null; show("view-home"); };
+
+$("btn-goto-quizzes").onclick = () => requireAdmin(() => { renderQuizList(); show("view-quizzes"); });
 $("btn-back-home").onclick = () => show("view-home");
 $("btn-new-quiz").onclick = () => openEditor(null);
 
@@ -634,6 +667,7 @@ async function hostGame(quiz) {
   if (!fbReady) return toast("Firebase 설정이 필요합니다. README를 참고하세요.");
   const err = validateQuiz(quiz);
   if (err) return toast(err);
+  if (fbReady && !auth.currentUser) return requireAdmin(() => hostGame(quiz));
   hostCleanup(false);
   // 사용 중이지 않은 PIN 찾기
   let pin, ref;

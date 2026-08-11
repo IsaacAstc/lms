@@ -111,5 +111,39 @@ service cloud.firestore {
     match /surveyAggregates/{aggregateId} {
       allow read, write: if isAdmin();
     }
+
+    // ── 동거 앱: 항공보안 히어로 미션(scfe/) — LMS Firebase 프로젝트로 통합 ──
+    // 관리자 판정은 위 admins 컬렉션을 그대로 공유한다(LMS 관리자 = scfe 관리자).
+
+    // 행사(세션): 참가자 앱이 행사명·일정을 읽어야 하므로 공개 읽기, 쓰기는 관리자만.
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 미션 설정(문구·항목·제한시간): 참가자 앱이 읽어야 하므로 공개 읽기, 쓰기는 관리자만.
+    // (LMS의 관리자 전용 settings 와 분리된 별도 컬렉션)
+    match /scfeSettings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 참가자(닉네임·점수만, 개인정보 없음): 리더보드용 공개 읽기.
+    match /participants/{docId} {
+      allow read: if true;
+      // 최초 생성: 닉네임·행사 형식만 검증, rewardGiven은 항상 false로 시작.
+      allow create: if request.resource.data.nickname is string
+                    && request.resource.data.nickname.size() > 0
+                    && request.resource.data.nickname.size() <= 20
+                    && request.resource.data.eventId is string
+                    && request.resource.data.eventId.size() > 0
+                    && request.resource.data.eventId.size() <= 64
+                    && request.resource.data.rewardGiven == false;
+      // 관리자는 전체 수정 가능. 비로그인 참가자는 rewardGiven(기념품 지급)만 변경 불가.
+      allow update: if isAdmin()
+                    || !("rewardGiven" in request.resource.data.diff(resource.data).affectedKeys());
+      // 삭제(데이터 초기화)는 관리자만.
+      allow delete: if isAdmin();
+    }
   }
 }
