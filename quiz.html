@@ -288,10 +288,12 @@
             <input type="text" id="ed-media-url" placeholder="이미지 URL 또는 유튜브/mp4 URL" style="flex:1;min-width:200px;">
             <button class="btn-sm" id="btn-media-file" type="button">🖼 이미지 파일</button>
             <input type="file" id="ed-media-file" accept="image/*" style="display:none;">
+            <button class="btn-sm" id="btn-media-video" type="button">🎬 동영상 파일</button>
+            <input type="file" id="ed-media-video" accept="video/mp4,video/webm" style="display:none;">
             <button class="btn-sm danger" id="btn-media-clear" type="button">제거</button>
           </div>
           <div id="ed-media-prev" style="margin-top:6px;"></div>
-          <div style="font-size:12px;opacity:0.7;margin-top:4px;">이미지 파일은 자동 압축해 퀴즈에 내장됩니다. 동영상은 파일 업로드가 불가하여 유튜브/mp4 URL만 지원합니다.</div>
+          <div style="font-size:12px;opacity:0.7;margin-top:4px;">이미지 파일은 자동 압축해 퀴즈에 내장됩니다. 동영상 파일은 저장소 media/ 폴더로 업로드됩니다(GitHub 토큰 1회 등록 필요, 공개 저장소이므로 공개 가능한 영상만 · 배포 1~2분 후 재생 가능). 유튜브/mp4 URL도 사용할 수 있습니다.</div>
         </div>
         <div class="field" id="ed-choices-wrap"><label id="ed-choices-label">보기 (정답에 체크 — 복수 정답 가능, 3·4번은 비우면 제외)</label>
           <div id="ed-choices"></div></div>
@@ -753,6 +755,62 @@ $("ed-media-file").onchange = e => {
   };
   img.onerror = () => toast("이미지 파일을 읽을 수 없습니다.");
   img.src = URL.createObjectURL(file);
+};
+/* ---- 동영상 파일 → GitHub 저장소 media/ 업로드 ----
+ * public 정적 사이트에는 토큰을 심을 수 없으므로, 관리자 본인의
+ * fine-grained PAT(이 저장소 Contents: Read/Write만)를 브라우저에 1회 저장해 사용한다. */
+const GH_REPO = "IsaacAstc/lms";
+const GH_TOKEN_KEY = "qbGhToken";
+function ghToken() {
+  let t = localStorage.getItem(GH_TOKEN_KEY);
+  if (!t) {
+    t = prompt(
+      "동영상 업로드에는 GitHub 토큰이 필요합니다(이 브라우저에만 저장).\n\n" +
+      "발급: github.com → Settings → Developer settings → Fine-grained tokens →\n" +
+      `대상 저장소 ${GH_REPO}, 권한은 Contents: Read and write만 → 생성된 토큰 붙여넣기`);
+    if (!t) return null;
+    t = t.trim();
+    localStorage.setItem(GH_TOKEN_KEY, t);
+  }
+  return t;
+}
+$("btn-media-video").onclick = () => $("ed-media-video").click();
+$("ed-media-video").onchange = async e => {
+  const file = e.target.files[0]; e.target.value = "";
+  if (!file) return;
+  if (file.size > 50 * 1024 * 1024) return toast("동영상은 50MB 이하만 업로드할 수 있습니다.");
+  const token = ghToken();
+  if (!token) return;
+  if (!confirm(`'${file.name}' (${(file.size / 1048576).toFixed(1)}MB)을 공개 저장소 media/ 폴더에 업로드할까요?\n공개 가능한 영상인지 확인하세요.`)) return;
+  const safe = file.name.replace(/[^\w.-]+/g, "-").replace(/-+/g, "-").toLowerCase();
+  const path = `media/${Date.now().toString(36)}-${safe}`;
+  toast("업로드 중… 파일 크기에 따라 시간이 걸립니다.");
+  try {
+    const b64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result).split(",")[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    const resp = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${path}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+      body: JSON.stringify({ message: `media: ${safe} 업로드 (퀴즈 편집기)`, content: b64 }),
+    });
+    if (resp.status === 401 || resp.status === 403) {
+      localStorage.removeItem(GH_TOKEN_KEY);
+      throw new Error("토큰이 유효하지 않거나 권한이 없습니다. 다시 시도해 토큰을 재등록하세요.");
+    }
+    if (!resp.ok) throw new Error(`업로드 실패 (HTTP ${resp.status})`);
+    const url = `${location.origin}${location.pathname.replace(/[^/]*$/, "")}${path}`;
+    const q = edQuiz.questions[edIdx];
+    q.media = { url };
+    $("ed-media-url").value = url;
+    renderMediaPreview(q);
+    toast("업로드 완료. 배포(1~2분) 후 재생할 수 있습니다.");
+  } catch (err) {
+    toast(err.message || "업로드에 실패했습니다.");
+  }
 };
 $("btn-media-clear").onclick = () => {
   const q = edQuiz.questions[edIdx];
