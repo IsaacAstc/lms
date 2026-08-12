@@ -145,6 +145,8 @@
   .board-row .rank { width: 30px; font-size: 18px; color: var(--purple); }
   .board-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .board-row .score { font-variant-numeric: tabular-nums; }
+  .q-media { display:flex; justify-content:center; margin:4px 0; }
+  .q-media:empty { display:none; }
   .board-row.gold { background: #ffd54f; } .board-row.silver { background: #e3e6ea; } .board-row.bronze { background: #e8b98a; }
 
   /* 시상대 */
@@ -259,20 +261,44 @@
         <div class="ed-row">
           <div class="field"><label>문제 유형</label>
             <select id="ed-type">
-              <option value="mc">4지선다</option>
+              <option value="mc">선다형 (2~4지)</option>
               <option value="ox">OX 퀴즈</option>
+              <option value="short">주관식 단답형</option>
+              <option value="poll">투표 (정답 없음)</option>
             </select></div>
           <div class="field"><label>제한시간 (초)</label>
             <select id="ed-time">
               <option>5</option><option>10</option><option selected>20</option>
-              <option>30</option><option>60</option>
+              <option>30</option><option>60</option><option>90</option><option>120</option>
             </select></div>
+          <div class="field"><label>점수</label>
+            <select id="ed-points">
+              <option value="standard">표준</option>
+              <option value="double">더블 포인트</option>
+              <option value="none">점수 없음</option>
+            </select></div>
+          <div class="field" id="ed-shuffle-wrap"><label>보기 순서</label>
+            <label style="display:flex;align-items:center;gap:6px;font-weight:400;">
+              <input type="checkbox" id="ed-shuffle"> 무작위 셔플</label></div>
         </div>
         <div class="field"><label>문제</label>
           <input type="text" id="ed-qtext" maxlength="120" placeholder="문제를 입력하세요"></div>
-        <div class="field"><label>보기 (정답에 체크)</label>
+        <div class="field"><label>미디어 (선택 — 호스트 화면에 표시)</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <input type="text" id="ed-media-url" placeholder="이미지 URL 또는 유튜브/mp4 URL" style="flex:1;min-width:200px;">
+            <button class="btn-sm" id="btn-media-file" type="button">🖼 이미지 파일</button>
+            <input type="file" id="ed-media-file" accept="image/*" style="display:none;">
+            <button class="btn-sm danger" id="btn-media-clear" type="button">제거</button>
+          </div>
+          <div id="ed-media-prev" style="margin-top:6px;"></div>
+          <div style="font-size:12px;opacity:0.7;margin-top:4px;">이미지 파일은 자동 압축해 퀴즈에 내장됩니다. 동영상은 파일 업로드가 불가하여 유튜브/mp4 URL만 지원합니다.</div>
+        </div>
+        <div class="field" id="ed-choices-wrap"><label id="ed-choices-label">보기 (정답에 체크 — 복수 정답 가능, 3·4번은 비우면 제외)</label>
           <div id="ed-choices"></div></div>
+        <div class="field" id="ed-accepted-wrap" style="display:none;"><label>허용 답안 (쉼표로 구분 — 대소문자·공백 무시 비교)</label>
+          <input type="text" id="ed-accepted" placeholder="예: 서울, 서울특별시"></div>
         <div class="q-actions">
+          <button class="btn-sm" id="btn-q-dup">⧉ 문제 복제</button>
           <button class="btn-sm" id="btn-q-up">▲ 위로</button>
           <button class="btn-sm" id="btn-q-down">▼ 아래로</button>
           <button class="btn-sm danger" id="btn-q-del">🗑 문제 삭제</button>
@@ -309,6 +335,7 @@
     <button class="btn-sm" id="btn-hq-skip">넘어가기 ▶</button>
   </div>
   <div class="q-text-big" id="hq-text"></div>
+  <div class="q-media" id="hq-media"></div>
   <div class="answered-count"><span id="hq-answered">0</span> / <span id="hq-total">0</span> 명 응답</div>
   <div class="answer-grid" id="hq-grid"></div>
 </div>
@@ -320,6 +347,7 @@
     <button class="btn-sm primary" id="btn-hr-next">다음 ▶</button>
   </div>
   <div class="q-text-big" id="hr-text"></div>
+  <div class="q-media" id="hr-media"></div>
   <div class="dist-wrap" id="hr-dist"></div>
   <div class="answer-grid" id="hr-grid" style="flex:initial;"></div>
 </div>
@@ -353,6 +381,13 @@
   <div class="player-header"><span id="pq-name"></span><span id="pq-progress"></span></div>
   <div class="timer-bar-wrap"><div class="timer-bar" id="pq-timerbar"></div></div>
   <div class="big-btn-grid" id="pq-grid"></div>
+  <div id="pq-short" style="display:none;padding:14px;">
+    <input type="text" id="pq-short-input" maxlength="60" placeholder="답을 입력하세요"
+      style="width:100%;padding:14px;font-size:18px;border-radius:10px;border:none;">
+  </div>
+  <div id="pq-submitwrap" style="display:none;padding:0 14px 14px;">
+    <button class="btn-big green" id="btn-pq-submit">제출</button>
+  </div>
 </div>
 
 <!-- ============ 참가자: 결과 ============ -->
@@ -416,7 +451,7 @@ function toast(msg) {
 }
 function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }
 function uid() { return Math.random().toString(36).slice(2, 10); }
-function choicesOf(q) { return q.type === "ox" ? OX_LABELS : q.choices; }
+function choicesOf(q) { return q.type === "ox" ? OX_LABELS : (q.choices || []); }
 
 /* ---------------- 효과음 (Web Audio) ---------------- */
 let audioCtx = null;
@@ -443,8 +478,49 @@ function loadQuizzes() {
   try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch (e) { return []; }
 }
 function saveQuizzes(list) { localStorage.setItem(LS_KEY, JSON.stringify(list)); }
+const TIME_OPTS = [5, 10, 20, 30, 60, 90, 120];
+const POINTS_OPTS = ["standard", "double", "none"];
 function newQuestion() {
-  return { type: "mc", text: "", choices: ["", "", "", ""], answer: 0, timeLimit: 20 };
+  return { type: "mc", text: "", choices: ["", "", "", ""], answers: [0], accepted: [],
+           points: "standard", shuffle: false, media: null, timeLimit: 20 };
+}
+// 주관식 답 비교용 정규화: 공백 제거 + 소문자.
+function normAnswer(t) { return String(t || "").replace(/\s+/g, "").toLowerCase(); }
+// URL로 미디어 종류 판별.
+function mediaKindOf(url) {
+  if (/youtu\.be\/|youtube\.com\//.test(url)) return "youtube";
+  if (/\.(mp4|webm|ogg)(\?|$)/i.test(url)) return "video";
+  return "image";
+}
+function youtubeEmbed(url) {
+  const m = url.match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([\w-]{11})/);
+  return m ? `https://www.youtube.com/embed/${m[1]}` : null;
+}
+// 문제 정규화(편집기 로드·JSON 가져오기·과거 데이터 호환: answer → answers).
+function normQ(x) {
+  const type = ["mc", "ox", "short", "poll"].includes(x.type) ? x.type : "mc";
+  let answers = Array.isArray(x.answers) ? x.answers.map(n => n | 0) : [Math.max(0, Math.min(3, x.answer | 0))];
+  answers = [...new Set(answers)].filter(n => n >= 0 && n < 4).sort();
+  if (!answers.length) answers = [0];
+  if (type === "ox") answers = [answers[0] > 1 ? 0 : answers[0]];
+  return {
+    type,
+    text: String(x.text || "").slice(0, 120),
+    choices: (Array.isArray(x.choices) ? x.choices : ["", "", "", ""]).slice(0, 4)
+      .map(c => String(c).slice(0, 60)).concat(["", "", "", ""]).slice(0, 4),
+    answers,
+    accepted: (Array.isArray(x.accepted) ? x.accepted : []).map(a => String(a).slice(0, 60)).filter(Boolean).slice(0, 10),
+    points: POINTS_OPTS.includes(x.points) ? x.points : "standard",
+    shuffle: !!x.shuffle,
+    media: (x.media && typeof x.media.url === "string" && x.media.url) ? { url: String(x.media.url).slice(0, 300000) } : null,
+    timeLimit: TIME_OPTS.includes(x.timeLimit) ? x.timeLimit : 20,
+  };
+}
+// 실제 사용할 보기(뒤쪽 빈 보기 제외, 최소 2개).
+function effChoices(q) {
+  const c = q.choices.slice();
+  while (c.length > 2 && !c[c.length - 1].trim()) c.pop();
+  return c;
 }
 function validateQuiz(quiz) {
   if (!quiz.title.trim()) return "퀴즈 제목을 입력하세요.";
@@ -452,7 +528,12 @@ function validateQuiz(quiz) {
   for (let i = 0; i < quiz.questions.length; i++) {
     const q = quiz.questions[i];
     if (!q.text.trim()) return `${i + 1}번 문제의 내용이 비어 있습니다.`;
-    if (q.type === "mc" && q.choices.some(c => !c.trim())) return `${i + 1}번 문제의 보기를 모두 입력하세요.`;
+    if (q.type === "mc" || q.type === "poll") {
+      const c = effChoices(q);
+      if (c.some(x => !x.trim())) return `${i + 1}번 문제의 보기를 입력하세요(중간 보기는 비울 수 없고, 3·4번만 비워 제외할 수 있습니다).`;
+      if (q.type === "mc" && !q.answers.some(a => a < c.length)) return `${i + 1}번 문제의 정답을 체크하세요.`;
+    }
+    if (q.type === "short" && !q.accepted.length) return `${i + 1}번 문제의 허용 답안을 1개 이상 입력하세요.`;
   }
   return null;
 }
@@ -473,10 +554,17 @@ function renderQuizList() {
         <div class="qi-meta">문제 ${quiz.questions.length}개</div>
       </div>
       <button class="btn-sm primary" data-act="edit">편집</button>
+      <button class="btn-sm" data-act="dup" title="퀴즈 복제">⧉</button>
       <button class="btn-sm primary" data-act="host" style="background:var(--green);" ${fbReady ? "" : "disabled"}>▶ 시작</button>
       <button class="btn-sm danger" data-act="del">삭제</button>`;
     div.querySelector('[data-act=edit]').onclick = () => openEditor(quiz.id);
     div.querySelector('[data-act=host]').onclick = () => hostGame(quiz);
+    div.querySelector('[data-act=dup]').onclick = () => {
+      const copy = JSON.parse(JSON.stringify(quiz));
+      copy.id = uid(); copy.title = (quiz.title + " (사본)").slice(0, 40);
+      const l = loadQuizzes(); l.push(copy); saveQuizzes(l); renderQuizList();
+      toast("퀴즈를 복제했습니다.");
+    };
     div.querySelector('[data-act=del]').onclick = () => {
       if (!confirm(`'${quiz.title}' 퀴즈를 삭제할까요?`)) return;
       saveQuizzes(loadQuizzes().filter(x => x.id !== quiz.id));
@@ -529,13 +617,7 @@ $("import-file").onchange = e => {
       quizzes.forEach(q => {
         if (!q || !q.title || !Array.isArray(q.questions)) return;
         list.push({ id: uid(), title: String(q.title).slice(0, 40),
-          questions: q.questions.map(x => ({
-            type: x.type === "ox" ? "ox" : "mc",
-            text: String(x.text || "").slice(0, 120),
-            choices: (Array.isArray(x.choices) ? x.choices : ["","","",""]).slice(0, 4).map(c => String(c).slice(0, 60)),
-            answer: Math.max(0, Math.min(3, x.answer | 0)),
-            timeLimit: [5,10,20,30,60].includes(x.timeLimit) ? x.timeLimit : 20,
-          })) });
+          questions: q.questions.map(normQ) });
         n++;
       });
       saveQuizzes(list); renderQuizList();
@@ -554,7 +636,7 @@ let edIdx = 0;       // 선택된 문제 인덱스
 
 function openEditor(quizId) {
   const found = quizId && loadQuizzes().find(q => q.id === quizId);
-  edQuiz = found ? JSON.parse(JSON.stringify(found))
+  edQuiz = found ? { ...JSON.parse(JSON.stringify(found)), questions: found.questions.map(normQ) }
                  : { id: uid(), title: "", questions: [newQuestion()] };
   edIdx = 0;
   $("ed-title").value = edQuiz.title;
@@ -567,7 +649,8 @@ function renderEditor() {
   edQuiz.questions.forEach((q, i) => {
     const item = document.createElement("div");
     item.className = "q-item" + (i === edIdx ? " sel" : "");
-    item.innerHTML = `<div class="q-num">${i + 1}. ${q.type === "ox" ? "OX" : "4지선다"} · ${q.timeLimit}초</div>
+    const typeLabel = { mc: "선다형", ox: "OX", short: "단답형", poll: "투표" }[q.type] || "선다형";
+    item.innerHTML = `<div class="q-num">${i + 1}. ${typeLabel} · ${q.timeLimit}초${q.points === "double" ? " · 2배" : q.points === "none" ? " · 0점" : ""}</div>
       <div class="q-preview">${esc(q.text) || "<i>(내용 없음)</i>"}</div>`;
     item.onclick = () => { edIdx = i; renderEditor(); };
     listEl.appendChild(item);
@@ -578,7 +661,23 @@ function renderQuestionPanel() {
   const q = edQuiz.questions[edIdx];
   $("ed-type").value = q.type;
   $("ed-time").value = q.timeLimit;
+  $("ed-points").value = q.points || "standard";
   $("ed-qtext").value = q.text;
+  $("ed-shuffle").checked = !!q.shuffle;
+  // 셔플은 보기가 있는 유형에서만 의미 있음.
+  $("ed-shuffle-wrap").style.display = (q.type === "mc" || q.type === "poll") ? "" : "none";
+  // 미디어.
+  $("ed-media-url").value = q.media && !q.media.url.startsWith("data:") ? q.media.url : "";
+  renderMediaPreview(q);
+  // 유형별 입력 영역 전환.
+  const isShort = q.type === "short";
+  $("ed-choices-wrap").style.display = isShort ? "none" : "";
+  $("ed-accepted-wrap").style.display = isShort ? "" : "none";
+  if (isShort) { $("ed-accepted").value = (q.accepted || []).join(", "); return; }
+  $("ed-choices-label").textContent =
+    q.type === "poll" ? "보기 (투표 항목 — 정답 없음, 3·4번은 비우면 제외)"
+    : q.type === "ox" ? "보기 (정답에 체크)"
+    : "보기 (정답에 체크 — 복수 정답 가능, 3·4번은 비우면 제외)";
   const wrap = $("ed-choices");
   wrap.innerHTML = "";
   const labels = choicesOf(q);
@@ -586,23 +685,85 @@ function renderQuestionPanel() {
     const row = document.createElement("div");
     row.className = "choice-edit";
     const isOx = q.type === "ox";
+    const optional = !isOx && i >= 2;
     row.innerHTML = `
       <div class="shape" style="background:${SHAPE_BG[i]}">${isOx ? (i === 0 ? "O" : "X") : SHAPES[i]}</div>
       ${isOx ? `<div style="flex:1; font-weight:700;">${label}</div>`
-             : `<input type="text" maxlength="60" placeholder="보기 ${i + 1}" value="${esc(q.choices[i])}">`}
-      <input type="radio" name="ed-answer" title="정답" ${q.answer === i ? "checked" : ""}>`;
+             : `<input type="text" maxlength="60" placeholder="보기 ${i + 1}${optional ? " (비우면 제외)" : ""}" value="${esc(q.choices[i])}">`}
+      ${q.type === "poll" ? "" : `<input type="checkbox" name="ed-answer" title="정답" ${q.answers.includes(i) ? "checked" : ""}>`}`;
     if (!isOx) row.querySelector('input[type=text]').oninput = e => { q.choices[i] = e.target.value; };
-    row.querySelector('input[type=radio]').onchange = () => { q.answer = i; };
+    const chk = row.querySelector('input[type=checkbox]');
+    if (chk) chk.onchange = () => {
+      let a = q.answers.filter(x => x !== i);
+      if (chk.checked) a.push(i);
+      if (q.type === "ox") a = [i]; // OX는 단일 정답.
+      q.answers = [...new Set(a)].sort();
+      if (!q.answers.length) { q.answers = [i]; chk.checked = true; toast("정답이 최소 1개 필요합니다."); }
+      if (q.type === "ox") renderQuestionPanel();
+    };
     wrap.appendChild(row);
   });
+}
+function renderMediaPreview(q) {
+  const box = $("ed-media-prev");
+  if (!q.media) { box.innerHTML = ""; return; }
+  const url = q.media.url;
+  const kind = mediaKindOf(url);
+  if (kind === "youtube") box.innerHTML = `<div style="font-size:13px;">🎬 유튜브: ${esc(url.slice(0, 80))}</div>`;
+  else if (kind === "video") box.innerHTML = `<div style="font-size:13px;">🎬 동영상: ${esc(url.slice(0, 80))}</div>`;
+  else box.innerHTML = `<img src="${esc(url)}" alt="미리보기" style="max-height:120px;max-width:100%;border-radius:8px;">`;
 }
 $("ed-type").onchange = e => {
   const q = edQuiz.questions[edIdx];
   q.type = e.target.value;
-  if (q.type === "ox" && q.answer > 1) q.answer = 0;
+  if (q.type === "ox") q.answers = [q.answers[0] > 1 ? 0 : q.answers[0]];
   renderQuestionPanel();
 };
 $("ed-time").onchange = e => { edQuiz.questions[edIdx].timeLimit = +e.target.value; };
+$("ed-points").onchange = e => { edQuiz.questions[edIdx].points = e.target.value; };
+$("ed-shuffle").onchange = e => { edQuiz.questions[edIdx].shuffle = e.target.checked; };
+$("ed-accepted").oninput = e => {
+  edQuiz.questions[edIdx].accepted = e.target.value.split(",").map(x => x.trim()).filter(Boolean).slice(0, 10);
+};
+// 미디어: URL 직접 입력.
+$("ed-media-url").onchange = e => {
+  const q = edQuiz.questions[edIdx];
+  const url = e.target.value.trim();
+  q.media = url ? { url } : null;
+  renderMediaPreview(q);
+};
+// 미디어: 이미지 파일 → 압축(최대 800px JPEG) 후 내장.
+$("btn-media-file").onclick = () => $("ed-media-file").click();
+$("ed-media-file").onchange = e => {
+  const file = e.target.files[0]; e.target.value = "";
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    const scale = Math.min(1, 800 / Math.max(img.width, img.height));
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(img.width * scale); cv.height = Math.round(img.height * scale);
+    cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+    const dataUrl = cv.toDataURL("image/jpeg", 0.8);
+    if (dataUrl.length > 300000) return toast("이미지가 너무 큽니다. 더 작은 이미지를 사용하세요.");
+    const q = edQuiz.questions[edIdx];
+    q.media = { url: dataUrl };
+    $("ed-media-url").value = "";
+    renderMediaPreview(q);
+    URL.revokeObjectURL(img.src);
+  };
+  img.onerror = () => toast("이미지 파일을 읽을 수 없습니다.");
+  img.src = URL.createObjectURL(file);
+};
+$("btn-media-clear").onclick = () => {
+  const q = edQuiz.questions[edIdx];
+  q.media = null; $("ed-media-url").value = ""; renderMediaPreview(q);
+};
+$("btn-q-dup").onclick = () => {
+  const copy = JSON.parse(JSON.stringify(edQuiz.questions[edIdx]));
+  edQuiz.questions.splice(edIdx + 1, 0, copy);
+  edIdx++;
+  renderEditor();
+};
 $("ed-qtext").oninput = e => { edQuiz.questions[edIdx].text = e.target.value; };
 $("ed-title").oninput = e => { edQuiz.title = e.target.value; };
 $("btn-add-q").onclick = () => {
@@ -679,12 +840,29 @@ async function hostGame(quiz) {
     pin = null;
   }
   if (!pin) return toast("PIN 생성에 실패했습니다. 다시 시도해 주세요.");
-  host.pin = pin; host.ref = ref; host.quiz = quiz; host.qIdx = -1;
+  // 진행용 스냅샷: 정규화 + 뒤쪽 빈 보기 제거 + (옵션) 보기 셔플(정답 인덱스 재매핑).
+  const prepareForPlay = (raw) => {
+    const q = normQ(raw);
+    const base = { type: q.type, text: q.text, timeLimit: q.timeLimit, points: q.points, media: q.media || null };
+    if (q.type === "short") return { ...base, accepted: q.accepted };
+    if (q.type === "ox") return { ...base, answers: q.answers };
+    let choices = effChoices(q);
+    let answers = q.answers.filter(a => a < choices.length);
+    if (q.shuffle) {
+      const idx = choices.map((_, i) => i);
+      for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+      choices = idx.map(i => choices[i]);
+      answers = answers.map(a => idx.indexOf(a)).sort();
+    }
+    return { ...base, choices, answers, multi: q.type === "mc" && answers.length > 1 };
+  };
+  const playQuiz = { title: quiz.title, questions: quiz.questions.map(prepareForPlay) };
+  host.pin = pin; host.ref = ref; host.quiz = playQuiz; host.qIdx = -1;
   await ref.set({
     status: "lobby",
     createdAt: firebase.database.ServerValue.TIMESTAMP,
     currentQ: -1,
-    quiz: { title: quiz.title, questions: quiz.questions },
+    quiz: playQuiz,
   });
   ref.onDisconnect().remove(); // 호스트가 나가면 방 제거
 
@@ -728,22 +906,42 @@ function hostNextQuestion() {
     else { clearInterval(cd); sfx.go(); hostShowQuestion(q); }
   }, 900);
 }
+function mediaHTML(q) {
+  if (!q.media || !q.media.url) return "";
+  const url = q.media.url;
+  const kind = url.startsWith("data:") ? "image" : mediaKindOf(url);
+  if (kind === "youtube") {
+    const em = youtubeEmbed(url);
+    return em ? `<iframe src="${esc(em)}" style="width:min(640px,90vw);aspect-ratio:16/9;border:none;border-radius:10px;" allow="autoplay; encrypted-media" allowfullscreen></iframe>` : "";
+  }
+  if (kind === "video") return `<video src="${esc(url)}" controls style="max-width:min(640px,90vw);max-height:38vh;border-radius:10px;"></video>`;
+  return `<img src="${esc(url)}" alt="" style="max-width:min(640px,90vw);max-height:38vh;border-radius:10px;">`;
+}
 function hostShowQuestion(q) {
   host.revealed = false;
   host.answers = {};
   const startAt = Date.now();
   host.ref.update({ status: "question", questionStartAt: startAt });
 
-  $("hq-progress").textContent = `${host.qIdx + 1} / ${host.quiz.questions.length}`;
+  $("hq-progress").textContent = `${host.qIdx + 1} / ${host.quiz.questions.length}`
+    + (q.points === "double" ? " · 더블 포인트!" : q.points === "none" ? " · 점수 없음" : "")
+    + (q.type === "poll" ? " · 투표" : "");
   $("hq-text").textContent = q.text;
+  $("hq-media").innerHTML = mediaHTML(q);
   $("hq-answered").textContent = "0";
   const grid = $("hq-grid");
-  grid.className = "answer-grid" + (q.type === "ox" ? " ox" : "");
-  grid.innerHTML = choicesOf(q).map((c, i) => `
-    <div class="ans-tile ${COLORS[i]}">
-      <span class="shape">${q.type === "ox" ? (i === 0 ? "O" : "X") : SHAPES[i]}</span>
-      <span>${esc(c)}</span>
-    </div>`).join("");
+  if (q.type === "short") {
+    grid.className = "answer-grid";
+    grid.innerHTML = `<div class="notice" style="grid-column:1/-1;align-self:center;justify-self:center;font-size:18px;">✍ 참가자가 답을 입력하는 중입니다…</div>`;
+  } else {
+    grid.className = "answer-grid" + (q.type === "ox" ? " ox" : "");
+    grid.innerHTML = choicesOf(q).map((c, i) => `
+      <div class="ans-tile ${COLORS[i]}">
+        <span class="shape">${q.type === "ox" ? (i === 0 ? "O" : "X") : SHAPES[i]}</span>
+        <span>${esc(c)}</span>
+      </div>`).join("")
+      + (q.multi ? `<div style="grid-column:1/-1;text-align:center;font-weight:700;">복수 정답 — 해당하는 것을 모두 고르세요</div>` : "");
+  }
   show("view-hq");
 
   // 답변 구독
@@ -778,11 +976,21 @@ function hostReveal(q) {
   host.ref.child("questionStartAt").get().then(s => {
     const qStart = s.val() || startAt;
     const limitMs = q.timeLimit * 1000;
+    const mult = q.points === "double" ? 2 : q.points === "none" ? 0 : 1;
+    const isCorrect = (a) => {
+      if (q.type === "poll") return false; // 투표는 정답 없음.
+      if (q.type === "short") return q.accepted.some(x => normAnswer(x) === normAnswer(a.text));
+      if (q.multi) {
+        const sel = Array.isArray(a.choices) ? [...a.choices].sort() : [];
+        return sel.length === q.answers.length && sel.every((v, i) => v === q.answers[i]);
+      }
+      return a.choice === q.answers[0];
+    };
     const updates = {};
     Object.entries(host.answers).forEach(([pid, a]) => {
-      const correct = a.choice === q.answer;
+      const correct = isCorrect(a);
       const remain = Math.max(0, limitMs - Math.max(0, (a.at || qStart) - qStart));
-      const points = correct ? Math.round(500 + 500 * remain / limitMs) : 0;
+      const points = correct ? Math.round((500 + 500 * remain / limitMs) * mult) : 0;
       updates[`answers/${host.qIdx}/${pid}/correct`] = correct;
       updates[`answers/${host.qIdx}/${pid}/points`] = points;
       if (points && host.players[pid]) {
@@ -794,27 +1002,53 @@ function hostReveal(q) {
   }).then(() => hostShowReveal(q));
 }
 function hostShowReveal(q) {
-  const labels = choicesOf(q);
-  const counts = labels.map(() => 0);
-  Object.values(host.answers).forEach(a => { if (a.choice >= 0 && a.choice < counts.length) counts[a.choice]++; });
-  const maxC = Math.max(1, ...counts);
-
-  $("hr-progress").textContent = `${host.qIdx + 1} / ${host.quiz.questions.length} — 정답 공개`;
+  const isPoll = q.type === "poll";
+  $("hr-progress").textContent = `${host.qIdx + 1} / ${host.quiz.questions.length} — ${isPoll ? "투표 결과" : "정답 공개"}`;
   $("hr-text").textContent = q.text;
-  $("hr-dist").innerHTML = labels.map((c, i) => `
-    <div class="dist-col">
-      <div class="dist-bar ${COLORS[i]}" style="height:${8 + 78 * counts[i] / maxC}%"><div class="cnt">${counts[i]}</div></div>
-      <div class="dist-shape ${COLORS[i]} ${i === q.answer ? "correct" : ""}">${q.type === "ox" ? (i === 0 ? "O" : "X") : SHAPES[i]}</div>
-    </div>`).join("");
+  $("hr-media").innerHTML = mediaHTML(q);
   const grid = $("hr-grid");
-  grid.className = "answer-grid" + (q.type === "ox" ? " ox" : "");
-  grid.innerHTML = labels.map((c, i) => `
-    <div class="ans-tile ${COLORS[i]} ${i === q.answer ? "" : "dim"}">
-      <span class="shape">${q.type === "ox" ? (i === 0 ? "O" : "X") : SHAPES[i]}</span>
-      <span>${esc(c)}</span>
-      ${i === q.answer ? '<span class="mark">✔</span>' : ""}
-    </div>`).join("");
-  sfx.correct();
+
+  if (q.type === "short") {
+    // 주관식: 답안 상위 목록(정답 여부 표시).
+    const tally = {};
+    Object.values(host.answers).forEach(a => {
+      const t = String(a.text || "").trim() || "(무응답)";
+      tally[t] = (tally[t] || 0) + 1;
+    });
+    const rows = Object.entries(tally).sort((x, y) => y[1] - x[1]).slice(0, 8);
+    const ok = (t) => q.accepted.some(x => normAnswer(x) === normAnswer(t));
+    $("hr-dist").innerHTML = `<div style="align-self:center;width:min(560px,92vw);display:flex;flex-direction:column;gap:8px;">
+      ${rows.length ? rows.map(([t, n]) => `
+        <div style="display:flex;gap:10px;align-items:center;background:rgba(255,255,255,0.12);border-radius:10px;padding:10px 14px;">
+          <span style="font-size:18px;">${ok(t) ? "✅" : "❌"}</span>
+          <span style="flex:1;font-weight:700;">${esc(t)}</span><span>${n}명</span>
+        </div>`).join("") : `<div class="notice">응답이 없습니다.</div>`}
+      <div style="opacity:0.85;font-size:14px;">정답: ${q.accepted.map(esc).join(", ")}</div>
+    </div>`;
+    grid.innerHTML = "";
+  } else {
+    const labels = choicesOf(q);
+    const counts = labels.map(() => 0);
+    Object.values(host.answers).forEach(a => {
+      const sel = Array.isArray(a.choices) ? a.choices : (a.choice >= 0 ? [a.choice] : []);
+      sel.forEach(c => { if (c >= 0 && c < counts.length) counts[c]++; });
+    });
+    const maxC = Math.max(1, ...counts);
+    const isAns = (i) => !isPoll && (q.answers || []).includes(i);
+    $("hr-dist").innerHTML = labels.map((c, i) => `
+      <div class="dist-col">
+        <div class="dist-bar ${COLORS[i]}" style="height:${8 + 78 * counts[i] / maxC}%"><div class="cnt">${counts[i]}</div></div>
+        <div class="dist-shape ${COLORS[i]} ${isAns(i) ? "correct" : ""}">${q.type === "ox" ? (i === 0 ? "O" : "X") : SHAPES[i]}</div>
+      </div>`).join("");
+    grid.className = "answer-grid" + (q.type === "ox" ? " ox" : "");
+    grid.innerHTML = labels.map((c, i) => `
+      <div class="ans-tile ${COLORS[i]} ${isPoll || isAns(i) ? "" : "dim"}">
+        <span class="shape">${q.type === "ox" ? (i === 0 ? "O" : "X") : SHAPES[i]}</span>
+        <span>${esc(c)}</span>
+        ${isAns(i) ? '<span class="mark">✔</span>' : ""}
+      </div>`).join("");
+  }
+  if (isPoll) sfx.go(); else sfx.correct();
   show("view-hr");
   $("btn-hr-next").onclick = () => hostShowBoard();
 }
@@ -941,16 +1175,55 @@ function playerShowQuestion(game) {
   const qi = game.currentQ;
   const q = game.quiz.questions[qi];
   if (player.answeredQ === qi) return; // 이미 답함 (새로고침 등)
-  $("pq-progress").textContent = `${qi + 1} / ${game.quiz.questions.length}`;
+  $("pq-progress").textContent = `${qi + 1} / ${game.quiz.questions.length}`
+    + (q.type === "poll" ? " · 투표" : q.multi ? " · 복수 선택" : "");
   const grid = $("pq-grid");
   grid.innerHTML = "";
-  choicesOf(q).forEach((label, i) => {
-    const b = document.createElement("button");
-    b.className = "p-ans-btn " + COLORS[i];
-    b.innerHTML = `<span>${q.type === "ox" ? (i === 0 ? "O" : "X") : SHAPES[i]}</span><span class="lbl">${esc(label)}</span>`;
-    b.onclick = () => playerAnswer(qi, i);
-    grid.appendChild(b);
-  });
+  const shortBox = $("pq-short"), submitWrap = $("pq-submitwrap");
+  shortBox.style.display = q.type === "short" ? "" : "none";
+  submitWrap.style.display = (q.type === "short" || q.multi) ? "" : "none";
+
+  if (q.type === "short") {
+    // 주관식: 입력 + 제출.
+    grid.style.display = "none";
+    const input = $("pq-short-input");
+    input.value = ""; input.disabled = false;
+    setTimeout(() => input.focus(), 50);
+    $("btn-pq-submit").onclick = () => {
+      if (!input.value.trim()) return toast("답을 입력하세요.");
+      playerAnswer(qi, { text: input.value.trim().slice(0, 60) });
+    };
+    input.onkeydown = (e) => { if (e.key === "Enter") $("btn-pq-submit").click(); };
+  } else if (q.multi) {
+    // 복수 정답: 토글 후 제출.
+    grid.style.display = "";
+    const selected = new Set();
+    choicesOf(q).forEach((label, i) => {
+      const b = document.createElement("button");
+      b.className = "p-ans-btn " + COLORS[i];
+      b.innerHTML = `<span>${SHAPES[i]}</span><span class="lbl">${esc(label)}</span>`;
+      b.onclick = () => {
+        if (selected.has(i)) { selected.delete(i); b.style.opacity = ""; b.style.outline = ""; }
+        else { selected.add(i); b.style.opacity = "1"; b.style.outline = "4px solid #fff"; }
+      };
+      b.style.opacity = "";
+      grid.appendChild(b);
+    });
+    $("btn-pq-submit").onclick = () => {
+      if (!selected.size) return toast("보기를 1개 이상 선택하세요.");
+      playerAnswer(qi, { choices: [...selected].sort() });
+    };
+  } else {
+    // 단일 선택(선다·OX·투표): 탭 즉시 제출.
+    grid.style.display = "";
+    choicesOf(q).forEach((label, i) => {
+      const b = document.createElement("button");
+      b.className = "p-ans-btn " + COLORS[i];
+      b.innerHTML = `<span>${q.type === "ox" ? (i === 0 ? "O" : "X") : SHAPES[i]}</span><span class="lbl">${esc(label)}</span>`;
+      b.onclick = () => playerAnswer(qi, { choice: i });
+      grid.appendChild(b);
+    });
+  }
   // 타이머 바
   clearInterval(player.timer);
   const limitMs = q.timeLimit * 1000;
@@ -970,13 +1243,14 @@ function playerShowQuestion(game) {
   }, 150);
   show("view-pq");
 }
-function playerAnswer(qi, choice) {
+function playerAnswer(qi, payload) {
   if (player.answeredQ === qi) return;
   player.answeredQ = qi;
   clearInterval(player.timer);
-  player.ref.child(`answers/${qi}/${player.id}`).set({ choice, at: Date.now() });
-  $("pw-icon").textContent = "🤞";
-  $("pw-msg").textContent = "답변 완료! 다른 참가자를 기다리는 중...";
+  player.ref.child(`answers/${qi}/${player.id}`).set({ ...payload, at: Date.now() });
+  const isPoll = player.quiz?.questions?.[qi]?.type === "poll";
+  $("pw-icon").textContent = isPoll ? "🗳" : "🤞";
+  $("pw-msg").textContent = isPoll ? "투표 완료! 결과를 기다리는 중..." : "답변 완료! 다른 참가자를 기다리는 중...";
   show("view-pwait");
 }
 function playerShowResult(game, myScore) {
@@ -988,6 +1262,14 @@ function playerShowResult(game, myScore) {
     .sort((a, b) => b.score - a.score);
   const myRank = ranked.findIndex(p => p.name === player.name) + 1;
 
+  const q = game.quiz.questions[qi];
+  if (q.type === "poll") {
+    $("pr-icon").textContent = "🗳"; $("pr-title").textContent = my ? "투표 완료" : "미참여";
+    $("pr-points").textContent = "";
+    $("pr-rank").textContent = `현재 ${myRank}위 · ${myScore.toLocaleString()}점`;
+    show("view-pr");
+    return;
+  }
   if (my && my.correct) {
     $("pr-icon").textContent = "✅"; $("pr-title").textContent = "정답!";
     $("pr-points").textContent = `+${(my.points || 0).toLocaleString()}점`;
