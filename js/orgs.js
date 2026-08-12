@@ -19,6 +19,9 @@ export const ORG_FEATURES = [
   ["stats", "통계"],
   ["reportdoc", "운영 보고서"],
   ["board", "공개 현황 보드"],
+  // 상단바 바로가기(퀴즈·히어로 미션은 기본 기관 백엔드로 연결되는 링크).
+  ["quiz", "퀴즈 바로가기"],
+  ["scfe", "히어로 미션 바로가기"],
 ];
 // 탭 id → 기능 id. 매핑에 없는 탭(설정 핵심)은 기능 선택과 무관하게 항상 표시.
 const TAB_FEATURE = {
@@ -92,9 +95,24 @@ export async function initOrgSelectors() {
     }
   }
 
-  // 추가 기관에서는 기본 기관 전용 바로가기(현황 보드·퀴즈·히어로 미션)를 숨긴다.
+  // 상단바 바로가기: 기관별 사용 기능에 따라 칩 단위로 표시.
+  // 기본 기관은 전체 표시. 추가 기관은 현황 보드=board, 퀴즈=quiz, 히어로 미션=scfe 기능 선택을 따른다.
+  const feats = currentOrg && Array.isArray(currentOrg.features) ? currentOrg.features : null;
+  const allowChip = (f) => !currentOrg || !feats || feats.includes(f);
+  const chips = [
+    ['a[href^="board.html"]', "board"],
+    ['a[href^="quiz.html"]', "quiz"],
+    ['a[href^="scfe/"]', "scfe"],
+  ];
+  let shown = 0;
+  for (const [selr, f] of chips) {
+    const a = document.querySelector(`.quick-links ${selr}`);
+    if (!a) continue;
+    a.hidden = !allowChip(f);
+    if (!a.hidden) shown++;
+  }
   const quick = document.querySelector(".quick-links");
-  if (quick) quick.hidden = !!currentOrg;
+  if (quick) quick.hidden = !shown;
 
   // 상단바 표시명 + 바로가기(현황 보드)에 기관 파라미터 반영.
   const label = document.getElementById("org-label");
