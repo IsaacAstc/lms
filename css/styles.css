@@ -366,3 +366,9 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .org-label:empty { display: none; }
 .topbar-org { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; }
 .topbar-org select { padding: 0.15rem 0.3rem; font-size: 0.78rem; }
+
+/* 기관 관리: 사용 기능 체크박스 */
+.org-features { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; }
+.org-features .chk { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; }
+.org-features .chk input { width: auto; }
+.org-feats { white-space: normal; max-width: 16rem; font-size: 0.8rem; }
