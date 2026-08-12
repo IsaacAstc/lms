@@ -6,7 +6,7 @@
 import {
   collection, getDocs, doc, setDoc, deleteDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { hubDb, currentOrg, switchOrg } from "./firebase.js";
+import { hubDb, currentOrg, switchOrg, guardedReload } from "./firebase.js";
 import { escapeHtml, isMasterMode } from "./app.js";
 
 // 기관별 취사선택 가능한 기능(탭 그룹 단위). 설정 핵심(기준값·관리자·데이터 관리)은 항상 포함.
@@ -72,15 +72,21 @@ export async function initOrgSelectors() {
       switchOrg(o ? { id: o.id, name: o.name, config: o.config, features: o.features } : null); // null = 기본 기관.
     });
   }
-  // 접속 중 기관의 레지스트리 변경(기관명·config·기능 목록)을 저장본에 반영 — 다르면 1회 새로고침.
+  // 접속 중 기관의 레지스트리 변경(기관명·config·기능 목록)을 저장본에 반영.
+  // 키 순서 차이로 인한 오탐을 막기 위해 정규화(정렬) 후 비교하고,
+  // 다를 때만 저장 + 가드된 새로고침(연속 반복 시 자동 중단) 1회.
   if (currentOrg) {
     const reg = orgs.find((o) => o.id === currentOrg.id);
     if (reg) {
-      const fresh = { id: reg.id, name: reg.name, config: reg.config, features: reg.features };
+      const stable = (v) => JSON.stringify(v, (k, x) =>
+        (x && typeof x === "object" && !Array.isArray(x))
+          ? Object.fromEntries(Object.keys(x).sort().map((kk) => [kk, x[kk]])) : x);
+      const fresh = { id: reg.id, name: reg.name || "", config: reg.config || {}, features: reg.features ?? null };
       const stored = JSON.parse(localStorage.getItem("lmsOrg") || "null");
-      if (stored && JSON.stringify(stored) !== JSON.stringify(fresh)) {
+      const norm = stored ? { id: stored.id, name: stored.name || "", config: stored.config || {}, features: stored.features ?? null } : null;
+      if (norm && stable(norm) !== stable(fresh)) {
         localStorage.setItem("lmsOrg", JSON.stringify(fresh));
-        location.reload();
+        guardedReload();
         return;
       }
     }
