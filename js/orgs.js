@@ -9,7 +9,31 @@ import {
 import { hubDb, currentOrg, switchOrg } from "./firebase.js";
 import { escapeHtml, isMasterMode } from "./app.js";
 
-let orgsCache = null; // [{id, name, active, config}]
+// 기관별 취사선택 가능한 기능(탭 그룹 단위). 설정 핵심(기준값·관리자·데이터 관리)은 항상 포함.
+export const ORG_FEATURES = [
+  ["courses", "차수·시간표"],
+  ["master", "마스터(커리큘럼·강의실·강사)"],
+  ["finance", "강사료·경비"],
+  ["surveys", "설문 관리"],
+  ["survey-result", "설문 결과"],
+  ["stats", "통계"],
+  ["reportdoc", "운영 보고서"],
+  ["board", "공개 현황 보드"],
+];
+// 탭 id → 기능 id. 매핑에 없는 탭(설정 핵심)은 기능 선택과 무관하게 항상 표시.
+const TAB_FEATURE = {
+  courses: "courses",
+  programs: "master", rooms: "master", instructors: "master",
+  payroll: "finance", expenses: "finance",
+  surveys: "surveys",
+  reports: "survey-result", freetext: "survey-result",
+  stats: "stats",
+  reportdoc: "reportdoc",
+  board: "board",
+};
+export function tabFeature(tab) { return TAB_FEATURE[tab] || null; }
+
+let orgsCache = null; // [{id, name, active, config, features}]
 
 async function fetchOrgs() {
   if (orgsCache) return orgsCache;
@@ -45,9 +69,27 @@ export async function initOrgSelectors() {
       const id = sel.value;
       if ((currentOrg?.id || "") === id) return;
       const o = active.find((x) => x.id === id);
-      switchOrg(o || null); // null = 기본 기관. 저장 후 새로고침.
+      switchOrg(o ? { id: o.id, name: o.name, config: o.config, features: o.features } : null); // null = 기본 기관.
     });
   }
+  // 접속 중 기관의 레지스트리 변경(기관명·config·기능 목록)을 저장본에 반영 — 다르면 1회 새로고침.
+  if (currentOrg) {
+    const reg = orgs.find((o) => o.id === currentOrg.id);
+    if (reg) {
+      const fresh = { id: reg.id, name: reg.name, config: reg.config, features: reg.features };
+      const stored = JSON.parse(localStorage.getItem("lmsOrg") || "null");
+      if (stored && JSON.stringify(stored) !== JSON.stringify(fresh)) {
+        localStorage.setItem("lmsOrg", JSON.stringify(fresh));
+        location.reload();
+        return;
+      }
+    }
+  }
+
+  // 추가 기관에서는 기본 기관 전용 바로가기(현황 보드·퀴즈·히어로 미션)를 숨긴다.
+  const quick = document.querySelector(".quick-links");
+  if (quick) quick.hidden = !!currentOrg;
+
   // 상단바 표시명 + 바로가기(현황 보드)에 기관 파라미터 반영.
   const label = document.getElementById("org-label");
   if (label) label.textContent = currentOrg ? currentOrg.name : "";
@@ -85,9 +127,24 @@ function parseConfig(text) {
   return { config: keep };
 }
 
+function renderFeatureChecks(form) {
+  const box = form.querySelector("#org-features");
+  if (!box || box.childElementCount) return;
+  box.innerHTML = ORG_FEATURES.map(([id, label]) =>
+    `<label class="chk"><input type="checkbox" name="feat" value="${id}" checked> ${escapeHtml(label)}</label>`).join("");
+}
+function setFeatureChecks(form, features) {
+  const all = !Array.isArray(features); // 미설정 = 전체 사용
+  form.querySelectorAll('input[name="feat"]').forEach((c) => { c.checked = all || features.includes(c.value); });
+}
+function readFeatureChecks(form) {
+  return [...form.querySelectorAll('input[name="feat"]:checked')].map((c) => c.value);
+}
+
 export function initOrgAdmin() {
   const form = document.getElementById("org-form");
   if (!form) return;
+  renderFeatureChecks(form);
   const listBox = document.getElementById("org-list");
   const note = document.getElementById("org-note");
 
@@ -105,11 +162,15 @@ export function initOrgAdmin() {
     const orgs = await fetchOrgs();
     if (!orgs.length) { listBox.innerHTML = `<p class="empty">등록된 기관이 없습니다. 기본 기관 단독으로 운영 중입니다.</p>`; return; }
     listBox.innerHTML = `<table><thead><tr>
-      <th>기관 ID</th><th>기관명</th><th>프로젝트</th><th>사용</th><th>관리</th>
+      <th>기관 ID</th><th>기관명</th><th>프로젝트</th><th>사용 기능</th><th>사용</th><th>관리</th>
     </tr></thead><tbody>${orgs.map((o) => `<tr>
       <td>${escapeHtml(o.id)}</td>
       <td>${escapeHtml(o.name || "")}</td>
       <td>${escapeHtml(o.config?.projectId || "")}</td>
+      <td class="org-feats">${Array.isArray(o.features)
+        ? (o.features.length === ORG_FEATURES.length ? "전체"
+          : ORG_FEATURES.filter(([f]) => o.features.includes(f)).map(([, l]) => escapeHtml(l.split("(")[0])).join(", ") || "(없음)")
+        : "전체"}</td>
       <td style="text-align:center">${o.active !== false ? "○" : "중지"}</td>
       <td class="actions">
         <button type="button" class="o-edit" data-id="${escapeHtml(o.id)}">수정</button>
@@ -124,13 +185,16 @@ export function initOrgAdmin() {
       form.orgId.readOnly = true;
       form.orgName.value = o.name || "";
       form.orgConfig.value = JSON.stringify(o.config || {}, null, 2);
+      setFeatureChecks(form, o.features);
       form.scrollIntoView({ behavior: "smooth" });
     }));
     listBox.querySelectorAll(".o-toggle").forEach((b) => b.addEventListener("click", async () => {
       const o = orgs.find((x) => x.id === b.dataset.id);
       try {
         await setDoc(doc(hubDb, "orgs", o.id), {
-          name: o.name || "", config: o.config || {}, active: o.active === false, updatedAtMs: Date.now(),
+          name: o.name || "", config: o.config || {},
+          features: Array.isArray(o.features) ? o.features : ORG_FEATURES.map(([f]) => f),
+          active: o.active === false, updatedAtMs: Date.now(),
         });
         render();
       } catch (e) { alert("저장 실패: " + e.message); }
@@ -154,7 +218,8 @@ export function initOrgAdmin() {
     try {
       const prev = (await fetchOrgs()).find((x) => x.id === id);
       await setDoc(doc(hubDb, "orgs", id), {
-        name, config: parsed.config, active: prev ? prev.active !== false : true, updatedAtMs: Date.now(),
+        name, config: parsed.config, features: readFeatureChecks(form),
+        active: prev ? prev.active !== false : true, updatedAtMs: Date.now(),
       });
       form.reset();
       form.orgId.readOnly = false;
@@ -162,7 +227,7 @@ export function initOrgAdmin() {
       render();
     } catch (e) { alert("저장 실패: " + e.message); }
   });
-  document.getElementById("org-cancel").addEventListener("click", () => { form.reset(); form.orgId.readOnly = false; });
+  document.getElementById("org-cancel").addEventListener("click", () => { form.reset(); form.orgId.readOnly = false; setFeatureChecks(form, null); });
 
   render();
 }

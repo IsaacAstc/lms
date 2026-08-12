@@ -19,7 +19,8 @@ import { initBoardAdmin } from "./board-admin.js";
 import { initExportButtons } from "./export-csv.js";
 import { initCsvImport } from "./csv-import.js";
 import { initSeed } from "./seed.js";
-import { initOrgSelectors, initOrgAdmin } from "./orgs.js";
+import { initOrgSelectors, initOrgAdmin, tabFeature } from "./orgs.js";
+import { currentOrg } from "./firebase.js";
 
 // 공용 유틸: HTML 이스케이프 (XSS 방지).
 export function escapeHtml(v) {
@@ -49,10 +50,21 @@ const MASTER_ONLY_TABS = new Set(["data", "orgs"]);
 let masterMode = false;
 export function isMasterMode() { return masterMode; }
 
-// 현재 역할에서 접근 가능한 탭만 남긴 그룹 목록.
+// 기관별 기능 취사선택: 추가 기관은 orgs 레지스트리의 features 목록에 있는 기능만 사용.
+// 기본 기관은 항상 전체. features 미설정(구버전 등록분)도 전체 허용.
+function orgAllows(tab) {
+  if (!currentOrg) return true;                       // 기본 기관: 전체
+  if (tab === "orgs") return false;                   // 기관 관리는 기본 기관 전용
+  const f = tabFeature(tab);
+  if (!f) return true;                                // 기능 분류 밖(설정 핵심 등)은 항상
+  const feats = Array.isArray(currentOrg.features) ? currentOrg.features : null;
+  return !feats || feats.includes(f);
+}
+
+// 현재 역할·기관에서 접근 가능한 탭만 남긴 그룹 목록.
 function visibleGroups() {
   return TAB_GROUPS
-    .map((g) => ({ ...g, tabs: g.tabs.filter(([t]) => masterMode || !MASTER_ONLY_TABS.has(t)) }))
+    .map((g) => ({ ...g, tabs: g.tabs.filter(([t]) => (masterMode || !MASTER_ONLY_TABS.has(t)) && orgAllows(t)) }))
     .filter((g) => g.tabs.length);
 }
 const groupOfTab = (name) => visibleGroups().find((g) => g.tabs.some(([t]) => t === name));
@@ -96,7 +108,10 @@ function setupTabs() {
     b.addEventListener("click", () => showTab(g.tabs[0][0]));
     nav.appendChild(b);
   }
-  showTab("courses");
+  // 첫 화면: 차수·시간표가 허용이면 그것, 아니면 첫 번째 보이는 탭.
+  const groups = visibleGroups();
+  const first = groups.some((g) => g.tabs.some(([t]) => t === "courses")) ? "courses" : groups[0]?.tabs[0][0];
+  if (first) showTab(first);
 }
 
 function initApp() {

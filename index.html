@@ -601,6 +601,11 @@
               <label>기관 ID (URL용, 영문 소문자)<input name="orgId" placeholder="예: busan" required /></label>
               <label>기관명<input name="orgName" placeholder="예: 부산교육센터" required /></label>
             </div>
+            <fieldset class="load-box" style="margin-top:0.6rem">
+              <legend>사용 기능 선택</legend>
+              <div id="org-features" class="org-features"></div>
+              <p class="hint">체크한 기능만 해당 기관 관리자 화면에 표시됩니다. 기준값 설정·관리자 계정·데이터 관리는 항상 포함됩니다. (기본 기관은 항상 전체 기능)</p>
+            </fieldset>
             <label style="display:block;margin-top:0.6rem;font-size:0.85rem">Firebase 설정값 (콘솔의 firebaseConfig 객체 붙여넣기)
               <textarea name="orgConfig" rows="7" required style="width:100%;font-family:monospace;font-size:0.8rem" placeholder='{ "apiKey": "...", "authDomain": "...", "projectId": "...", "storageBucket": "...", "messagingSenderId": "...", "appId": "..." }'></textarea>
             </label>
