@@ -152,6 +152,41 @@ export function renderEduHTML(a) {
   return `<table><thead>${head}</thead><tbody>${rows}${totalRow}</tbody></table>`;
 }
 
+// 운영 보고서용: 같은 강사(교관유형 내)를 한 행으로 합쳐 표시.
+//  - 강사 열은 항상 '이름(소속)' 형태(소속 없으면 이름만).
+//  - 과정명 열은 출강 과정명을 중복 제거해 한 셀에 나열.
+//  - 문항별 점수는 응답 수 가중평균(과목별 sum/count 합산), n은 과목별 응답 합계.
+export function renderInstMergedHTML(a) {
+  const kinds = Object.keys(a.inst.groups).sort();
+  if (!kinds.length) return `<p class="empty">강사 만족도 응답이 없습니다.</p>`;
+  const items = instItemsOf(a);
+  const head = `<tr><th>교관유형</th><th>강사(소속)</th><th>과정명</th>${items.map((t) => `<th>${escapeHtml(t)}</th>`).join("")}<th>강사별 평균</th><th>n</th></tr>`;
+  let body = "";
+  for (const kind of kinds) {
+    // 그룹 키(instructorId|courseId|subject)의 강사 ID 기준으로 병합.
+    const merged = {};
+    for (const [key, g] of Object.entries(a.inst.groups[kind])) {
+      const instId = key.split("|")[0] || `${g.name}|${g.affiliation || ""}`;
+      const m = merged[instId] = merged[instId] || {
+        name: g.name, affiliation: g.affiliation || "",
+        courses: new Set(), items: items.map(() => ({ sum: 0, count: 0 })), n: 0,
+      };
+      if (g.courseName) m.courses.add(g.courseName);
+      m.n += g.n;
+      items.forEach((_, i) => { const s = g.items[i]; if (s) { m.items[i].sum += s.sum; m.items[i].count += s.count; } });
+    }
+    const rows = Object.values(merged).sort((x, y) => x.name.localeCompare(y.name));
+    rows.forEach((m, idx) => {
+      const itemMeans = m.items.map((s) => mean100(s));
+      const itemTds = itemMeans.map((v) => `<td>${fmt(v)}</td>`).join("");
+      const overall = (() => { const v = itemMeans.filter((x) => x != null); return v.length ? v.reduce((p, c) => p + c, 0) / v.length : null; })();
+      const nameCell = `${escapeHtml(m.name)}${m.affiliation ? `(${escapeHtml(m.affiliation)})` : ""}`;
+      body += `<tr>${idx === 0 ? `<td rowspan="${rows.length}">${escapeHtml(kind)}</td>` : ""}<td>${nameCell}</td><td>${[...m.courses].map(escapeHtml).join(", ")}</td>${itemTds}<td><b>${fmt(overall)}</b></td><td style="text-align:right">${m.n}</td></tr>`;
+    });
+  }
+  return `<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
+}
+
 export function renderInstHTML(a) {
   const kinds = Object.keys(a.inst.groups).sort();
   if (!kinds.length) return `<p class="empty">강사 만족도 응답이 없습니다.</p>`;

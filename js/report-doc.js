@@ -8,7 +8,7 @@ import { escapeHtml } from "./app.js";
 import { coursesCache } from "./courses.js";
 import { getProgramById } from "./programs.js";
 import {
-  computeAgg, deserializeAgg, renderEduHTML, renderInstHTML,
+  computeAgg, deserializeAgg, renderEduHTML, renderInstMergedHTML,
 } from "./agg.js";
 import { fmtDot } from "./time.js";
 
@@ -151,7 +151,7 @@ async function run() {
     agg = computeAgg(responses);
     summaryHtml = summaryTableHTML(summaryFromResponses(responses));
     detailEdu = renderEduHTML(agg);
-    detailInst = renderInstHTML(agg);
+    detailInst = renderInstMergedHTML(agg);
     freetext = freetextHTML(responses);
   } else {
     // 원문 파기됨 → 스냅샷.
@@ -161,7 +161,7 @@ async function run() {
       agg = deserializeAgg(sdoc.data());
       summaryHtml = `<p class="hint">원문이 파기되어 과정유형별 요약은 세부 집계표로 대체합니다.</p>`;
       detailEdu = renderEduHTML(agg);
-      detailInst = renderInstHTML(agg);
+      detailInst = renderInstMergedHTML(agg);
       freetext = `<p class="empty">원문이 파기되어 주관식 원문은 표시할 수 없습니다.</p>`;
     } else {
       summaryHtml = detailEdu = detailInst = freetext = `<p class="empty">해당 기간 설문 데이터가 없습니다.</p>`;
