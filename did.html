@@ -39,16 +39,17 @@
   .cards { flex: 1; display: flex; flex-direction: column; gap: 1.4vh; min-height: 0; }
   .card {
     background: rgba(255,255,255,0.93); color: #17304f; border-radius: 1.4vh;
-    padding: 2vh 1.8vw; display: flex; align-items: center; gap: 1.2vw;
+    padding: 1.6vh 1.8vw; display: flex; align-items: center; gap: 1.2vw;
     animation: fadein 0.5s;
   }
   @keyframes fadein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
-  .card .info { flex: 1; min-width: 0; }
-  .card .name { font-size: 4.4vh; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .card .sub { font-size: 2.6vh; color: #5a6c84; margin-top: 0.4vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 한 줄 레이아웃: [과정/행사명] [부가정보] ......... [강의실] */
+  .card .info { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 1.2vw; }
+  .card .name { font-size: 5.2vh; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .sub { font-size: 2.8vh; color: #5a6c84; white-space: nowrap; flex-shrink: 0; }
   .card .room {
-    font-size: 4.8vh; font-weight: 900; color: #1a4d8f; white-space: nowrap;
-    background: #e8f0fb; border-radius: 1vh; padding: 1vh 1.2vw;
+    font-size: 5.4vh; font-weight: 900; color: #1a4d8f; white-space: nowrap;
+    background: #e8f0fb; border-radius: 1vh; padding: 0.8vh 1.2vw;
   }
   .empty { opacity: 0.75; font-size: 2.4vh; text-align: center; margin-top: 6vh; }
 

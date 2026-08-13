@@ -14,6 +14,8 @@ const PAGE_INTERVAL = 10000; // 페이지 순환 간격(ms)
 let courses = [];   // publicBoard
 let rentals = [];
 let pageTick = 0;
+let lastPages = 1;      // 마지막 렌더 기준 총 페이지 수
+let lastDay = "";       // 마지막 렌더 날짜(자정 경계 감지)
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; };
@@ -49,6 +51,8 @@ function render() {
     ...rent.map((r) => ({ kind: "rent", r })),
   ];
   const pages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+  lastPages = pages;
+  lastDay = today;
   const p = pageTick % pages;
   const label = pages > 1 ? `${p + 1} / ${pages}` : "";
   const items = all.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);
@@ -102,8 +106,12 @@ function applyConfig(cfg) {
 function main() {
   tickClock();
   setInterval(tickClock, 5000);
-  // 페이지 순환 + 날짜 경계(자정) 자동 갱신.
-  setInterval(() => { pageTick++; render(); }, PAGE_INTERVAL);
+  // 페이지 순환: 페이지가 2개 이상일 때만 다시 그린다(단일 페이지 불필요 갱신·깜빡임 방지).
+  // 날짜가 바뀌면(자정) 표시 대상이 달라지므로 그때는 강제 갱신.
+  setInterval(() => {
+    const dayChanged = todayStr() !== lastDay;
+    if (lastPages > 1 || dayChanged) { pageTick++; render(); }
+  }, PAGE_INTERVAL);
 
   onSnapshot(doc(db, "publicBoard", "__did"), (snap) => {
     applyConfig(snap.exists() ? snap.data() : {});
