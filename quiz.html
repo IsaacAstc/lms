@@ -359,6 +359,7 @@
   <div class="host-topbar">
     <div id="hq-progress">1 / 10</div>
     <div class="timer-wrap"><div class="timer-circle" id="hq-timer">20</div></div>
+    <button class="btn-sm" id="btn-mute" title="효과음 켜기/끄기">🔊</button>
     <button class="btn-sm" id="btn-hq-skip">넘어가기 ▶</button>
   </div>
   <div class="q-text-big" id="hq-text"></div>
@@ -495,7 +496,10 @@ function choicesOf(q) { return q.type === "ox" ? OX_LABELS : (q.choices || []); 
 
 /* ---------------- 효과음 (Web Audio) ---------------- */
 let audioCtx = null;
+// 호스트 음소거 토글(localStorage 유지).
+let sfxMuted = localStorage.getItem("qbMuted") === "1";
 function beep(freq, dur, type = "square", vol = 0.08, delay = 0) {
+  if (sfxMuted) return;
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const t = audioCtx.currentTime + delay;
@@ -511,7 +515,22 @@ const sfx = {
   correct: () => { beep(660, 0.12, "sine", 0.12); beep(880, 0.12, "sine", 0.12, 0.12); beep(1320, 0.25, "sine", 0.12, 0.24); },
   wrong: () => beep(180, 0.45, "sawtooth", 0.1),
   fanfare: () => [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.3, "triangle", 0.12, i * 0.18)),
+  // 잔여 5초 카운트다운: 남을수록 톤 상승(5초=낮음 → 1초=높음).
+  warn: (left) => beep(500 + (5 - left) * 120, 0.12, "square", 0.1),
+  timeup: () => { beep(392, 0.25, "sawtooth", 0.12); beep(262, 0.5, "sawtooth", 0.12, 0.22); },
 };
+function updateMuteBtn() {
+  const b = $("btn-mute");
+  if (b) b.textContent = sfxMuted ? "🔇" : "🔊";
+}
+function toggleMute() {
+  sfxMuted = !sfxMuted;
+  localStorage.setItem("qbMuted", sfxMuted ? "1" : "0");
+  updateMuteBtn();
+  if (!sfxMuted) sfx.tick(); // 켤 때 확인음
+}
+$("btn-mute").addEventListener("click", toggleMute);
+updateMuteBtn();
 
 /* ---------------- 퀴즈 저장소 (localStorage) ---------------- */
 function loadQuizzes() {
@@ -1114,10 +1133,15 @@ function hostShowQuestion(q) {
   clearInterval(host.timer);
   const endAt = startAt + q.timeLimit * 1000;
   $("hq-timer").textContent = q.timeLimit;
+  let lastLeft = q.timeLimit;
   host.timer = setInterval(() => {
     const left = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
     $("hq-timer").textContent = left;
-    if (left <= 0) hostReveal(q);
+    if (left !== lastLeft) {
+      lastLeft = left;
+      if (!host.revealed && left >= 1 && left <= 5) sfx.warn(left);      // 잔여 5초부터 카운트다운 틱
+      if (left <= 0) { if (!host.revealed) sfx.timeup(); hostReveal(q); } // 시간 종료음
+    } else if (left <= 0) hostReveal(q);
   }, 200);
   $("btn-hq-skip").onclick = () => hostReveal(q);
 }
