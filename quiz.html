@@ -88,7 +88,7 @@
   .ed-row .field { flex: 1; min-width: 140px; }
   .choice-edit { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   .choice-edit .shape { width: 42px; height: 42px; flex-shrink: 0; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; }
-  .choice-edit input[type=radio] { width: 20px; height: 20px; accent-color: var(--green); flex-shrink: 0; }
+  .choice-edit input[type=radio], .choice-edit input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--green); flex-shrink: 0; }
   .q-actions { display: flex; gap: 6px; margin-top: 4px; }
   .q-actions button { flex: 1; }
 
@@ -549,7 +549,12 @@ function normQ(x) {
     accepted: (Array.isArray(x.accepted) ? x.accepted : []).map(a => String(a).slice(0, 60)).filter(Boolean).slice(0, 10),
     points: POINTS_OPTS.includes(x.points) ? x.points : "standard",
     shuffle: !!x.shuffle,
-    media: (x.media && typeof x.media.url === "string" && x.media.url) ? { url: String(x.media.url).slice(0, 300000) } : null,
+    media: (() => {
+      const u = x.media && typeof x.media.url === "string" ? x.media.url : "";
+      if (!u) return null;
+      if (u.startsWith("data:")) return u.length <= 300000 ? { url: u } : null; // 잘라내면 이미지가 깨지므로 제거
+      return { url: u.slice(0, 2000) };
+    })(),
     body: String(x.body || "").slice(0, 2000),
     timeLimit: TIME_OPTS.includes(x.timeLimit) ? x.timeLimit : 20,
   };
