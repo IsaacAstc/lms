@@ -28,26 +28,26 @@
   #date { font-size: 2.2vh; opacity: 0.85; }
   #clock { font-size: 4.6vh; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.1; }
 
-  main { flex: 1; display: flex; gap: 2vw; min-height: 0; }
-  section { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  main { flex: 1; display: flex; flex-direction: column; gap: 1.6vh; min-height: 0; }
+  section { display: flex; flex-direction: column; min-width: 0; }
   section.hidden { display: none; }
   h2 {
-    font-size: 2.8vh; font-weight: 900; padding: 1.2vh 1.5vw; border-radius: 1.2vh;
+    font-size: 3.1vh; font-weight: 900; padding: 1.2vh 1.5vw; border-radius: 1.2vh;
     background: rgba(255,255,255,0.14); margin-bottom: 1.4vh; display: flex; align-items: center; gap: 0.8vw;
   }
   h2 .pageinfo { margin-left: auto; font-size: 1.9vh; font-weight: 400; opacity: 0.75; }
   .cards { flex: 1; display: flex; flex-direction: column; gap: 1.4vh; min-height: 0; }
   .card {
     background: rgba(255,255,255,0.93); color: #17304f; border-radius: 1.4vh;
-    padding: 1.6vh 1.6vw; display: flex; align-items: center; gap: 1.2vw;
+    padding: 2vh 1.8vw; display: flex; align-items: center; gap: 1.2vw;
     animation: fadein 0.5s;
   }
   @keyframes fadein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
   .card .info { flex: 1; min-width: 0; }
-  .card .name { font-size: 2.9vh; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .card .sub { font-size: 1.9vh; color: #5a6c84; margin-top: 0.4vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .name { font-size: 4.4vh; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .sub { font-size: 2.6vh; color: #5a6c84; margin-top: 0.4vh; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .card .room {
-    font-size: 3.2vh; font-weight: 900; color: #1a4d8f; white-space: nowrap;
+    font-size: 4.8vh; font-weight: 900; color: #1a4d8f; white-space: nowrap;
     background: #e8f0fb; border-radius: 1vh; padding: 1vh 1.2vw;
   }
   .empty { opacity: 0.75; font-size: 2.4vh; text-align: center; margin-top: 6vh; }
