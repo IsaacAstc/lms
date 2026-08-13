@@ -8,7 +8,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 
-const PAGE_SIZE = 6;        // 섹션당 한 화면 카드 수(86" 16:9 기준 가독 한계)
+const PAGE_SIZE = 4;        // 한 화면 카드 수(교육+대관 합산, 1열 대형 텍스트 기준)
 const PAGE_INTERVAL = 10000; // 페이지 순환 간격(ms)
 
 let courses = [];   // publicBoard
@@ -32,13 +32,8 @@ function tickClock() {
 }
 
 // ── 렌더 ──
-function pageOf(list, tick) {
-  if (list.length <= PAGE_SIZE) return { items: list, label: "" };
-  const pages = Math.ceil(list.length / PAGE_SIZE);
-  const p = tick % pages;
-  return { items: list.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE), label: `${p + 1} / ${pages}` };
-}
-
+// 1열 배치: 교육·대관을 합쳐 한 화면 최대 PAGE_SIZE건으로 페이지 순환.
+// 각 페이지에서 해당 유형의 항목이 있을 때만 그 섹션(헤더)을 표시한다.
 function render() {
   const today = todayStr();
 
@@ -49,14 +44,26 @@ function render() {
     .filter((r) => !r.hidden && (r.startDate || "") <= today && today <= (r.endDate || r.startDate || ""))
     .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
 
-  // 한쪽이 비면 다른 쪽을 전체 폭으로.
-  $("sec-rent").classList.toggle("hidden", !rent.length);
-  $("sec-edu").classList.toggle("hidden", !edu.length && !!rent.length);
+  const all = [
+    ...edu.map((c) => ({ kind: "edu", c })),
+    ...rent.map((r) => ({ kind: "rent", r })),
+  ];
+  const pages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+  const p = pageTick % pages;
+  const label = pages > 1 ? `${p + 1} / ${pages}` : "";
+  const items = all.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);
+  const eduItems = items.filter((x) => x.kind === "edu");
+  const rentItems = items.filter((x) => x.kind === "rent");
 
-  const ep = pageOf(edu, pageTick);
-  $("edu-page").textContent = ep.label;
-  $("edu-cards").innerHTML = ep.items.length
-    ? ep.items.map((c) => `
+  // 이 페이지에 해당 유형이 없으면 섹션을 숨긴다.
+  // 단 교육이 아예 없는 날은 '오늘 진행 중인 교육이 없습니다' 안내를 위해 섹션 유지.
+  $("sec-edu").classList.toggle("hidden", edu.length > 0 && !eduItems.length);
+  $("sec-rent").classList.toggle("hidden", !rentItems.length);
+  $("edu-page").textContent = label;
+  $("rent-page").textContent = eduItems.length ? "" : label;
+
+  $("edu-cards").innerHTML = eduItems.length
+    ? eduItems.map(({ c }) => `
       <div class="card">
         <div class="info">
           <div class="name">${esc(c.name)}${c.round ? ` <small style="font-weight:400;color:#5a6c84;">${esc(String(c.round))}차수</small>` : ""}</div>
@@ -66,9 +73,7 @@ function render() {
       </div>`).join("")
     : `<div class="empty">오늘 진행 중인 교육이 없습니다.</div>`;
 
-  const rp = pageOf(rent, pageTick);
-  $("rent-page").textContent = rp.label;
-  $("rent-cards").innerHTML = rp.items.map((r) => `
+  $("rent-cards").innerHTML = rentItems.map(({ r }) => `
     <div class="card">
       <div class="info">
         <div class="name">${esc(r.name)}</div>
