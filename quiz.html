@@ -472,6 +472,9 @@ if (prefillPin && /^\d{6}$/.test(prefillPin)) {
   window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("join-pin").value = prefillPin;
     document.getElementById("join-name").focus();
+    // QR 스캔 참가자 진입: 관리자용 '퀴즈 만들기/진행하기' 카드는 숨긴다.
+    const adminCard = document.getElementById("btn-goto-quizzes")?.closest(".card");
+    if (adminCard) adminCard.hidden = true;
   });
 }
 
