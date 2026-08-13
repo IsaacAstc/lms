@@ -82,22 +82,28 @@ exports.submitApplication = onCall(
     const title = str(d.title, 200, "제목", false);
     const body = str(d.body, 5000, "내용", false);
     let count = 0;
-    let attachment = null;
     let receiptCode = "";
     if (kind === "apply") {
       count = Number(d.count);
       if (!Number.isInteger(count) || count < 1 || count > MAX_COUNT) bad(`신청 인원은 1~${MAX_COUNT} 사이여야 합니다.`);
-      if (d.attachment) {
-        const a = d.attachment;
-        const name = str(a.name, 200, "첨부파일명", true).replace(/[\r\n"]/g, "_");
-        if (typeof a.dataBase64 !== "string" || !a.dataBase64) bad("첨부파일 데이터가 비었습니다.");
-        const bytes = Math.floor(a.dataBase64.length * 3 / 4);
-        if (bytes > MAX_ATTACH_BYTES) bad("첨부파일은 5MB 이하만 가능합니다.");
-        attachment = { filename: name, content: Buffer.from(a.dataBase64, "base64") };
-      }
     } else {
       receiptCode = str(d.receiptCode, 16, "접수번호", true).toUpperCase().replace(/\s/g, "");
     }
+
+    // 첨부: 공문 필수(1개 이상), 최대 5개, 파일당 5MB·전체 8MB.
+    const rawAtt = Array.isArray(d.attachments) ? d.attachments : [];
+    if (!rawAtt.length) bad("공문 파일을 첨부하세요(필수).");
+    if (rawAtt.length > 5) bad("첨부는 최대 5개까지 가능합니다.");
+    let totalBytes = 0;
+    const attachments = rawAtt.map((a) => {
+      const name = str(a && a.name, 200, "첨부파일명", true).replace(/[\r\n"]/g, "_");
+      if (!a || typeof a.dataBase64 !== "string" || !a.dataBase64) bad(`첨부파일 데이터가 비었습니다. (${name})`);
+      const bytes = Math.floor(a.dataBase64.length * 3 / 4);
+      if (bytes > MAX_ATTACH_BYTES) bad(`첨부파일은 파일당 5MB 이하만 가능합니다. (${name})`);
+      totalBytes += bytes;
+      return { filename: name, content: Buffer.from(a.dataBase64, "base64") };
+    });
+    if (totalBytes > 8 * 1024 * 1024) bad("첨부파일 전체 합계는 8MB 이하만 가능합니다.");
 
     await checkRateLimit(req.rawRequest?.ip);
 
@@ -150,7 +156,7 @@ exports.submitApplication = onCall(
             "※ 이 메일은 공개 현황 보드의 신청 양식에서 자동 발송되었습니다.",
             "※ 취소는 보드의 '신청 취소'에서 접수번호로 가능합니다.",
           ].join("\n"),
-          attachments: attachment ? [attachment] : [],
+          attachments,
         });
       } catch (e) {
         // 메일 실패 → 선점한 잔여석 원복 + 접수 문서 제거.
@@ -208,6 +214,7 @@ exports.submitApplication = onCall(
           `요청자 이메일: ${email}`, "", body || "(내용 없음)", "",
           "※ 잔여석은 취소 즉시 공개 보드에 반영되었습니다.",
         ].join("\n"),
+        attachments,
       });
     } catch (e) {
       // 취소 자체는 성공 — 메일만 실패했음을 알린다(잔여석 이중 복구 방지 위해 원복하지 않음).
