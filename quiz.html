@@ -201,10 +201,10 @@
     포함돼야 실시간 게임이 동작합니다. (배포 Secrets의 <code>FIREBASE_DATABASE_URL</code> 확인)
   </div>
   <div class="card">
-    <h2>🎮 게임 참가하기</h2>
-    <div class="field"><label>게임 PIN</label>
+    <h2 id="join-title">🎮 게임 참가하기</h2>
+    <div class="field"><label id="join-pin-label">게임 PIN</label>
       <input type="text" id="join-pin" inputmode="numeric" maxlength="6" placeholder="6자리 숫자"></div>
-    <div class="field"><label>닉네임</label>
+    <div class="field"><label id="join-name-label">닉네임</label>
       <input type="text" id="join-name" maxlength="12" placeholder="닉네임 (최대 12자)"></div>
     <button class="btn-big green" id="btn-join">입장하기</button>
   </div>
@@ -481,6 +481,11 @@ const I18N = {
     plusPts: (p) => `+${p.toLocaleString()}점`,
     rankLine: (r, s) => `현재 ${r}위 · ${s.toLocaleString()}점`,
     finalRank: (r) => `최종 ${r}위!`, scoreOf: (s) => `${s.toLocaleString()}점`, home: "홈으로",
+    joinTitle: "🎮 게임 참가하기", joinPinLabel: "게임 PIN", joinPinPh: "6자리 숫자",
+    joinNameLabel: "닉네임", joinNamePh: "닉네임 (최대 12자)", joinBtn: "입장하기",
+    errPin: "6자리 PIN을 입력하세요.", errName: "닉네임을 입력하세요.",
+    errNoGame: "게임을 찾을 수 없습니다. PIN을 확인하세요.", errStarted: "이미 시작된 게임입니다.",
+    errDupName: "이미 사용 중인 닉네임입니다.", errJoin: "입장에 실패했습니다.",
   },
   en: {
     gamePin: "Game PIN", qrJoin: "Scan QR to join", players: (n) => `👥 ${n} player${n === 1 ? "" : "s"}`,
@@ -502,6 +507,11 @@ const I18N = {
     plusPts: (p) => `+${p.toLocaleString()} pts`,
     rankLine: (r, s) => `Rank ${r} · ${s.toLocaleString()} pts`,
     finalRank: (r) => `You finished #${r}!`, scoreOf: (s) => `${s.toLocaleString()} pts`, home: "Home",
+    joinTitle: "🎮 Join the Game", joinPinLabel: "Game PIN", joinPinPh: "6-digit number",
+    joinNameLabel: "Nickname", joinNamePh: "Nickname (max 12 chars)", joinBtn: "Join",
+    errPin: "Enter the 6-digit PIN.", errName: "Enter a nickname.",
+    errNoGame: "Game not found. Check the PIN.", errStarted: "The game has already started.",
+    errDupName: "That nickname is already taken.", errJoin: "Failed to join.",
   },
 };
 let LANG = "ko";
@@ -522,6 +532,15 @@ function setLang(lang) {
   $("pq-short-input").placeholder = tr("typeAnswer");
   $("btn-pf-home").textContent = tr("home");
 }
+// 참가 입력 화면(닉네임·PIN) 라벨 — QR의 &en=1 진입 또는 setLang 시 적용.
+function applyJoinLang() {
+  $("join-title").textContent = tr("joinTitle");
+  $("join-pin-label").textContent = tr("joinPinLabel");
+  $("join-pin").placeholder = tr("joinPinPh");
+  $("join-name-label").textContent = tr("joinNameLabel");
+  $("join-name").placeholder = tr("joinNamePh");
+  $("btn-join").textContent = tr("joinBtn");
+}
 const GAME_TTL = 24*60*60*1000; // 24시간 지난 게임은 입장 불가
 const LS_KEY = "qb_quizzes";
 
@@ -535,8 +554,11 @@ if (fbReady) {
   document.getElementById("fb-warning").style.display = "block";
 }
 
-/* URL ?pin= 으로 진입하면(QR 스캔) PIN을 미리 채우고 닉네임 입력에 포커스. */
-const prefillPin = new URLSearchParams(location.search).get("pin");
+/* URL ?pin= 으로 진입하면(QR 스캔) PIN을 미리 채우고 닉네임 입력에 포커스.
+ * &en=1 이면(영문 진행 퀴즈의 QR) 참가 입력 화면부터 영어로 표시. */
+const urlParams = new URLSearchParams(location.search);
+const prefillPin = urlParams.get("pin");
+if (urlParams.get("en") === "1") { LANG = "en"; window.addEventListener("DOMContentLoaded", applyJoinLang); }
 if (prefillPin && /^\d{6}$/.test(prefillPin)) {
   window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("join-pin").value = prefillPin;
@@ -1082,7 +1104,9 @@ async function hostGame(quiz) {
   const qrBox = $("lobby-qr");
   qrBox.innerHTML = "";
   if (typeof QRCode !== "undefined") {
-    new QRCode(qrBox, { text: `${location.origin}${location.pathname}?pin=${pin}`, width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M });
+    // 영문 진행 퀴즈면 &en=1 — 참가 입력 화면부터 영어로.
+    const enParam = playQuiz.lang === "en" ? "&en=1" : "";
+    new QRCode(qrBox, { text: `${location.origin}${location.pathname}?pin=${pin}${enParam}`, width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M });
   }
   // 참가자 구독
   const pRef = ref.child("players");
@@ -1360,17 +1384,17 @@ $("btn-join").onclick = async () => {
   if (!fbReady) return toast("Firebase 설정이 필요합니다. README를 참고하세요.");
   const pin = $("join-pin").value.trim();
   const name = $("join-name").value.trim();
-  if (!/^\d{6}$/.test(pin)) return toast("6자리 PIN을 입력하세요.");
-  if (!name) return toast("닉네임을 입력하세요.");
+  if (!/^\d{6}$/.test(pin)) return toast(tr("errPin"));
+  if (!name) return toast(tr("errName"));
   $("btn-join").disabled = true;
   try {
     const gRef = db.ref("games/" + pin);
     const snap = await gRef.get();
     const game = snap.val();
-    if (!game || (game.createdAt || 0) < Date.now() - GAME_TTL) throw new Error("게임을 찾을 수 없습니다. PIN을 확인하세요.");
-    if (game.status !== "lobby") throw new Error("이미 시작된 게임입니다.");
+    if (!game || (game.createdAt || 0) < Date.now() - GAME_TTL) throw new Error(tr("errNoGame"));
+    if (game.status !== "lobby") throw new Error(tr("errStarted"));
     const dup = Object.values(game.players || {}).some(p => p.name === name);
-    if (dup) throw new Error("이미 사용 중인 닉네임입니다.");
+    if (dup) throw new Error(tr("errDupName"));
 
     const pRef = gRef.child("players").push();
     await pRef.set({ name, score: 0, joinedAt: firebase.database.ServerValue.TIMESTAMP });
@@ -1386,7 +1410,7 @@ $("btn-join").onclick = async () => {
 
     player.unsub = gRef.on("value", s => playerOnState(s.val(), pRef));
   } catch (e) {
-    toast(e.message || "입장에 실패했습니다.");
+    toast(e.message || tr("errJoin"));
   } finally {
     $("btn-join").disabled = false;
   }
