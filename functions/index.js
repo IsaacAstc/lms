@@ -179,18 +179,17 @@ exports.submitApplication = onCall(
 
     let courseName = app.courseName || "";
     await db.runTransaction(async (tx) => {
-      const aSnap = await tx.get(appDoc.ref);
+      // Firestore 트랜잭션 규칙: 읽기를 전부 먼저, 쓰기는 그 뒤에.
+      const cRef = db.doc(`courses/${app.courseId}`);
+      const bRef = db.doc(`publicBoard/${app.courseId}`);
+      const [aSnap, cSnap, bSnap] = await Promise.all([tx.get(appDoc.ref), tx.get(cRef), tx.get(bRef)]);
       if (!aSnap.exists || aSnap.data().status !== "active") {
         throw new HttpsError("failed-precondition", "이미 취소된 접수번호입니다.");
       }
-      const cRef = db.doc(`courses/${app.courseId}`);
-      const bRef = db.doc(`publicBoard/${app.courseId}`);
-      const cSnap = await tx.get(cRef);
       if (cSnap.exists) {
         const c = cSnap.data();
         const applied = Math.max(0, (c.appliedCount || 0) - (app.count || 0));
         tx.update(cRef, { appliedCount: applied });
-        const bSnap = await tx.get(bRef);
         if (bSnap.exists) {
           tx.update(bRef, { appliedCount: applied, remaining: Math.max(0, (c.capacity || 0) - applied), updatedAtMs: Date.now() });
         }
