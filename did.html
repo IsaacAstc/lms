@@ -42,17 +42,17 @@
   h2 .pageinfo { margin-left: auto; font-size: 1.9vh; font-weight: 400; opacity: 0.75; }
   .card {
     background: rgba(255,255,255,0.93); color: #17304f; border-radius: 1.4vh;
-    padding: 1.6vh 1.8vw; display: flex; align-items: center; margin-bottom: 1.4vh;
+    padding: 1vh 1.8vw; display: flex; align-items: center; margin-bottom: 1.2vh;
   }
   .card .info { flex: 1; min-width: 0; display: flex; align-items: baseline; overflow: hidden; }
   .card .name {
-    font-size: 5.2vh; font-weight: 900; white-space: nowrap; overflow: hidden;
+    font-size: 10.4vh; font-weight: 900; white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis; margin-right: 1.2vw;
   }
   .card .name small { font-weight: 400; color: #5a6c84; }
-  .card .sub { font-size: 2.8vh; color: #5a6c84; white-space: nowrap; flex-shrink: 0; }
+  .card .sub { font-size: 5.6vh; color: #5a6c84; white-space: nowrap; flex-shrink: 0; }
   .card .room {
-    font-size: 5.4vh; font-weight: 900; color: #1a4d8f; white-space: nowrap;
+    font-size: 10.8vh; font-weight: 900; color: #1a4d8f; white-space: nowrap;
     background: #e8f0fb; border-radius: 1vh; padding: 0.8vh 1.2vw; margin-left: 1.2vw;
   }
   .empty { opacity: 0.75; font-size: 2.4vh; text-align: center; margin-top: 6vh; }
@@ -94,7 +94,7 @@
 /* 현장 안내 DID — 구형 TV 브라우저 호환판(ES5+Promise, async/await·옵셔널 체이닝 미사용). */
 (function () {
   "use strict";
-  var PAGE_SIZE = 4;
+  var PAGE_SIZE = 3; // 카드 텍스트 2배 확대에 맞춰 한 화면 3건(초과분 자동 순환)
   var PAGE_INTERVAL = 10000;
 
   var courses = [];
@@ -181,6 +181,7 @@
       html = '<div class="empty">오늘 진행 중인 교육이 없습니다.</div>';
     }
     $("edu-cards").innerHTML = html;
+    fitNames($("edu-cards"));
 
     html = "";
     for (i = 0; i < rentItems.length; i++) {
@@ -191,6 +192,25 @@
         + esc(r2.venue || "장소 미정") + '</div></div>';
     }
     $("rent-cards").innerHTML = html;
+    fitNames($("rent-cards"));
+  }
+
+  // 과정/행사명이 칸을 넘치면 글자를 단계적으로 줄여 한 줄에 맞춘다(최소 절반 = 기존 크기).
+  function fitNames(box) {
+    var names = box.querySelectorAll(".name");
+    var vh = window.innerHeight / 100;
+    for (var i = 0; i < names.length; i++) {
+      var el = names[i];
+      var size = 10.4 * vh;
+      var min = 5.2 * vh;
+      el.style.fontSize = size + "px";
+      var guard = 0;
+      while (el.scrollWidth > el.clientWidth && size > min && guard < 20) {
+        size = size * 0.93;
+        el.style.fontSize = size + "px";
+        guard++;
+      }
+    }
   }
 
   function applyConfig(cfg) {
