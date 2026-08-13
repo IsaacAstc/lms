@@ -85,9 +85,13 @@ async function saveApply() {
 
 // 접수 이메일(관리자 전용 settings) + 보드 노출 여부(__config, 공개는 boolean만).
 async function saveApplyEmail() {
-  const email = document.getElementById("board-apply-email").value.trim();
+  // 쉼표(,)로 복수 주소 입력 가능 — 저장 전 각 주소 형식 검증.
+  const raw = document.getElementById("board-apply-email").value.trim();
+  const list = raw.split(/[,;\s]+/).filter(Boolean);
+  const email = list.join(", ");
   const enabled = document.getElementById("board-apply-enabled").checked;
-  if (enabled && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert("접수 이메일 주소를 확인하세요."); return; }
+  const badAddr = list.find((a) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a));
+  if ((enabled && !list.length) || badAddr) { alert(`접수 이메일 주소를 확인하세요.${badAddr ? ` (잘못된 주소: ${badAddr})` : ""}`); return; }
   try {
     await setDoc(doc(db, "settings", "apply"), { email }, { merge: true });
     await setDoc(doc(db, "publicBoard", "__config"), { applyEnabled: enabled && !!email, updatedAtMs: Date.now() }, { merge: true });

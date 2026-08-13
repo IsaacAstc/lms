@@ -101,10 +101,11 @@ exports.submitApplication = onCall(
 
     await checkRateLimit(req.rawRequest?.ip);
 
-    // ── 접수 이메일 주소(관리자 화면에서 설정, settings/apply) ──
+    // ── 접수 이메일 주소(관리자 화면에서 설정, settings/apply — 쉼표 구분 복수 가능) ──
     const applySnap = await db.doc("settings/apply").get();
-    const applyTo = applySnap.exists ? (applySnap.data().email || "") : "";
-    if (!applyTo) throw new HttpsError("failed-precondition", "접수 이메일이 설정되지 않았습니다. 관리자에게 문의하세요.");
+    const applyTo = (applySnap.exists ? (applySnap.data().email || "") : "")
+      .split(/[,;\s]+/).filter((a) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a));
+    if (!applyTo.length) throw new HttpsError("failed-precondition", "접수 이메일이 설정되지 않았습니다. 관리자에게 문의하세요.");
 
     const courseRef = db.doc(`courses/${courseId}`);
     const boardRef = db.doc(`publicBoard/${courseId}`);
