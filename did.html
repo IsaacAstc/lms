@@ -14,18 +14,19 @@
   html, body { height: 100%; }
   body {
     font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
-    color: #fff; background: #0c2a52; overflow: hidden;
+    color: #0c2a52; background: #e9eff7; overflow: hidden;
   }
   #bg {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background-size: cover; background-position: center;
-    background-image: linear-gradient(165deg, #123c72 0%, #0c2a52 60%, #081c38 100%);
+    background-image: linear-gradient(165deg, #f4f8fc 0%, #e9eff7 60%, #d9e4f1 100%);
   }
-  #bg-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(6,20,40,0.55); display: none; }
+  /* 배경 이미지 사용 시: 밝은 반투명 오버레이로 네이비 텍스트 가독성 유지 */
+  #bg-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(238,243,249,0.6); display: none; }
   .wrap { position: relative; height: 100vh; display: flex; flex-direction: column; padding: 2.2vh 2.5vw; }
 
   header { display: flex; align-items: center; margin-bottom: 2vh; }
-  #logo { max-height: 7vh; max-width: 18vw; margin-right: 1.5vw; }
+  #logo { max-height: 14vh; max-width: 30vw; margin-right: 1.5vw; }
   #title { font-size: 3.6vh; font-weight: 900; letter-spacing: 0.05em; }
   .clockbox { margin-left: auto; text-align: right; }
   #date { font-size: 2.2vh; opacity: 0.85; }
@@ -36,12 +37,12 @@
   section.hidden { display: none; }
   h2 {
     font-size: 3.1vh; font-weight: 900; padding: 1.2vh 1.5vw; border-radius: 1.2vh;
-    background: rgba(255,255,255,0.14); margin-bottom: 1.4vh; display: flex; align-items: center;
+    background: rgba(12,42,82,0.1); margin-bottom: 1.4vh; display: flex; align-items: center;
   }
   h2 .ico { margin-right: 0.8vw; }
   h2 .pageinfo { margin-left: auto; font-size: 1.9vh; font-weight: 400; opacity: 0.75; }
   .card {
-    background: rgba(255,255,255,0.93); color: #17304f; border-radius: 1.4vh;
+    background: #0c2a52; color: #fff; border-radius: 1.4vh;
     padding: 1vh 1.8vw; display: flex; align-items: center; margin-bottom: 1.2vh;
   }
   .card .info { flex: 1; min-width: 0; display: flex; align-items: baseline; overflow: hidden; }
@@ -49,8 +50,8 @@
     font-size: 11.6vh; font-weight: 900; white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis; margin-right: 1.2vw;
   }
-  .card .name small { font-weight: 400; color: #5a6c84; }
-  .card .sub { font-size: 3.2vh; color: #5a6c84; white-space: nowrap; flex-shrink: 0; }
+  .card .name small { font-weight: 400; color: #9fb4d0; }
+  .card .sub { font-size: 3.2vh; color: #9fb4d0; white-space: nowrap; flex-shrink: 0; }
   .card .room {
     font-size: 8.2vh; font-weight: 900; color: #1a4d8f; white-space: nowrap;
     background: #e8f0fb; border-radius: 1vh; padding: 0.8vh 1.2vw; margin-left: 1.2vw;
@@ -66,7 +67,7 @@
 
   footer { margin-top: 0.4vh; min-height: 4.4vh; display: flex; align-items: center; }
   #notice {
-    font-size: 2.4vh; font-weight: 700; background: rgba(255,255,255,0.14);
+    font-size: 2.4vh; font-weight: 700; background: rgba(12,42,82,0.1);
     border-radius: 1vh; padding: 1vh 1.5vw; width: 100%; text-align: center;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: none;
   }
@@ -269,9 +270,27 @@
     return m ? decodeURIComponent(m[1]) : "";
   }
 
+  // 배포 자동 반영: 10분마다 이 페이지의 ETag/Last-Modified를 확인해
+  // 변경되면 자동 재로드한다(데이터는 Firestore 실시간이라 이건 코드 배포용).
+  var pageTag = null;
+  function checkUpdate() {
+    var x = new XMLHttpRequest();
+    x.open("HEAD", location.pathname + "?t=" + Date.now(), true);
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4 || x.status < 200 || x.status >= 300) return;
+      var tag = (x.getResponseHeader("ETag") || "") + "|" + (x.getResponseHeader("Last-Modified") || "");
+      if (tag === "|") return;
+      if (pageTag === null) { pageTag = tag; return; }
+      if (tag !== pageTag) location.reload();
+    };
+    x.send();
+  }
+
   function start(db) {
     tickClock();
     setInterval(tickClock, 5000);
+    checkUpdate();
+    setInterval(checkUpdate, 600000);
     setInterval(function () {
       var dayChanged = todayStr() !== lastDay;
       if (lastPages > 1 || dayChanged) { pageTick++; render(); }
