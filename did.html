@@ -57,6 +57,13 @@
   }
   .empty { opacity: 0.75; font-size: 2.4vh; text-align: center; margin-top: 6vh; }
 
+  /* 4건 이상: 2열 그리드(6건/페이지). 카드 폭이 절반이라 텍스트는 표준 크기. */
+  .two-col { display: flex; flex-wrap: wrap; margin-left: -0.6vw; margin-right: -0.6vw; }
+  .two-col .card { width: 48.5%; margin-left: 0.6vw; margin-right: 0.6vw; padding: 1.4vh 1.2vw; }
+  .two-col .name { font-size: 5.2vh; }
+  .two-col .sub { font-size: 2.8vh; }
+  .two-col .room { font-size: 5.4vh; }
+
   footer { margin-top: 0.4vh; min-height: 4.4vh; display: flex; align-items: center; }
   #notice {
     font-size: 2.4vh; font-weight: 700; background: rgba(255,255,255,0.14);
@@ -94,7 +101,7 @@
 /* 현장 안내 DID — 구형 TV 브라우저 호환판(ES5+Promise, async/await·옵셔널 체이닝 미사용). */
 (function () {
   "use strict";
-  var PAGE_SIZE = 3; // 카드 텍스트 2배 확대에 맞춰 한 화면 3건(초과분 자동 순환)
+  // 적응형: 오늘 항목 3건 이하 = 1열 대형(3건/페이지), 4건 이상 = 2열(6건/페이지).
   var PAGE_INTERVAL = 10000;
 
   var courses = [];
@@ -150,12 +157,14 @@
     for (i = 0; i < edu.length; i++) all.push({ kind: "edu", v: edu[i] });
     for (i = 0; i < rent.length; i++) all.push({ kind: "rent", v: rent[i] });
 
-    var pages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+    var big = all.length <= 3;              // 1열 대형 모드 여부
+    var pageSize = big ? 3 : 6;
+    var pages = Math.max(1, Math.ceil(all.length / pageSize));
     lastPages = pages;
     lastDay = today;
     var p = pageTick % pages;
     var label = pages > 1 ? (p + 1) + " / " + pages : "";
-    var items = all.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);
+    var items = all.slice(p * pageSize, (p + 1) * pageSize);
     var eduItems = [];
     var rentItems = [];
     for (i = 0; i < items.length; i++) {
@@ -180,8 +189,9 @@
     } else {
       html = '<div class="empty">오늘 진행 중인 교육이 없습니다.</div>';
     }
+    $("edu-cards").className = big ? "" : "two-col";
     $("edu-cards").innerHTML = html;
-    fitNames($("edu-cards"));
+    fitNames($("edu-cards"), big);
 
     html = "";
     for (i = 0; i < rentItems.length; i++) {
@@ -191,18 +201,19 @@
         + '</div><div class="sub">' + sub + '</div></div><div class="room">'
         + esc(r2.venue || "장소 미정") + '</div></div>';
     }
+    $("rent-cards").className = big ? "" : "two-col";
     $("rent-cards").innerHTML = html;
-    fitNames($("rent-cards"));
+    fitNames($("rent-cards"), big);
   }
 
-  // 과정/행사명이 칸을 넘치면 글자를 단계적으로 줄여 한 줄에 맞춘다(최소 절반 = 기존 크기).
-  function fitNames(box) {
+  // 과정/행사명이 칸을 넘치면 글자를 단계적으로 줄여 한 줄에 맞춘다(최소 절반).
+  function fitNames(box, big) {
     var names = box.querySelectorAll(".name");
     var vh = window.innerHeight / 100;
     for (var i = 0; i < names.length; i++) {
       var el = names[i];
-      var size = 10.4 * vh;
-      var min = 5.2 * vh;
+      var size = (big ? 10.4 : 5.2) * vh;
+      var min = (big ? 5.2 : 3.4) * vh;
       el.style.fontSize = size + "px";
       var guard = 0;
       while (el.scrollWidth > el.clientWidth && size > min && guard < 20) {
