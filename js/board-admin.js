@@ -1,6 +1,6 @@
 // 공개 현황 보드 관리(관리자): 전체 동기화 + 신청 안내 문구 편집 + 공개 주소 안내.
 import {
-  collection, getDocs, getDoc, doc, setDoc, writeBatch,
+  collection, getDocs, getDoc, doc, setDoc, writeBatch, query, orderBy, limit,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { boardFields, isBoardExcluded } from "./courses.js";
@@ -9,6 +9,7 @@ import { orgQuery } from "./orgs.js";
 export function initBoardAdmin() {
   document.getElementById("board-sync").addEventListener("click", () => syncAll(true));
   document.getElementById("board-apply-save").addEventListener("click", saveApply);
+  document.getElementById("board-apply-email-save").addEventListener("click", saveApplyEmail);
   document.getElementById("board-url-copy").addEventListener("click", () => {
     navigator.clipboard?.writeText(document.getElementById("board-url").value);
     document.getElementById("board-url-copy").textContent = "복사됨";
@@ -23,7 +24,13 @@ async function load() {
   try {
     const d = await getDoc(doc(db, "publicBoard", "__config"));
     document.getElementById("board-apply-input").value = d.exists() ? (d.data().applyInfo || "") : "";
+    document.getElementById("board-apply-enabled").checked = d.exists() && !!d.data().applyEnabled;
   } catch { /* */ }
+  try {
+    const a = await getDoc(doc(db, "settings", "apply"));
+    document.getElementById("board-apply-email").value = a.exists() ? (a.data().email || "") : "";
+  } catch { /* */ }
+  loadApplications();
   // 탭 진입 시 차이만 자동 동기화(변경 없으면 쓰기 없음). CSV 대량등록·시드분 자동 반영.
   autoSync();
 }
@@ -74,6 +81,34 @@ async function saveApply() {
     await setDoc(doc(db, "publicBoard", "__config"), { applyInfo: v, updatedAtMs: Date.now() }, { merge: true });
     alert("신청 안내 문구를 저장했습니다.");
   } catch (e) { alert("저장 실패: " + e.message); }
+}
+
+// 접수 이메일(관리자 전용 settings) + 보드 노출 여부(__config, 공개는 boolean만).
+async function saveApplyEmail() {
+  const email = document.getElementById("board-apply-email").value.trim();
+  const enabled = document.getElementById("board-apply-enabled").checked;
+  if (enabled && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert("접수 이메일 주소를 확인하세요."); return; }
+  try {
+    await setDoc(doc(db, "settings", "apply"), { email }, { merge: true });
+    await setDoc(doc(db, "publicBoard", "__config"), { applyEnabled: enabled && !!email, updatedAtMs: Date.now() }, { merge: true });
+    alert("접수 설정을 저장했습니다." + (enabled && email ? " 보드에 신청 버튼이 노출됩니다." : " (신청 버튼 비노출)"));
+  } catch (e) { alert("저장 실패: " + e.message); }
+}
+
+// 접수 이력(개인정보 없음 — 접수번호 해시·수치·상태만).
+async function loadApplications() {
+  const body = document.getElementById("board-apps-body");
+  try {
+    const snap = await getDocs(query(collection(db, "applications"), orderBy("createdAt", "desc"), limit(50)));
+    if (snap.empty) { body.innerHTML = `<tr><td colspan="4" class="empty">접수 이력이 없습니다.</td></tr>`; return; }
+    const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    body.innerHTML = snap.docs.map((d) => {
+      const a = d.data();
+      const t = a.createdAt?.toDate ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "short" }).format(a.createdAt.toDate()) : "-";
+      return `<tr><td>${t}</td><td>${esc(a.courseName || a.courseId)}</td><td>${a.count || 0}명</td>
+        <td>${a.status === "cancelled" ? "취소됨" : "신청"}</td></tr>`;
+    }).join("");
+  } catch (e) { body.innerHTML = `<tr><td colspan="4" class="empty">불러오기 실패: ${e.message}</td></tr>`; }
 }
 
 async function syncAll(force) {

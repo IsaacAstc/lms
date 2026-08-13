@@ -70,6 +70,7 @@ export function switchOrg(o) {
 }
 
 const app = initializeApp(cfg);
+export { app };
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 
