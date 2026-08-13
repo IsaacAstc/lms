@@ -36,15 +36,17 @@
             <label>신청 인원
               <select id="apply-count"></select>
             </label>
-            <label>첨부파일 <small>(신청 명단 등 · 5MB 이하 · 선택)</small>
-              <input type="file" id="apply-file" />
-            </label>
           </div>
           <div id="apply-fields-cancel" hidden>
             <label>접수번호 <small>(신청 시 발급된 8자리)</small>
               <input type="text" id="apply-receipt" maxlength="12" autocomplete="off" placeholder="예: A2B3C4D5" />
             </label>
           </div>
+          <label>공문 첨부 <small>(필수 · 파일당 5MB 이하)</small>
+            <input type="file" id="apply-file" required />
+          </label>
+          <div id="apply-extra-files"></div>
+          <button type="button" id="apply-add-file" class="apply-add-file">+ 기타 첨부 추가</button>
           <label>제목 <small>(선택)</small>
             <input type="text" id="apply-subject" maxlength="200" />
           </label>

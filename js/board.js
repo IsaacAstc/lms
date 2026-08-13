@@ -124,6 +124,7 @@ function openDialog(id, kind) {
       Array.from({ length: maxN }, (_, i) => `<option value="${i + 1}">${i + 1}명</option>`).join("");
   }
   document.getElementById("apply-file").value = "";
+  document.getElementById("apply-extra-files").innerHTML = "";
   document.getElementById("apply-receipt").value = "";
   document.getElementById("apply-subject").value = "";
   document.getElementById("apply-body").value = "";
@@ -159,16 +160,29 @@ async function send() {
   };
   if (current.kind === "apply") {
     payload.count = Number(document.getElementById("apply-count").value);
-    const f = document.getElementById("apply-file").files[0];
-    if (f) {
-      if (f.size > 5 * 1024 * 1024) { status.textContent = "첨부파일은 5MB 이하만 가능합니다."; return; }
-      status.textContent = "첨부파일 처리 중…";
-      payload.attachment = { name: f.name, dataBase64: await readFileBase64(f).catch(() => null) };
-      if (!payload.attachment.dataBase64) { status.textContent = "첨부파일을 읽지 못했습니다."; return; }
-    }
   } else {
     payload.receiptCode = document.getElementById("apply-receipt").value.trim();
     if (!payload.receiptCode) { status.textContent = "접수번호를 입력하세요."; return; }
+  }
+
+  // 첨부: 공문(필수) + 기타 첨부(선택, 추가 버튼) — 파일당 5MB, 전체 8MB 제한.
+  const files = [document.getElementById("apply-file").files[0]];
+  document.querySelectorAll("#apply-extra-files input[type=file]").forEach((inp) => {
+    if (inp.files[0]) files.push(inp.files[0]);
+  });
+  if (!files[0]) { status.textContent = "공문 파일을 첨부하세요(필수)."; return; }
+  let total = 0;
+  for (const f of files) {
+    if (f.size > 5 * 1024 * 1024) { status.textContent = `첨부파일은 파일당 5MB 이하만 가능합니다. (${f.name})`; return; }
+    total += f.size;
+  }
+  if (total > 8 * 1024 * 1024) { status.textContent = "첨부파일 전체 합계는 8MB 이하만 가능합니다."; return; }
+  status.textContent = "첨부파일 처리 중…";
+  payload.attachments = [];
+  for (const f of files) {
+    const data = await readFileBase64(f).catch(() => null);
+    if (!data) { status.textContent = `첨부파일을 읽지 못했습니다. (${f.name})`; return; }
+    payload.attachments.push({ name: f.name, dataBase64: data });
   }
 
   btn.disabled = true;
@@ -197,6 +211,16 @@ root.addEventListener("click", (e) => {
 });
 document.getElementById("apply-send").addEventListener("click", send);
 document.getElementById("apply-close").addEventListener("click", () => dlg.close());
+document.getElementById("apply-add-file").addEventListener("click", () => {
+  const box = document.getElementById("apply-extra-files");
+  if (box.querySelectorAll("input[type=file]").length >= 4) { alert("기타 첨부는 최대 4개까지 가능합니다."); return; }
+  const label = document.createElement("label");
+  label.innerHTML = `기타 첨부 <small>(5MB 이하)</small>`;
+  const inp = document.createElement("input");
+  inp.type = "file";
+  label.appendChild(inp);
+  box.appendChild(label);
+});
 
 function main() {
   applyDefaultRange(); // 최초 조회는 오늘 ~ 다음 달 말일.
