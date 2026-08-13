@@ -5,8 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KAC 항공보안교육센터</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<!-- 구형 TV 브라우저(webOS 등, 크로뮴 50~60급) 호환:
+     ES 모듈·최신 문법 미사용, Firebase v8 클래식 SDK, CSS gap/inset 미사용. -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <style>
-  /* 로비 대형 TV(16:9 가로, LG 86UN891C 등) 상시 표출용 DID */
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
   body {
@@ -14,60 +17,60 @@
     color: #fff; background: #0c2a52; overflow: hidden;
   }
   #bg {
-    position: fixed; inset: 0; background-size: cover; background-position: center;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background-size: cover; background-position: center;
     background-image: linear-gradient(165deg, #123c72 0%, #0c2a52 60%, #081c38 100%);
   }
-  #bg::after { content: ""; position: absolute; inset: 0; background: rgba(6, 20, 40, 0.55); opacity: 0; }
-  #bg.has-img::after { opacity: 1; }  /* 배경 이미지 사용 시 가독성 오버레이 */
+  #bg-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(6,20,40,0.55); display: none; }
   .wrap { position: relative; height: 100vh; display: flex; flex-direction: column; padding: 2.2vh 2.5vw; }
 
-  header { display: flex; align-items: center; gap: 1.5vw; margin-bottom: 2vh; }
-  #logo { max-height: 7vh; max-width: 18vw; object-fit: contain; }
+  header { display: flex; align-items: center; margin-bottom: 2vh; }
+  #logo { max-height: 7vh; max-width: 18vw; margin-right: 1.5vw; }
   #title { font-size: 3.6vh; font-weight: 900; letter-spacing: 0.05em; }
-  #title:empty { display: none; }
   .clockbox { margin-left: auto; text-align: right; }
   #date { font-size: 2.2vh; opacity: 0.85; }
-  #clock { font-size: 4.6vh; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  #clock { font-size: 4.6vh; font-weight: 900; line-height: 1.1; }
 
-  main { flex: 1; display: flex; flex-direction: column; gap: 1.6vh; min-height: 0; }
-  section { display: flex; flex-direction: column; min-width: 0; }
+  main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  section { display: flex; flex-direction: column; min-width: 0; margin-bottom: 1.6vh; }
   section.hidden { display: none; }
   h2 {
     font-size: 3.1vh; font-weight: 900; padding: 1.2vh 1.5vw; border-radius: 1.2vh;
-    background: rgba(255,255,255,0.14); margin-bottom: 1.4vh; display: flex; align-items: center; gap: 0.8vw;
+    background: rgba(255,255,255,0.14); margin-bottom: 1.4vh; display: flex; align-items: center;
   }
+  h2 .ico { margin-right: 0.8vw; }
   h2 .pageinfo { margin-left: auto; font-size: 1.9vh; font-weight: 400; opacity: 0.75; }
-  .cards { flex: 1; display: flex; flex-direction: column; gap: 1.4vh; min-height: 0; }
   .card {
     background: rgba(255,255,255,0.93); color: #17304f; border-radius: 1.4vh;
-    padding: 1.6vh 1.8vw; display: flex; align-items: center; gap: 1.2vw;
-    animation: fadein 0.5s;
+    padding: 1.6vh 1.8vw; display: flex; align-items: center; margin-bottom: 1.4vh;
   }
-  @keyframes fadein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
-  /* 한 줄 레이아웃: [과정/행사명] [부가정보] ......... [강의실] */
-  .card .info { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 1.2vw; }
-  .card .name { font-size: 5.2vh; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .info { flex: 1; min-width: 0; display: flex; align-items: baseline; overflow: hidden; }
+  .card .name {
+    font-size: 5.2vh; font-weight: 900; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; margin-right: 1.2vw;
+  }
+  .card .name small { font-weight: 400; color: #5a6c84; }
   .card .sub { font-size: 2.8vh; color: #5a6c84; white-space: nowrap; flex-shrink: 0; }
   .card .room {
     font-size: 5.4vh; font-weight: 900; color: #1a4d8f; white-space: nowrap;
-    background: #e8f0fb; border-radius: 1vh; padding: 0.8vh 1.2vw;
+    background: #e8f0fb; border-radius: 1vh; padding: 0.8vh 1.2vw; margin-left: 1.2vw;
   }
   .empty { opacity: 0.75; font-size: 2.4vh; text-align: center; margin-top: 6vh; }
 
-  footer { margin-top: 1.8vh; min-height: 4.4vh; display: flex; align-items: center; }
+  footer { margin-top: 0.4vh; min-height: 4.4vh; display: flex; align-items: center; }
   #notice {
     font-size: 2.4vh; font-weight: 700; background: rgba(255,255,255,0.14);
     border-radius: 1vh; padding: 1vh 1.5vw; width: 100%; text-align: center;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: none;
   }
-  #notice:empty { display: none; }
 </style>
 </head>
 <body>
 <div id="bg"></div>
+<div id="bg-overlay"></div>
 <div class="wrap">
   <header>
-    <img id="logo" alt="" hidden>
+    <img id="logo" alt="" style="display:none">
     <div id="title"></div>
     <div class="clockbox">
       <div id="date"></div>
@@ -76,16 +79,203 @@
   </header>
   <main>
     <section id="sec-edu">
-      <h2>📚 오늘의 교육 <span class="pageinfo" id="edu-page"></span></h2>
-      <div class="cards" id="edu-cards"></div>
+      <h2><span class="ico">📚</span> 오늘의 교육 <span class="pageinfo" id="edu-page"></span></h2>
+      <div id="edu-cards"></div>
     </section>
-    <section id="sec-rent">
-      <h2>🏢 대관 행사 <span class="pageinfo" id="rent-page"></span></h2>
-      <div class="cards" id="rent-cards"></div>
+    <section id="sec-rent" class="hidden">
+      <h2><span class="ico">🏢</span> 대관 행사 <span class="pageinfo" id="rent-page"></span></h2>
+      <div id="rent-cards"></div>
     </section>
   </main>
   <footer><div id="notice"></div></footer>
 </div>
-<script type="module" src="js/did.js"></script>
+
+<script>
+/* 현장 안내 DID — 구형 TV 브라우저 호환판(ES5+Promise, async/await·옵셔널 체이닝 미사용). */
+(function () {
+  "use strict";
+  var PAGE_SIZE = 4;
+  var PAGE_INTERVAL = 10000;
+
+  var courses = [];
+  var rentals = [];
+  var pageTick = 0;
+  var lastPages = 1;
+  var lastDay = "";
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    var d = document.createElement("div");
+    d.textContent = s == null ? "" : String(s);
+    return d.innerHTML;
+  }
+  function pad2(n) { return n < 10 ? "0" + n : "" + n; }
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+  }
+
+  function tickClock() {
+    var d = new Date();
+    var days = ["일", "월", "화", "수", "목", "금", "토"];
+    $("date").textContent = d.getFullYear() + "." + pad2(d.getMonth() + 1) + "." + pad2(d.getDate()) + " (" + days[d.getDay()] + ")";
+    $("clock").textContent = pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+  }
+
+  function render() {
+    var today = todayStr();
+    var edu = [];
+    var rent = [];
+    var i;
+    for (i = 0; i < courses.length; i++) {
+      var c = courses[i];
+      var cs = c.startDate || "";
+      var ce = c.endDate || cs;
+      if (cs <= today && today <= ce) edu.push(c);
+    }
+    edu.sort(function (a, b) {
+      var v = (a.venue || "").localeCompare(b.venue || "");
+      return v !== 0 ? v : (a.name || "").localeCompare(b.name || "");
+    });
+    for (i = 0; i < rentals.length; i++) {
+      var r = rentals[i];
+      if (r.hidden) continue;
+      var rs = r.startDate || "";
+      var re = r.endDate || rs;
+      if (rs <= today && today <= re) rent.push(r);
+    }
+    rent.sort(function (a, b) { return (a.startTime || "").localeCompare(b.startTime || ""); });
+
+    var all = [];
+    for (i = 0; i < edu.length; i++) all.push({ kind: "edu", v: edu[i] });
+    for (i = 0; i < rent.length; i++) all.push({ kind: "rent", v: rent[i] });
+
+    var pages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+    lastPages = pages;
+    lastDay = today;
+    var p = pageTick % pages;
+    var label = pages > 1 ? (p + 1) + " / " + pages : "";
+    var items = all.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE);
+    var eduItems = [];
+    var rentItems = [];
+    for (i = 0; i < items.length; i++) {
+      if (items[i].kind === "edu") eduItems.push(items[i].v); else rentItems.push(items[i].v);
+    }
+
+    $("sec-edu").className = (edu.length > 0 && eduItems.length === 0) ? "hidden" : "";
+    $("sec-rent").className = rentItems.length === 0 ? "hidden" : "";
+    $("edu-page").textContent = label;
+    $("rent-page").textContent = eduItems.length ? "" : label;
+
+    var html = "";
+    if (eduItems.length) {
+      for (i = 0; i < eduItems.length; i++) {
+        var e2 = eduItems[i];
+        var period = esc(e2.startDate || "") + (e2.endDate && e2.endDate !== e2.startDate ? " - " + esc(e2.endDate) : "");
+        html += '<div class="card"><div class="info"><div class="name">' + esc(e2.name)
+          + (e2.round ? ' <small>' + esc(String(e2.round)) + '차수</small>' : "")
+          + '</div><div class="sub">' + period + '</div></div><div class="room">'
+          + esc(e2.venue || "장소 미정") + '</div></div>';
+      }
+    } else {
+      html = '<div class="empty">오늘 진행 중인 교육이 없습니다.</div>';
+    }
+    $("edu-cards").innerHTML = html;
+
+    html = "";
+    for (i = 0; i < rentItems.length; i++) {
+      var r2 = rentItems[i];
+      var sub = esc(r2.startTime || "") + (r2.endTime ? " - " + esc(r2.endTime) : "") + (r2.note ? " · " + esc(r2.note) : "");
+      html += '<div class="card"><div class="info"><div class="name">' + esc(r2.name)
+        + '</div><div class="sub">' + sub + '</div></div><div class="room">'
+        + esc(r2.venue || "장소 미정") + '</div></div>';
+    }
+    $("rent-cards").innerHTML = html;
+  }
+
+  function applyConfig(cfg) {
+    cfg = cfg || {};
+    $("title").textContent = cfg.title || "";
+    document.title = cfg.title || "KAC 항공보안교육센터";
+    $("title").style.display = cfg.title ? "" : "none";
+    var n = $("notice");
+    n.textContent = cfg.notice || "";
+    n.style.display = cfg.notice ? "block" : "none";
+    var logo = $("logo");
+    if (cfg.logoUrl) { logo.src = cfg.logoUrl; logo.style.display = ""; }
+    else { logo.style.display = "none"; }
+    var bg = $("bg");
+    if (cfg.bgUrl) {
+      bg.style.backgroundImage = 'url("' + String(cfg.bgUrl).replace(/"/g, "") + '")';
+      $("bg-overlay").style.display = "block";
+    } else {
+      bg.style.backgroundImage = "";
+      $("bg-overlay").style.display = "none";
+    }
+  }
+
+  function getParam(name) {
+    var m = new RegExp("[?&]" + name + "=([^&]*)").exec(location.search);
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+
+  function start(db) {
+    tickClock();
+    setInterval(tickClock, 5000);
+    setInterval(function () {
+      var dayChanged = todayStr() !== lastDay;
+      if (lastPages > 1 || dayChanged) { pageTick++; render(); }
+    }, PAGE_INTERVAL);
+
+    db.collection("publicBoard").doc("__did").onSnapshot(function (snap) {
+      applyConfig(snap.exists ? snap.data() : {});
+    }, function () {});
+
+    db.collection("publicBoard").onSnapshot(function (snap) {
+      courses = [];
+      snap.forEach(function (d) { if (d.id.indexOf("__") !== 0) courses.push(d.data()); });
+      render();
+    }, function () {
+      $("edu-cards").innerHTML = '<div class="empty">정보를 불러오지 못했습니다.</div>';
+    });
+
+    db.collection("rentals").onSnapshot(function (snap) {
+      rentals = [];
+      snap.forEach(function (d) { rentals.push(d.data()); });
+      render();
+    }, function () {});
+  }
+
+  // 설정 로드(fetch 미지원 구형 대비 XHR) → (?org= 있으면) 허브에서 기관 config 해석 → 시작.
+  function loadJson(url, ok, fail) {
+    var x = new XMLHttpRequest();
+    x.open("GET", url, true);
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4) return;
+      if (x.status >= 200 && x.status < 300) {
+        try { ok(JSON.parse(x.responseText)); } catch (e) { fail(); }
+      } else fail();
+    };
+    x.send();
+  }
+
+  loadJson("js/firebase-config.json", function (baseCfg) {
+    var org = getParam("org");
+    var hub = firebase.initializeApp(baseCfg);
+    if (!org) { start(hub.firestore()); return; }
+    hub.firestore().collection("orgs").doc(org).get().then(function (snap) {
+      var d = snap.exists ? snap.data() : null;
+      if (d && d.active !== false && d.config && d.config.apiKey) {
+        var app2 = firebase.initializeApp(d.config, "org-" + org);
+        start(app2.firestore());
+      } else {
+        start(hub.firestore());
+      }
+    }).catch(function () { start(hub.firestore()); });
+  }, function () {
+    $("edu-cards").innerHTML = '<div class="empty">설정 파일(js/firebase-config.json)을 찾을 수 없습니다. 배포 상태를 확인하세요.</div>';
+  });
+})();
+</script>
 </body>
 </html>
