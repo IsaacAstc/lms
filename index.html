@@ -589,6 +589,55 @@
           <div class="form-actions"><button id="board-apply-save" type="button">안내 문구 저장</button></div>
         </section>
 
+
+        <!-- 현장 안내: 대관 관리 + DID 설정 -->
+        <section class="tab-panel" data-tab="rentals" hidden>
+          <h2>현장 안내 — 대관 관리 · DID</h2>
+          <p class="hint">로비 TV에 <b>오늘의 교육(과정별 강의실)</b>과 <b>대관 행사(장소·시간)</b>를 상시 표출하는 현장 안내(DID) 화면을 구성합니다. 대관 정보는 행사명·장소·시간만 저장·공개합니다(개인정보 없음).</p>
+
+          <h3>DID 표출 화면</h3>
+          <div class="load-row">
+            <input id="did-url" readonly style="min-width:280px" />
+            <button id="did-url-copy" type="button">주소 복사</button>
+            <a id="did-open" href="did.html" target="_blank" class="btn-link">새 창에서 열기</a>
+          </div>
+          <div class="load-row" style="margin-top:0.6rem">
+            <label>화면 제목 <input id="did-title" placeholder="예: 항공보안교육훈련센터 안내" /></label>
+            <label>하단 안내문구 <input id="did-notice" style="min-width:260px" placeholder="예: 문의는 1층 안내데스크로" /></label>
+          </div>
+          <div class="load-row" style="margin-top:0.4rem">
+            <label>로고 이미지 URL <input id="did-logo" style="min-width:240px" placeholder="예: https://…/logo.png (media/ 업로드 활용 가능)" /></label>
+            <label>배경 이미지 URL <input id="did-bg" style="min-width:240px" placeholder="비우면 기본 네이비 배경" /></label>
+            <button id="did-save" type="button">DID 설정 저장</button>
+          </div>
+          <p class="hint">로고·배경 이미지는 저장소 <code>media/</code> 폴더에 올린 파일 주소를 쓰면 됩니다(퀴즈 편집기의 업로드 기능 또는 github.com 업로드). TV 브라우저 전체화면으로 열어두면 실시간 자동 갱신됩니다.</p>
+
+          <h3>대관 행사 등록</h3>
+          <form id="rental-form" class="entry-form">
+            <div class="grid">
+              <label>행사명<input name="rname" required /></label>
+              <label>시작일<input name="rstart" type="date" required /></label>
+              <label>종료일<input name="rend" type="date" /></label>
+              <label>시작시간<input name="rstime" type="time" /></label>
+              <label>종료시간<input name="retime" type="time" /></label>
+              <label>장소<input name="rvenue" list="rental-venue-list" placeholder="강의실 선택 또는 직접 입력" required /></label>
+              <label>비고(표시용)<input name="rnote" placeholder="예: 관계자 외 출입 제한" /></label>
+              <label class="chk">숨김(DID 미표시)<input name="rhide" type="checkbox" /></label>
+            </div>
+            <datalist id="rental-venue-list"></datalist>
+            <div class="form-actions">
+              <button id="rental-submit" type="submit">등록</button>
+              <button id="rental-cancel" type="button" hidden>취소</button>
+            </div>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>행사명</th><th>기간</th><th>시간</th><th>장소</th><th>비고</th><th>숨김</th><th>관리</th></tr></thead>
+              <tbody id="rental-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+
         <!-- 기관 관리 (마스터 전용, 허브에서만 편집) -->
         <section class="tab-panel" data-tab="orgs" hidden>
           <h2>기관 관리</h2>
