@@ -606,11 +606,15 @@
             <label>하단 안내문구 <input id="did-notice" style="min-width:260px" placeholder="예: 문의는 1층 안내데스크로" /></label>
           </div>
           <div class="load-row" style="margin-top:0.4rem">
-            <label>로고 이미지 URL <input id="did-logo" style="min-width:240px" placeholder="예: https://…/logo.png (media/ 업로드 활용 가능)" /></label>
+            <label>로고 이미지 URL <input id="did-logo" style="min-width:240px" placeholder="예: https://…/logo.png" /></label>
+            <button id="did-logo-upload" type="button">로고 파일 업로드</button>
+            <input id="did-logo-file" type="file" accept="image/*" hidden />
             <label>배경 이미지 URL <input id="did-bg" style="min-width:240px" placeholder="비우면 기본 네이비 배경" /></label>
+            <button id="did-bg-upload" type="button">배경 파일 업로드</button>
+            <input id="did-bg-file" type="file" accept="image/*" hidden />
             <button id="did-save" type="button">DID 설정 저장</button>
           </div>
-          <p class="hint">로고·배경 이미지는 저장소 <code>media/</code> 폴더에 올린 파일 주소를 쓰면 됩니다(퀴즈 편집기의 업로드 기능 또는 github.com 업로드). TV 브라우저 전체화면으로 열어두면 실시간 자동 갱신됩니다.</p>
+          <p class="hint">로고·배경은 <b>파일 업로드</b> 버튼으로 저장소 <code>media/</code>에 바로 올릴 수 있습니다(GitHub 토큰 1회 등록 — 퀴즈 편집기와 공유, 공개 저장소이므로 공개 가능한 이미지만 · 업로드 후 배포 1~2분 뒤 표시). 업로드가 끝나면 <b>DID 설정 저장</b>을 눌러야 반영됩니다. TV 브라우저 전체화면으로 열어두면 실시간 자동 갱신됩니다.</p>
 
           <h3>대관 행사 등록</h3>
           <form id="rental-form" class="entry-form">
