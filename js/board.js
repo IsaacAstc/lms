@@ -3,7 +3,12 @@
 import {
   collection, doc, onSnapshot,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { db } from "./firebase.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+import { db, app } from "./firebase.js";
+
+// 온라인 신청 활성 여부(관리자가 접수 이메일을 설정하면 __config.applyEnabled=true).
+let applyEnabled = false;
+const fns = getFunctions(app, "asia-northeast3");
 
 const root = document.getElementById("board-root");
 let items = [];
@@ -91,15 +96,115 @@ function card(c) {
         <div><dt>잔여</dt><dd class="${full ? "board-full" : "board-open"}">${full ? "마감" : remaining}</dd></div>
       </dl>
       <div class="board-bar"><span style="width:${pct}%"></span></div>
+      ${applyEnabled ? `<div class="board-actions no-print">
+        ${!full ? `<button type="button" class="board-apply-btn" data-id="${esc(c.id)}" data-kind="apply">신청</button>` : ""}
+        <button type="button" class="board-apply-btn ghost" data-id="${esc(c.id)}" data-kind="cancel">신청 취소</button>
+      </div>` : ""}
     </article>`;
 }
+
+// ── 온라인 신청/취소 양식 ──
+const dlg = document.getElementById("apply-dialog");
+let current = null; // { id, kind, course }
+
+function openDialog(id, kind) {
+  const c = items.find((x) => x.id === id);
+  if (!c) return;
+  current = { id, kind, course: c };
+  const apply = kind === "apply";
+  document.getElementById("apply-title").textContent = apply ? "교육 신청" : "신청 취소";
+  document.getElementById("apply-course").textContent =
+    `${c.name || ""}${c.round ? ` ${c.round}차수` : ""} · ${dot(c.startDate || "")}${c.endDate && c.endDate !== c.startDate ? " - " + dot(c.endDate) : ""}`;
+  document.getElementById("apply-fields-apply").hidden = !apply;
+  document.getElementById("apply-fields-cancel").hidden = apply;
+  if (apply) {
+    const remaining = c.remaining != null ? c.remaining : Math.max(0, (c.capacity || 0) - (c.appliedCount || 0));
+    const maxN = Math.max(1, Math.min(20, remaining || 20));
+    document.getElementById("apply-count").innerHTML =
+      Array.from({ length: maxN }, (_, i) => `<option value="${i + 1}">${i + 1}명</option>`).join("");
+  }
+  document.getElementById("apply-file").value = "";
+  document.getElementById("apply-receipt").value = "";
+  document.getElementById("apply-subject").value = "";
+  document.getElementById("apply-body").value = "";
+  document.getElementById("apply-status").textContent = "";
+  document.getElementById("apply-send").disabled = false;
+  dlg.showModal();
+}
+
+function readFileBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1] || "");
+    r.onerror = () => reject(new Error("파일을 읽지 못했습니다."));
+    r.readAsDataURL(file);
+  });
+}
+
+async function send() {
+  if (!current) return;
+  const status = document.getElementById("apply-status");
+  const btn = document.getElementById("apply-send");
+  const email = document.getElementById("apply-email").value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { status.textContent = "이메일 주소를 확인하세요."; return; }
+
+  const payload = {
+    kind: current.kind,
+    courseId: current.id,
+    email,
+    title: document.getElementById("apply-subject").value.trim(),
+    body: document.getElementById("apply-body").value.trim(),
+  };
+  if (current.kind === "apply") {
+    payload.count = Number(document.getElementById("apply-count").value);
+    const f = document.getElementById("apply-file").files[0];
+    if (f) {
+      if (f.size > 5 * 1024 * 1024) { status.textContent = "첨부파일은 5MB 이하만 가능합니다."; return; }
+      status.textContent = "첨부파일 처리 중…";
+      payload.attachment = { name: f.name, dataBase64: await readFileBase64(f).catch(() => null) };
+      if (!payload.attachment.dataBase64) { status.textContent = "첨부파일을 읽지 못했습니다."; return; }
+    }
+  } else {
+    payload.receiptCode = document.getElementById("apply-receipt").value.trim();
+    if (!payload.receiptCode) { status.textContent = "접수번호를 입력하세요."; return; }
+  }
+
+  btn.disabled = true;
+  status.textContent = "발송 중… (잠시 기다려 주세요)";
+  try {
+    const res = await httpsCallable(fns, "submitApplication")(payload);
+    const r = res.data || {};
+    if (current.kind === "apply") {
+      status.innerHTML = `✅ 접수 완료! <b>접수번호: ${esc(r.receiptCode || "")}</b><br>` +
+        `확인 메일을 발송했습니다. 접수번호는 취소 시 필요하니 보관하세요.`;
+    } else {
+      status.textContent = r.mailFailed
+        ? "✅ 취소 처리되었습니다. (확인 메일 발송은 실패 — 잔여석은 복구됨)"
+        : "✅ 취소 완료. 확인 메일을 발송했으며 잔여석이 복구되었습니다.";
+    }
+  } catch (e) {
+    status.textContent = "❌ " + (e.message || "처리에 실패했습니다. 잠시 후 다시 시도하세요.");
+    btn.disabled = false;
+  }
+}
+
+root.addEventListener("click", (e) => {
+  const b = e.target.closest(".board-apply-btn");
+  if (b) openDialog(b.dataset.id, b.dataset.kind);
+});
+document.getElementById("apply-send").addEventListener("click", send);
+document.getElementById("apply-close").addEventListener("click", () => dlg.close());
 
 function main() {
   applyDefaultRange(); // 최초 조회는 오늘 ~ 다음 달 말일.
 
   // 신청 안내 텍스트(__config 문서) 구독.
   onSnapshot(doc(db, "publicBoard", "__config"), (snap) => {
-    const applyInfo = snap.exists() ? (snap.data().applyInfo || "") : "";
+    const cfg = snap.exists() ? snap.data() : {};
+    const applyInfo = cfg.applyInfo || "";
+    const was = applyEnabled;
+    applyEnabled = !!cfg.applyEnabled;
+    if (was !== applyEnabled) render();
     const box = document.getElementById("board-apply");
     if (applyInfo.trim()) {
       document.getElementById("board-apply-text").innerHTML = esc(applyInfo).replace(/\n/g, "<br>");
@@ -109,7 +214,7 @@ function main() {
 
   // 과정 현황 구독(실시간).
   onSnapshot(collection(db, "publicBoard"), (snap) => {
-    items = snap.docs.filter((d) => !d.id.startsWith("__")).map((d) => d.data());
+    items = snap.docs.filter((d) => !d.id.startsWith("__")).map((d) => ({ id: d.id, ...d.data() }));
     const latest = items.reduce((m, c) => Math.max(m, c.updatedAtMs || 0), 0);
     document.getElementById("board-updated").textContent = latest
       ? `업데이트: ${new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" }).format(new Date(latest))}`
