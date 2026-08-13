@@ -131,8 +131,84 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
   }
 }
 
+// ── 로고·배경 이미지 업로드 (저장소 media/ — 퀴즈 편집기와 동일 방식·토큰 공유) ──
+const GH_REPO = "IsaacAstc/lms";
+const GH_TOKEN_KEY = "qbGhToken"; // 퀴즈 편집기와 같은 키(토큰 1회 등록으로 양쪽 사용)
+function ghToken() {
+  let t = localStorage.getItem(GH_TOKEN_KEY);
+  if (!t) {
+    t = prompt(
+      "이미지 업로드에는 GitHub 토큰이 필요합니다(이 브라우저에만 저장).\n\n"
+      + "발급: github.com → Settings → Developer settings → Fine-grained tokens →\n"
+      + `대상 저장소 ${GH_REPO}, 권한은 Contents: Read and write만 → 생성된 토큰 붙여넣기`);
+    if (!t) return null;
+    localStorage.setItem(GH_TOKEN_KEY, t.trim());
+    t = t.trim();
+  }
+  return t;
+}
+
+// 이미지 압축: 로고는 투명 보존(PNG, 최대 400px), 배경은 JPEG(최대 1920px).
+function compressImage(file, { maxDim, keepAlpha }) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(img.width * scale); cv.height = Math.round(img.height * scale);
+      cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(img.src);
+      resolve(keepAlpha ? cv.toDataURL("image/png") : cv.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error("이미지 파일을 읽을 수 없습니다.")); };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function uploadDidImage(file, { maxDim, keepAlpha, prefix }) {
+  const token = ghToken();
+  if (!token) return null;
+  if (!confirm(`'${file.name}'을 공개 저장소 media/ 폴더에 업로드할까요?\n공개 가능한 이미지인지 확인하세요.`)) return null;
+  const dataUrl = await compressImage(file, { maxDim, keepAlpha });
+  const b64 = dataUrl.split(",")[1];
+  if (b64.length > 2 * 1024 * 1024) throw new Error("이미지가 너무 큽니다. 더 작은 이미지를 사용하세요.");
+  const ext = keepAlpha ? "png" : "jpg";
+  const path = `media/${prefix}-${Date.now().toString(36)}.${ext}`;
+  const resp = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${path}`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+    body: JSON.stringify({ message: `media: DID ${prefix} 이미지 업로드`, content: b64 }),
+  });
+  if (resp.status === 401 || resp.status === 403) {
+    localStorage.removeItem(GH_TOKEN_KEY);
+    throw new Error("토큰이 유효하지 않거나 권한이 없습니다. 다시 시도해 토큰을 재등록하세요.");
+  }
+  if (!resp.ok) throw new Error(`업로드 실패 (HTTP ${resp.status})`);
+  return `${location.origin}${location.pathname.replace(/[^/]*$/, "")}${path}`;
+}
+
+function wireDidUpload(btnId, fileId, inputId, opts) {
+  document.getElementById(btnId).addEventListener("click", () => document.getElementById(fileId).click());
+  document.getElementById(fileId).addEventListener("change", async (e) => {
+    const file = e.target.files[0]; e.target.value = "";
+    if (!file) return;
+    const btn = document.getElementById(btnId);
+    btn.disabled = true; btn.textContent = "업로드 중…";
+    try {
+      const url = await uploadDidImage(file, opts);
+      if (url) {
+        document.getElementById(inputId).value = url;
+        alert("업로드 완료. 'DID 설정 저장'을 눌러 반영하세요. (배포 1~2분 후 표시됩니다)");
+      }
+    } catch (err) { alert(err.message || "업로드에 실패했습니다."); }
+    finally { btn.disabled = false; btn.textContent = opts.prefix === "logo" ? "로고 파일 업로드" : "배경 파일 업로드"; }
+  });
+}
+
 // ── DID 설정 ──
 function initDidConfig() {
+  wireDidUpload("did-logo-upload", "did-logo-file", "did-logo", { maxDim: 400, keepAlpha: true, prefix: "logo" });
+  wireDidUpload("did-bg-upload", "did-bg-file", "did-bg", { maxDim: 1920, keepAlpha: false, prefix: "bg" });
   const base = location.origin + location.pathname.replace(/[^/]*$/, "");
   const url = `${base}did.html${orgQuery(true)}`;
   document.getElementById("did-url").value = url;
