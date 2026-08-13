@@ -18,6 +18,7 @@ export const ORG_FEATURES = [
   ["survey-result", "설문 결과"],
   ["stats", "통계"],
   ["reportdoc", "운영 보고서"],
+  ["rentals", "현장 안내(대관·DID)"],
   ["board", "공개 현황 보드"],
   // 상단바 바로가기(퀴즈·히어로 미션은 기본 기관 백엔드로 연결되는 링크).
   ["quiz", "퀴즈 바로가기"],
@@ -32,6 +33,7 @@ const TAB_FEATURE = {
   reports: "survey-result", freetext: "survey-result",
   stats: "stats",
   reportdoc: "reportdoc",
+  rentals: "rentals",
   board: "board",
 };
 export function tabFeature(tab) { return TAB_FEATURE[tab] || null; }

@@ -146,6 +146,13 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // 대관 행사(현장 안내 DID 표출용): 행사명·장소·시간만 저장(개인정보 없음).
+    // DID는 로그인 없는 상시 화면이라 공개 읽기, 쓰기는 관리자만.
+    match /rentals/{rentalId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // 기관(테넌트) 레지스트리 — 허브 프로젝트에서만 의미 있음.
     // config는 공개값(도메인·보안규칙이 실제 방어선)이라 공개 읽기, 등록·편집은 마스터만.
     match /orgs/{orgId} {

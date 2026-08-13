@@ -120,6 +120,16 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
    `FIREBASE_DATABASE_URL` = RTDB 주소(`https://…firebasedatabase.app`) 추가 후 재배포.
    로컬 `js/firebase-config.js`에도 `databaseURL` 필드 추가.
 
+## 현장 안내 DID (`did.html`)
+
+로비 대형 TV(16:9 가로)에 상시 표출하는 공개 안내 화면.
+- **오늘의 교육**: 공개 현황 보드 데이터에서 오늘 진행 중인 과정 → 차수의 교육장 표시.
+- **대관 행사**: `rentals` 컬렉션(행사명·기간·시간·장소·비고만 — 개인정보 없음, 공개 읽기).
+- 항목이 한 화면(섹션당 6개)을 넘으면 10초 간격 자동 페이지 순환. 실시간 갱신·시계 포함.
+- 관리: 관리자 화면 **현장 안내** 탭(대관 CRUD + DID 제목/안내문구/로고/배경 설정).
+  설정은 `publicBoard/__did` 문서. 기관별 URL은 `did.html?org=<기관ID>`.
+- 규칙: `rentals` 공개 읽기/관리자 쓰기 — `firestore.rules` 재배포 필요.
+
 ## 기관(테넌트) 분리 운영
 
 코드는 이 저장소 하나를 공유하고, **기관별로 별도 Firebase 프로젝트**를 사용해
