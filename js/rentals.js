@@ -148,7 +148,7 @@ function ghToken() {
   return t;
 }
 
-// 이미지 압축: 로고는 투명 보존(PNG, 최대 400px), 배경은 JPEG(최대 1920px).
+// 이미지 압축: 로고는 투명 보존(PNG, 최대 400px), 배경은 JPEG(최대 3840px — 4K TV 대응).
 function compressImage(file, { maxDim, keepAlpha }) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -208,7 +208,7 @@ function wireDidUpload(btnId, fileId, inputId, opts) {
 // ── DID 설정 ──
 function initDidConfig() {
   wireDidUpload("did-logo-upload", "did-logo-file", "did-logo", { maxDim: 400, keepAlpha: true, prefix: "logo" });
-  wireDidUpload("did-bg-upload", "did-bg-file", "did-bg", { maxDim: 1920, keepAlpha: false, prefix: "bg" });
+  wireDidUpload("did-bg-upload", "did-bg-file", "did-bg", { maxDim: 3840, keepAlpha: false, prefix: "bg" });
   const base = location.origin + location.pathname.replace(/[^/]*$/, "");
   const url = `${base}did.html${orgQuery(true)}`;
   document.getElementById("did-url").value = url;
