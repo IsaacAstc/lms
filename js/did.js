@@ -84,8 +84,8 @@ function render() {
 }
 
 function applyConfig(cfg) {
-  $("title").textContent = cfg.title || "현장 안내";
-  document.title = cfg.title || "현장 안내";
+  $("title").textContent = cfg.title || "KAC 항공보안교육센터";
+  document.title = cfg.title || "KAC 항공보안교육센터";
   $("notice").textContent = cfg.notice || "";
   const logo = $("logo");
   if (cfg.logoUrl) { logo.src = cfg.logoUrl; logo.hidden = false; } else logo.hidden = true;
