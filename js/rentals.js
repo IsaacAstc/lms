@@ -169,10 +169,20 @@ async function uploadDidImage(file, { maxDim, keepAlpha, prefix }) {
   const token = ghToken();
   if (!token) return null;
   if (!confirm(`'${file.name}'을 공개 저장소 media/ 폴더에 업로드할까요?\n공개 가능한 이미지인지 확인하세요.`)) return null;
-  const dataUrl = await compressImage(file, { maxDim, keepAlpha });
-  const b64 = dataUrl.split(",")[1];
-  if (b64.length > 2 * 1024 * 1024) throw new Error("이미지가 너무 큽니다. 더 작은 이미지를 사용하세요.");
-  const ext = keepAlpha ? "png" : "jpg";
+  // SVG는 벡터 그대로 업로드(래스터 변환 없음 — 로고 선명도 유지). 그 외는 캔버스 압축.
+  const isSvg = file.type === "image/svg+xml" || /\.svg$/i.test(file.name);
+  let b64, ext;
+  if (isSvg) {
+    if (file.size > 1024 * 1024) throw new Error("SVG는 1MB 이하만 업로드할 수 있습니다.");
+    const text = await file.text();
+    b64 = btoa(String.fromCharCode(...new TextEncoder().encode(text)));
+    ext = "svg";
+  } else {
+    const dataUrl = await compressImage(file, { maxDim, keepAlpha });
+    b64 = dataUrl.split(",")[1];
+    if (b64.length > 2 * 1024 * 1024) throw new Error("이미지가 너무 큽니다. 더 작은 이미지를 사용하세요.");
+    ext = keepAlpha ? "png" : "jpg";
+  }
   const path = `media/${prefix}-${Date.now().toString(36)}.${ext}`;
   const resp = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${path}`, {
     method: "PUT",
