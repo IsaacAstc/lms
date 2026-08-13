@@ -591,7 +591,7 @@
           <h3>온라인 신청 접수 (이메일 자동 발송)</h3>
           <p class="hint">접수 이메일을 설정하고 활성화하면 공개 보드에 <b>신청/취소 버튼</b>이 나타납니다. 신청 시 접수 메일이 이 주소와 신청자 본인에게 자동 발송되고, 잔여석이 <b>즉시 보드에 반영</b>됩니다. 취소는 신청 시 발급된 접수번호로만 가능합니다. 신청자 이메일·첨부파일은 메일 발송에만 쓰이고 시스템에 저장되지 않습니다. <b>Cloud Functions 배포(Blaze 플랜) 후 동작합니다</b> — 배포 방법은 README 참고.</p>
           <div class="load-row">
-            <input id="board-apply-email" type="email" placeholder="접수 이메일 (예: edu@example.com)" />
+            <input id="board-apply-email" type="text" placeholder="접수 이메일 — 쉼표로 여러 개 (예: edu@example.com, mgr@example.com)" />
             <label><input type="checkbox" id="board-apply-enabled" /> 보드에 신청 버튼 노출</label>
             <button id="board-apply-email-save" type="button">접수 설정 저장</button>
           </div>
