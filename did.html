@@ -46,13 +46,13 @@
   }
   .card .info { flex: 1; min-width: 0; display: flex; align-items: baseline; overflow: hidden; }
   .card .name {
-    font-size: 10.4vh; font-weight: 900; white-space: nowrap; overflow: hidden;
+    font-size: 11.6vh; font-weight: 900; white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis; margin-right: 1.2vw;
   }
   .card .name small { font-weight: 400; color: #5a6c84; }
-  .card .sub { font-size: 5.6vh; color: #5a6c84; white-space: nowrap; flex-shrink: 0; }
+  .card .sub { font-size: 3.2vh; color: #5a6c84; white-space: nowrap; flex-shrink: 0; }
   .card .room {
-    font-size: 10.8vh; font-weight: 900; color: #1a4d8f; white-space: nowrap;
+    font-size: 8.2vh; font-weight: 900; color: #1a4d8f; white-space: nowrap;
     background: #e8f0fb; border-radius: 1vh; padding: 0.8vh 1.2vw; margin-left: 1.2vw;
   }
   .empty { opacity: 0.75; font-size: 2.4vh; text-align: center; margin-top: 6vh; }
@@ -60,9 +60,9 @@
   /* 4건 이상: 2열 그리드(6건/페이지). 카드 폭이 절반이라 텍스트는 표준 크기. */
   .two-col { display: flex; flex-wrap: wrap; margin-left: -0.6vw; margin-right: -0.6vw; }
   .two-col .card { width: 48.5%; margin-left: 0.6vw; margin-right: 0.6vw; padding: 1.4vh 1.2vw; }
-  .two-col .name { font-size: 5.2vh; }
-  .two-col .sub { font-size: 2.8vh; }
-  .two-col .room { font-size: 5.4vh; }
+  .two-col .name { font-size: 5.8vh; }
+  .two-col .sub { font-size: 2.2vh; }
+  .two-col .room { font-size: 4.2vh; }
 
   footer { margin-top: 0.4vh; min-height: 4.4vh; display: flex; align-items: center; }
   #notice {
@@ -138,6 +138,8 @@
       var c = courses[i];
       var cs = c.startDate || "";
       var ce = c.endDate || cs;
+      // 찾아가는 교육(출장 교육)은 센터 내 안내 대상이 아니므로 표시하지 않는다.
+      if ((c.venue || "").replace(/\s+/g, "").indexOf("찾아가") !== -1) continue;
       if (cs <= today && today <= ce) edu.push(c);
     }
     edu.sort(function (a, b) {
@@ -180,11 +182,10 @@
     if (eduItems.length) {
       for (i = 0; i < eduItems.length; i++) {
         var e2 = eduItems[i];
-        var period = esc(e2.startDate || "") + (e2.endDate && e2.endDate !== e2.startDate ? " - " + esc(e2.endDate) : "");
+        var period = esc(fmtD(e2.startDate)) + (e2.endDate && e2.endDate !== e2.startDate ? " - " + esc(fmtD(e2.endDate)) : "");
         html += '<div class="card"><div class="info"><div class="name">' + esc(e2.name)
-          + (e2.round ? ' <small>' + esc(String(e2.round)) + '차수</small>' : "")
           + '</div><div class="sub">' + period + '</div></div><div class="room">'
-          + esc(e2.venue || "장소 미정") + '</div></div>';
+          + esc(roomLabel(e2.venue)) + '</div></div>';
       }
     } else {
       html = '<div class="empty">오늘 진행 중인 교육이 없습니다.</div>';
@@ -199,11 +200,29 @@
       var sub = esc(r2.startTime || "") + (r2.endTime ? " - " + esc(r2.endTime) : "") + (r2.note ? " · " + esc(r2.note) : "");
       html += '<div class="card"><div class="info"><div class="name">' + esc(r2.name)
         + '</div><div class="sub">' + sub + '</div></div><div class="room">'
-        + esc(r2.venue || "장소 미정") + '</div></div>';
+        + esc(roomLabel(r2.venue)) + '</div></div>';
     }
     $("rent-cards").className = big ? "" : "two-col";
     $("rent-cards").innerHTML = html;
     fitNames($("rent-cards"), big);
+  }
+
+  // 날짜 축약: "2026-08-13" → "08.13" (연도 생략, 과정명 공간 확보).
+  function fmtD(s) {
+    s = s || "";
+    var m = /^\d{4}-(\d{2})-(\d{2})$/.exec(s);
+    return m ? m[1] + "." + m[2] : s;
+  }
+
+  // 강의실 앞에 층수를 붙여 안내 효과를 높인다(미등록 장소는 그대로 표시).
+  var ROOM_FLOORS = {
+    "A강의실": "2층", "B강의실": "2층", "C강의실": "2층", "D강의실": "2층",
+    "CBT실습실": "1층", "X-ray실습실": "1층", "온라인스튜디오": "1층"
+  };
+  function roomLabel(venue) {
+    var v = venue || "장소 미정";
+    var f = ROOM_FLOORS[v.replace(/\s+/g, "")];
+    return f ? f + " " + v : v;
   }
 
   // 과정/행사명이 칸을 넘치면 글자를 단계적으로 줄여 한 줄에 맞춘다(최소 절반).
@@ -212,7 +231,7 @@
     var vh = window.innerHeight / 100;
     for (var i = 0; i < names.length; i++) {
       var el = names[i];
-      var size = (big ? 10.4 : 5.2) * vh;
+      var size = (big ? 11.6 : 5.8) * vh;
       var min = (big ? 5.2 : 3.4) * vh;
       el.style.fontSize = size + "px";
       var guard = 0;
