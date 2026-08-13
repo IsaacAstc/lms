@@ -88,7 +88,8 @@ function render() {
 }
 
 function applyConfig(cfg) {
-  $("title").textContent = cfg.title || "KAC 항공보안교육센터";
+  // 상단 텍스트는 설정한 경우에만 표시(기본은 로고만). 브라우저 탭 제목은 유지.
+  $("title").textContent = cfg.title || "";
   document.title = cfg.title || "KAC 항공보안교육센터";
   $("notice").textContent = cfg.notice || "";
   const logo = $("logo");

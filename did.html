@@ -24,6 +24,7 @@
   header { display: flex; align-items: center; gap: 1.5vw; margin-bottom: 2vh; }
   #logo { max-height: 7vh; max-width: 18vw; object-fit: contain; }
   #title { font-size: 3.6vh; font-weight: 900; letter-spacing: 0.05em; }
+  #title:empty { display: none; }
   .clockbox { margin-left: auto; text-align: right; }
   #date { font-size: 2.2vh; opacity: 0.85; }
   #clock { font-size: 4.6vh; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.1; }
@@ -67,7 +68,7 @@
 <div class="wrap">
   <header>
     <img id="logo" alt="" hidden>
-    <div id="title">KAC 항공보안교육센터</div>
+    <div id="title"></div>
     <div class="clockbox">
       <div id="date"></div>
       <div id="clock"></div>
