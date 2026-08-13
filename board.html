@@ -26,6 +26,42 @@
         <h2>신청 방법 안내</h2>
         <div id="board-apply-text" class="report-narr"></div>
       </section>
+
+      <!-- 온라인 신청/취소 양식(관리자가 접수 이메일을 설정한 경우에만 노출) -->
+      <dialog id="apply-dialog" class="apply-dialog">
+        <form id="apply-form" method="dialog">
+          <h2 id="apply-title">교육 신청</h2>
+          <p id="apply-course" class="apply-course"></p>
+          <div id="apply-fields-apply">
+            <label>신청 인원
+              <select id="apply-count"></select>
+            </label>
+            <label>첨부파일 <small>(신청 명단 등 · 5MB 이하 · 선택)</small>
+              <input type="file" id="apply-file" />
+            </label>
+          </div>
+          <div id="apply-fields-cancel" hidden>
+            <label>접수번호 <small>(신청 시 발급된 8자리)</small>
+              <input type="text" id="apply-receipt" maxlength="12" autocomplete="off" placeholder="예: A2B3C4D5" />
+            </label>
+          </div>
+          <label>제목 <small>(선택)</small>
+            <input type="text" id="apply-subject" maxlength="200" />
+          </label>
+          <label>내용 <small>(선택)</small>
+            <textarea id="apply-body" rows="3" maxlength="5000"></textarea>
+          </label>
+          <label>본인 이메일 <small>(접수 확인 메일 수신용)</small>
+            <input type="email" id="apply-email" required maxlength="254" placeholder="name@example.com" />
+          </label>
+          <p class="apply-privacy">입력한 이메일과 첨부파일은 접수 메일 발송에만 사용되며 이 시스템에 저장되지 않습니다. 첨부파일에 불필요한 개인정보가 포함되지 않도록 유의하세요.</p>
+          <p id="apply-status" class="apply-status"></p>
+          <div class="form-actions">
+            <button type="button" id="apply-send">발송</button>
+            <button type="button" id="apply-close">닫기</button>
+          </div>
+        </form>
+      </dialog>
     </main>
     <script type="module" src="js/board.js"></script>
   </body>

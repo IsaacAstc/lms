@@ -130,6 +130,37 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
   설정은 `publicBoard/__did` 문서. 기관별 URL은 `did.html?org=<기관ID>`.
 - 규칙: `rentals` 공개 읽기/관리자 쓰기 — `firestore.rules` 재배포 필요.
 
+## 온라인 교육 신청 접수 (`functions/` — Cloud Functions, Blaze 필요)
+
+공개 현황 보드에서 과정별 **신청/취소**를 받아 접수 이메일로 자동 발송하고,
+잔여석을 **즉시 보드에 반영**하는 서버 함수(`submitApplication`).
+
+- 신청: 인원·제목·내용·본인 이메일·첨부(≤5MB) → 잔여석 선점(트랜잭션) →
+  접수처+본인에게 메일 발송(실패 시 잔여석 원복) → **접수번호** 발급.
+- 취소: 접수번호 대조(해시) 후 잔여석 복구 + 메일 통지. 익명 취소 공격 불가.
+- **개인정보 무저장**: 이메일 주소·첨부파일은 메일 발송에만 사용하고 저장하지
+  않는다. `applications` 문서에는 접수번호 해시·과정ID·인원수·상태만 남는다.
+- 남용 방지: IP(해시)당 시간당 10회 제한, 인원 1~20, 잔여석 초과 거부.
+
+### 배포 절차 (1회)
+1. Firebase 콘솔 → 프로젝트 설정 → **요금제를 Blaze(종량제)로 업그레이드**
+   (이 사용량 규모는 무료 구간 내 — 카드 등록만 필요).
+2. 발신용 Gmail 계정에 2단계 인증 설정 → [앱 비밀번호](https://myaccount.google.com/apppasswords) 발급.
+3. 로컬에서 (Node 20+, `npm i -g firebase-tools`):
+   ```bash
+   firebase login
+   firebase use <프로젝트ID>
+   firebase functions:secrets:set MAIL_USER   # 발신 Gmail 주소 입력
+   firebase functions:secrets:set MAIL_PASS   # 앱 비밀번호 입력
+   cd functions && npm install && cd ..
+   firebase deploy --only functions
+   ```
+4. `firestore.rules` 재배포(`applications`/`rateLimits` 규칙 추가분).
+5. 관리자 화면 → 공개 현황 보드 탭 → **접수 이메일 입력 + 신청 버튼 노출 체크 → 저장**.
+   저장해야 보드에 신청/취소 버튼이 나타난다(체크 해제로 즉시 비활성화 가능).
+
+기관(테넌트) 분리 운영 시 함수는 프로젝트별로 각각 배포해야 한다.
+
 ## 기관(테넌트) 분리 운영
 
 코드는 이 저장소 하나를 공유하고, **기관별로 별도 Firebase 프로젝트**를 사용해

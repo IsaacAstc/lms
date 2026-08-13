@@ -153,6 +153,18 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // 교육 신청 접수 기록 — Cloud Function(Admin SDK)만 생성·갱신.
+    // 개인정보 없음: 접수번호 해시·과정ID·인원수·상태만. 관리자 열람용 읽기만 허용.
+    match /applications/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // 요청 빈도 제한 카운터 — Cloud Function 전용(클라이언트 접근 금지).
+    match /rateLimits/{id} {
+      allow read, write: if false;
+    }
+
     // 기관(테넌트) 레지스트리 — 허브 프로젝트에서만 의미 있음.
     // config는 공개값(도메인·보안규칙이 실제 방어선)이라 공개 읽기, 등록·편집은 마스터만.
     match /orgs/{orgId} {

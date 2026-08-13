@@ -300,6 +300,26 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .board-bar span { display: block; height: 100%; background: var(--primary); }
 .board-apply { margin-top: 1.5rem; }
 
+/* 온라인 신청/취소 */
+.board-actions { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
+.board-apply-btn {
+  flex: 1; padding: 0.45rem 0.6rem; border: none; border-radius: 6px;
+  background: var(--primary); color: #fff; font-weight: 700; cursor: pointer;
+}
+.board-apply-btn.ghost { background: transparent; color: var(--primary); border: 1px solid var(--primary); flex: 0 0 auto; }
+.apply-dialog { border: none; border-radius: 12px; padding: 0; max-width: 26rem; width: calc(100vw - 2rem); }
+.apply-dialog::backdrop { background: rgba(0,0,0,0.45); }
+.apply-dialog form { padding: 1.2rem 1.3rem; display: flex; flex-direction: column; gap: 0.7rem; }
+.apply-dialog h2 { margin: 0; }
+.apply-dialog label { display: flex; flex-direction: column; gap: 0.25rem; font-weight: 600; font-size: 0.9rem; }
+.apply-dialog label small { color: var(--muted); font-weight: 400; }
+.apply-dialog input, .apply-dialog select, .apply-dialog textarea {
+  padding: 0.45rem 0.5rem; border: 1px solid var(--border, #ccc); border-radius: 6px; font: inherit;
+}
+.apply-course { margin: 0; font-weight: 700; color: var(--primary); }
+.apply-privacy { margin: 0; font-size: 0.78rem; color: var(--muted); }
+.apply-status { margin: 0; min-height: 1.2em; font-size: 0.9rem; font-weight: 600; }
+
 /* 과정유형 편집 칩 내 입력 */
 .chip input.ct-name { border: none; background: transparent; padding: 0.1rem 0.2rem; font-size: 0.82rem; width: 6.5rem; }
 .chip input.ct-name:focus { outline: 1px solid var(--primary); border-radius: 3px; }
