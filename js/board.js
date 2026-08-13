@@ -128,7 +128,9 @@ function openDialog(id, kind) {
   document.getElementById("apply-subject").value = "";
   document.getElementById("apply-body").value = "";
   document.getElementById("apply-status").textContent = "";
-  document.getElementById("apply-send").disabled = false;
+  const sendBtn = document.getElementById("apply-send");
+  sendBtn.disabled = false;
+  sendBtn.hidden = false;
   dlg.showModal();
 }
 
@@ -182,6 +184,7 @@ async function send() {
         ? "✅ 취소 처리되었습니다. (확인 메일 발송은 실패 — 잔여석은 복구됨)"
         : "✅ 취소 완료. 확인 메일을 발송했으며 잔여석이 복구되었습니다.";
     }
+    btn.hidden = true; // 완료 후엔 닫기만 — 중복 발송 방지
   } catch (e) {
     status.textContent = "❌ " + (e.message || "처리에 실패했습니다. 잠시 후 다시 시도하세요.");
     btn.disabled = false;
