@@ -249,6 +249,8 @@
   <div class="ed-header">
     <button class="btn-sm" id="btn-ed-back">← 목록</button>
     <div class="title-input"><input type="text" id="ed-title" maxlength="40" placeholder="퀴즈 제목"></div>
+    <label style="display:flex;align-items:center;gap:5px;font-size:13px;font-weight:700;white-space:nowrap;" title="체크하면 진행 화면(PIN·QR 대기실부터 결과까지)이 영어로 표시됩니다 — 국제과정용">
+      <input type="checkbox" id="ed-lang-en"> 영문 진행</label>
     <button class="btn-sm" id="btn-export">💾 JSON 내보내기</button>
     <button class="btn-sm primary" id="btn-ed-save">저장</button>
     <button class="btn-sm primary" id="btn-ed-host" style="background:var(--green);">▶ 게임 시작</button>
@@ -333,16 +335,16 @@
 <div id="view-lobby" class="view center" style="gap:18px;">
   <div style="display:flex;gap:16px;align-items:stretch;flex-wrap:wrap;justify-content:center;">
     <div class="pin-banner">
-      <div class="pin-label">게임 PIN</div>
+      <div class="pin-label" id="lobby-pin-label">게임 PIN</div>
       <div class="pin" id="lobby-pin">000000</div>
       <div class="join-url" id="lobby-url"></div>
     </div>
     <div class="pin-banner" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
-      <div class="pin-label">QR로 바로 입장</div>
+      <div class="pin-label" id="lobby-qr-label">QR로 바로 입장</div>
       <div id="lobby-qr"></div>
     </div>
   </div>
-  <div style="font-size:17px; font-weight:700;">👥 참가자 <span id="lobby-count">0</span>명</div>
+  <div style="font-size:17px; font-weight:700;" id="lobby-count-line">👥 참가자 <span id="lobby-count">0</span>명</div>
   <div class="player-chips" id="lobby-players"></div>
   <button class="btn-big green" id="btn-start-game" style="max-width:300px;" disabled>게임 시작</button>
   <button class="btn-sm" id="btn-cancel-game">게임 취소</button>
@@ -365,7 +367,7 @@
   <div class="q-text-big" id="hq-text"></div>
   <div class="q-media" id="hq-media"></div>
   <div id="hq-body" style="display:none;align-self:center;width:min(760px,92vw);background:rgba(255,255,255,0.1);border-radius:10px;padding:16px 20px;font-size:18px;line-height:1.7;white-space:pre-wrap;"></div>
-  <div class="answered-count"><span id="hq-answered">0</span> / <span id="hq-total">0</span> 명 응답</div>
+  <div class="answered-count"><span id="hq-answered">0</span> / <span id="hq-total">0</span> <span id="hq-resp-label">명 응답</span></div>
   <div class="answer-grid" id="hq-grid"></div>
 </div>
 
@@ -383,14 +385,14 @@
 
 <!-- ============ 호스트: 리더보드 ============ -->
 <div id="view-hb" class="view center">
-  <h1 style="font-size:30px;">🏆 리더보드</h1>
+  <h1 style="font-size:30px;" id="hb-title">🏆 리더보드</h1>
   <div class="board" id="hb-board"></div>
   <button class="btn-big" id="btn-hb-next" style="max-width:300px;">다음 문제 ▶</button>
 </div>
 
 <!-- ============ 호스트: 최종 결과 ============ -->
 <div id="view-hf" class="view center">
-  <h1 style="font-size:34px;">🎉 최종 결과</h1>
+  <h1 style="font-size:34px;" id="hf-title">🎉 최종 결과</h1>
   <div class="podium" id="hf-podium"></div>
   <div class="board" id="hf-board" style="margin-top:28px;"></div>
   <button class="btn-big" id="btn-hf-done" style="max-width:300px;">끝내기</button>
@@ -454,6 +456,72 @@ const COLORS = ["c0","c1","c2","c3"];
 const SHAPES = ["✈","◆","●","▣"];
 const SHAPE_BG = ["var(--red)","var(--blue)","var(--yellow)","var(--green)"];
 const OX_LABELS = ["O 맞다","X 아니다"];
+
+/* ---------------- 진행 언어 (퀴즈별 '영문 진행' 옵션 — 국제과정용) ----------------
+ * 문제·보기 텍스트는 출제자가 입력한 그대로 표시하고,
+ * 진행 UI(대기실·카운트다운·결과·리더보드·참가자 안내)만 언어를 바꾼다. */
+const I18N = {
+  ko: {
+    gamePin: "게임 PIN", qrJoin: "QR로 바로 입장", players: (n) => `👥 참가자 ${n}명`,
+    start: "게임 시작", cancel: "게임 취소", qNum: (n) => `${n}번 문제`,
+    respLabel: "명 응답", skip: "넘어가기 ▶", next: "다음 ▶", nextQ: "다음 문제 ▶",
+    double: " · 더블 포인트!", noPts: " · 점수 없음", pollTag: " · 투표", slideTag: " · 안내", multiTag: " · 복수 선택",
+    shortWait: "✍ 참가자가 답을 입력하는 중입니다…",
+    multiNote: "복수 정답 — 해당하는 것을 모두 고르세요",
+    revealTitle: "정답 공개", pollResult: "투표 결과", noAnswerLabel: "(무응답)", ppl: "명",
+    noResponses: "응답이 없습니다.", answerIs: "정답: ", pts: "점",
+    leaderboard: "🏆 리더보드", finalResult: "🎉 최종 결과", finish: "끝내기",
+    oxLabels: ["O 맞다", "X 아니다"],
+    waitStart: "입장 완료! 게임 시작을 기다리는 중...",
+    soonStart: (n) => `${n}번 문제가 곧 시작됩니다!`, watchScreen: "화면을 봐주세요!",
+    typeAnswer: "답을 입력하세요", submit: "제출", pickOne: "보기를 1개 이상 선택하세요.",
+    timeUpWait: "시간 종료! 결과를 기다리는 중...",
+    votedWait: "투표 완료! 결과를 기다리는 중...", answeredWait: "답변 완료! 다른 참가자를 기다리는 중...",
+    correct: "정답!", wrong: "오답...", timeUp: "시간 초과", voted: "투표 완료", noVote: "미참여",
+    plusPts: (p) => `+${p.toLocaleString()}점`,
+    rankLine: (r, s) => `현재 ${r}위 · ${s.toLocaleString()}점`,
+    finalRank: (r) => `최종 ${r}위!`, scoreOf: (s) => `${s.toLocaleString()}점`, home: "홈으로",
+  },
+  en: {
+    gamePin: "Game PIN", qrJoin: "Scan QR to join", players: (n) => `👥 ${n} player${n === 1 ? "" : "s"}`,
+    start: "Start Game", cancel: "Cancel", qNum: (n) => `Question ${n}`,
+    respLabel: "answered", skip: "Skip ▶", next: "Next ▶", nextQ: "Next Question ▶",
+    double: " · Double Points!", noPts: " · No Points", pollTag: " · Poll", slideTag: " · Info", multiTag: " · Multi-select",
+    shortWait: "✍ Players are typing their answers…",
+    multiNote: "Multiple answers — select all that apply",
+    revealTitle: "Answer", pollResult: "Poll Results", noAnswerLabel: "(no answer)", ppl: "",
+    noResponses: "No responses.", answerIs: "Answer: ", pts: " pts",
+    leaderboard: "🏆 Leaderboard", finalResult: "🎉 Final Results", finish: "Finish",
+    oxLabels: ["O True", "X False"],
+    waitStart: "You're in! Waiting for the game to start...",
+    soonStart: (n) => `Question ${n} is about to start!`, watchScreen: "Look at the screen!",
+    typeAnswer: "Type your answer", submit: "Submit", pickOne: "Select at least one option.",
+    timeUpWait: "Time's up! Waiting for results...",
+    votedWait: "Vote submitted! Waiting for results...", answeredWait: "Answer submitted! Waiting for others...",
+    correct: "Correct!", wrong: "Wrong...", timeUp: "Time's up", voted: "Voted", noVote: "No vote",
+    plusPts: (p) => `+${p.toLocaleString()} pts`,
+    rankLine: (r, s) => `Rank ${r} · ${s.toLocaleString()} pts`,
+    finalRank: (r) => `You finished #${r}!`, scoreOf: (s) => `${s.toLocaleString()} pts`, home: "Home",
+  },
+};
+let LANG = "ko";
+const tr = (k) => I18N[LANG][k] ?? I18N.ko[k];
+// 진행 언어 적용: 정적 라벨 일괄 갱신(대기실·리더보드·최종·참가자 버튼).
+function setLang(lang) {
+  LANG = lang === "en" ? "en" : "ko";
+  $("lobby-pin-label").textContent = tr("gamePin");
+  $("lobby-qr-label").textContent = tr("qrJoin");
+  $("btn-start-game").textContent = tr("start");
+  $("btn-cancel-game").textContent = tr("cancel");
+  $("hq-resp-label").textContent = tr("respLabel");
+  $("hb-title").textContent = tr("leaderboard");
+  $("btn-hb-next").textContent = tr("nextQ");
+  $("hf-title").textContent = tr("finalResult");
+  $("btn-hf-done").textContent = tr("finish");
+  $("btn-pq-submit").textContent = tr("submit");
+  $("pq-short-input").placeholder = tr("typeAnswer");
+  $("btn-pf-home").textContent = tr("home");
+}
 const GAME_TTL = 24*60*60*1000; // 24시간 지난 게임은 입장 불가
 const LS_KEY = "qb_quizzes";
 
@@ -492,7 +560,7 @@ function toast(msg) {
 }
 function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }
 function uid() { return Math.random().toString(36).slice(2, 10); }
-function choicesOf(q) { return q.type === "ox" ? OX_LABELS : (q.choices || []); }
+function choicesOf(q) { return q.type === "ox" ? tr("oxLabels") : (q.choices || []); }
 
 /* ---------------- 효과음 (Web Audio) ---------------- */
 let audioCtx = null;
@@ -709,6 +777,7 @@ function openEditor(quizId) {
                  : { id: uid(), title: "", questions: [newQuestion()] };
   edIdx = 0;
   $("ed-title").value = edQuiz.title;
+  $("ed-lang-en").checked = edQuiz.lang === "en";
   renderEditor();
   show("view-editor");
 }
@@ -904,6 +973,7 @@ $("btn-q-dup").onclick = () => {
 };
 $("ed-qtext").oninput = e => { edQuiz.questions[edIdx].text = e.target.value; };
 $("ed-title").oninput = e => { edQuiz.title = e.target.value; };
+$("ed-lang-en").onchange = e => { edQuiz.lang = e.target.checked ? "en" : "ko"; };
 $("btn-add-q").onclick = () => {
   edQuiz.questions.push(newQuestion());
   edIdx = edQuiz.questions.length - 1;
@@ -995,7 +1065,8 @@ async function hostGame(quiz) {
     }
     return { ...base, choices, answers, multi: q.type === "mc" && answers.length > 1 };
   };
-  const playQuiz = { title: quiz.title, questions: quiz.questions.map(prepareForPlay) };
+  const playQuiz = { title: quiz.title, lang: quiz.lang === "en" ? "en" : "ko", questions: quiz.questions.map(prepareForPlay) };
+  setLang(playQuiz.lang); // 진행 화면 언어(대기실부터) 적용
   host.pin = pin; host.ref = ref; host.quiz = playQuiz; host.qIdx = -1;
   await ref.set({
     status: "lobby",
@@ -1018,7 +1089,7 @@ async function hostGame(quiz) {
   const onPlayers = pRef.on("value", snap => {
     host.players = snap.val() || {};
     const names = Object.values(host.players).map(p => p.name);
-    $("lobby-count").textContent = names.length;
+    $("lobby-count-line").textContent = tr("players")(names.length);
     $("lobby-players").innerHTML = names.map(n => `<div class="player-chip">${esc(n)}</div>`).join("");
     $("btn-start-game").disabled = names.length === 0;
     $("hq-total").textContent = names.length;
@@ -1041,7 +1112,7 @@ function hostNextQuestion() {
   if (q.type === "slide") return hostShowSlide(q); // 안내 페이지: 카운트다운 없이 바로.
   // 3-2-1 카운트다운 (호스트 화면 로컬, 참가자는 '준비' 화면)
   host.ref.update({ status: "countdown", currentQ: host.qIdx });
-  $("cd-label").textContent = `${host.qIdx + 1}번 문제`;
+  $("cd-label").textContent = tr("qNum")(host.qIdx + 1);
   show("view-countdown");
   let n = 3;
   $("cd-num").textContent = n;
@@ -1071,7 +1142,7 @@ function tryPlay(container) {
 function hostShowSlide(q) {
   clearInterval(host.timer);
   host.ref.update({ status: "slide", currentQ: host.qIdx });
-  $("hq-progress").textContent = `${host.qIdx + 1} / ${host.quiz.questions.length} · 안내`;
+  $("hq-progress").textContent = `${host.qIdx + 1} / ${host.quiz.questions.length}${tr("slideTag")}`;
   $("hq-timer").textContent = "—";
   $("hq-text").textContent = q.text || "";
   $("hq-media").innerHTML = mediaHTML(q, true);
@@ -1084,7 +1155,7 @@ function hostShowSlide(q) {
   grid.className = "answer-grid";
   grid.innerHTML = "";
   show("view-hq");
-  $("btn-hq-skip").textContent = "다음 ▶";
+  $("btn-hq-skip").textContent = tr("next");
   $("btn-hq-skip").onclick = () => hostNextQuestion();
 }
 function hostShowQuestion(q) {
@@ -1094,19 +1165,19 @@ function hostShowQuestion(q) {
   host.ref.update({ status: "question", questionStartAt: startAt });
 
   $("hq-progress").textContent = `${host.qIdx + 1} / ${host.quiz.questions.length}`
-    + (q.points === "double" ? " · 더블 포인트!" : q.points === "none" ? " · 점수 없음" : "")
-    + (q.type === "poll" ? " · 투표" : "");
+    + (q.points === "double" ? tr("double") : q.points === "none" ? tr("noPts") : "")
+    + (q.type === "poll" ? tr("pollTag") : "");
   $("hq-text").textContent = q.text;
   $("hq-media").innerHTML = mediaHTML(q, true); // 출제 화면에서는 동영상 즉시 재생.
   tryPlay($("hq-media"));
   $("hq-body").style.display = "none";
   $("hq-answered").parentElement.style.visibility = "";
-  $("btn-hq-skip").textContent = "넘어가기 ▶";
+  $("btn-hq-skip").textContent = tr("skip");
   $("hq-answered").textContent = "0";
   const grid = $("hq-grid");
   if (q.type === "short") {
     grid.className = "answer-grid";
-    grid.innerHTML = `<div class="notice" style="grid-column:1/-1;align-self:center;justify-self:center;font-size:18px;">✍ 참가자가 답을 입력하는 중입니다…</div>`;
+    grid.innerHTML = `<div class="notice" style="grid-column:1/-1;align-self:center;justify-self:center;font-size:18px;">${tr("shortWait")}</div>`;
   } else {
     grid.className = "answer-grid" + (q.type === "ox" ? " ox" : "");
     grid.innerHTML = choicesOf(q).map((c, i) => `
@@ -1114,7 +1185,7 @@ function hostShowQuestion(q) {
         <span class="shape">${q.type === "ox" ? (i === 0 ? "O" : "X") : SHAPES[i]}</span>
         <span>${esc(c)}</span>
       </div>`).join("")
-      + (q.multi ? `<div style="grid-column:1/-1;text-align:center;font-weight:700;">복수 정답 — 해당하는 것을 모두 고르세요</div>` : "");
+      + (q.multi ? `<div style="grid-column:1/-1;text-align:center;font-weight:700;">${tr("multiNote")}</div>` : "");
   }
   show("view-hq");
 
@@ -1182,7 +1253,7 @@ function hostReveal(q) {
 }
 function hostShowReveal(q) {
   const isPoll = q.type === "poll";
-  $("hr-progress").textContent = `${host.qIdx + 1} / ${host.quiz.questions.length} — ${isPoll ? "투표 결과" : "정답 공개"}`;
+  $("hr-progress").textContent = `${host.qIdx + 1} / ${host.quiz.questions.length} — ${isPoll ? tr("pollResult") : tr("revealTitle")}`;
   $("hr-text").textContent = q.text;
   $("hr-media").innerHTML = mediaHTML(q);
   const grid = $("hr-grid");
@@ -1191,7 +1262,7 @@ function hostShowReveal(q) {
     // 주관식: 답안 상위 목록(정답 여부 표시).
     const tally = {};
     Object.values(host.answers).forEach(a => {
-      const t = String(a.text || "").trim() || "(무응답)";
+      const t = String(a.text || "").trim() || tr("noAnswerLabel");
       tally[t] = (tally[t] || 0) + 1;
     });
     const rows = Object.entries(tally).sort((x, y) => y[1] - x[1]).slice(0, 8);
@@ -1200,9 +1271,9 @@ function hostShowReveal(q) {
       ${rows.length ? rows.map(([t, n]) => `
         <div style="display:flex;gap:10px;align-items:center;background:rgba(255,255,255,0.12);border-radius:10px;padding:10px 14px;">
           <span style="font-size:18px;">${ok(t) ? "✅" : "❌"}</span>
-          <span style="flex:1;font-weight:700;">${esc(t)}</span><span>${n}명</span>
-        </div>`).join("") : `<div class="notice">응답이 없습니다.</div>`}
-      <div style="opacity:0.85;font-size:14px;">정답: ${q.accepted.map(esc).join(", ")}</div>
+          <span style="flex:1;font-weight:700;">${esc(t)}</span><span>${n}${tr("ppl")}</span>
+        </div>`).join("") : `<div class="notice">${tr("noResponses")}</div>`}
+      <div style="opacity:0.85;font-size:14px;">${tr("answerIs")}${q.accepted.map(esc).join(", ")}</div>
     </div>`;
     grid.innerHTML = "";
   } else {
@@ -1241,7 +1312,7 @@ function boardRowsHtml(list, limit) {
   return list.slice(0, limit).map((p, i) => `
     <div class="board-row ${medals[i] || ""}">
       <span class="rank">${i + 1}</span><span class="name">${esc(p.name)}</span>
-      <span class="score">${p.score.toLocaleString()}점</span>
+      <span class="score">${p.score.toLocaleString()}${tr("pts")}</span>
     </div>`).join("");
 }
 function hostShowBoard() {
@@ -1263,7 +1334,7 @@ function hostFinish() {
   $("hf-podium").innerHTML = pods.map(x => `
     <div class="pod ${x.cls}">
       <div class="pod-name">${esc(x.p.name)}</div>
-      <div class="pod-score">${x.p.score.toLocaleString()}점</div>
+      <div class="pod-score">${x.p.score.toLocaleString()}${tr("pts")}</div>
       <div class="pod-block">${x.n}</div>
     </div>`).join("");
   $("hf-board").innerHTML = boardRowsHtml(ranked.slice(3), 7);
@@ -1307,9 +1378,10 @@ $("btn-join").onclick = async () => {
 
     playerCleanup();
     player.pin = pin; player.id = pRef.key; player.name = name; player.ref = gRef;
+    setLang(game.quiz?.lang); // 영문 진행 퀴즈면 참가자 화면도 영어로
     $("pw-name").textContent = name; $("pq-name").textContent = name;
     $("pw-score").textContent = ""; $("pw-icon").textContent = "🙌";
-    $("pw-msg").textContent = "입장 완료! 게임 시작을 기다리는 중...";
+    $("pw-msg").textContent = tr("waitStart");
     show("view-pwait");
 
     player.unsub = gRef.on("value", s => playerOnState(s.val(), pRef));
@@ -1327,9 +1399,10 @@ function playerOnState(game, pRef) {
     return;
   }
   player.quiz = game.quiz;
+  if ((game.quiz?.lang === "en") !== (LANG === "en")) setLang(game.quiz?.lang);
   const me = (game.players || {})[player.id];
   const myScore = me ? (me.score || 0) : 0;
-  $("pw-score").textContent = myScore ? myScore.toLocaleString() + "점" : "";
+  $("pw-score").textContent = myScore ? tr("scoreOf")(myScore) : "";
   const state = game.status + ":" + game.currentQ;
   if (state === player.lastState) {
     // 같은 상태 내 갱신 (참가자 수 변화 등) — 화면 전환 없음
@@ -1340,12 +1413,12 @@ function playerOnState(game, pRef) {
   if (game.status === "countdown") {
     pRef.onDisconnect().cancel(); // 게임 시작 후에는 새로고침해도 점수 유지
     $("pw-icon").textContent = "👀";
-    $("pw-msg").textContent = `${game.currentQ + 1}번 문제가 곧 시작됩니다!`;
+    $("pw-msg").textContent = tr("soonStart")(game.currentQ + 1);
     show("view-pwait");
   } else if (game.status === "slide") {
     clearInterval(player.timer);
     $("pw-icon").textContent = "📺";
-    $("pw-msg").textContent = "화면을 봐주세요!";
+    $("pw-msg").textContent = tr("watchScreen");
     show("view-pwait");
   } else if (game.status === "question") {
     playerShowQuestion(game);
@@ -1360,7 +1433,7 @@ function playerShowQuestion(game) {
   const q = game.quiz.questions[qi];
   if (player.answeredQ === qi) return; // 이미 답함 (새로고침 등)
   $("pq-progress").textContent = `${qi + 1} / ${game.quiz.questions.length}`
-    + (q.type === "poll" ? " · 투표" : q.multi ? " · 복수 선택" : "");
+    + (q.type === "poll" ? tr("pollTag") : q.multi ? tr("multiTag") : "");
   const grid = $("pq-grid");
   grid.innerHTML = "";
   const shortBox = $("pq-short"), submitWrap = $("pq-submitwrap");
@@ -1374,7 +1447,7 @@ function playerShowQuestion(game) {
     input.value = ""; input.disabled = false;
     setTimeout(() => input.focus(), 50);
     $("btn-pq-submit").onclick = () => {
-      if (!input.value.trim()) return toast("답을 입력하세요.");
+      if (!input.value.trim()) return toast(tr("typeAnswer"));
       playerAnswer(qi, { text: input.value.trim().slice(0, 60) });
     };
     input.onkeydown = (e) => { if (e.key === "Enter") $("btn-pq-submit").click(); };
@@ -1394,7 +1467,7 @@ function playerShowQuestion(game) {
       grid.appendChild(b);
     });
     $("btn-pq-submit").onclick = () => {
-      if (!selected.size) return toast("보기를 1개 이상 선택하세요.");
+      if (!selected.size) return toast(tr("pickOne"));
       playerAnswer(qi, { choices: [...selected].sort() });
     };
   } else {
@@ -1420,7 +1493,7 @@ function playerShowQuestion(game) {
       clearInterval(player.timer);
       if (player.answeredQ !== qi) {
         $("pw-icon").textContent = "⏰";
-        $("pw-msg").textContent = "시간 종료! 결과를 기다리는 중...";
+        $("pw-msg").textContent = tr("timeUpWait");
         show("view-pwait");
       }
     }
@@ -1434,7 +1507,7 @@ function playerAnswer(qi, payload) {
   player.ref.child(`answers/${qi}/${player.id}`).set({ ...payload, at: Date.now() });
   const isPoll = player.quiz?.questions?.[qi]?.type === "poll";
   $("pw-icon").textContent = isPoll ? "🗳" : "🤞";
-  $("pw-msg").textContent = isPoll ? "투표 완료! 결과를 기다리는 중..." : "답변 완료! 다른 참가자를 기다리는 중...";
+  $("pw-msg").textContent = isPoll ? tr("votedWait") : tr("answeredWait");
   show("view-pwait");
 }
 function playerShowResult(game, myScore) {
@@ -1448,25 +1521,25 @@ function playerShowResult(game, myScore) {
 
   const q = game.quiz.questions[qi];
   if (q.type === "poll") {
-    $("pr-icon").textContent = "🗳"; $("pr-title").textContent = my ? "투표 완료" : "미참여";
+    $("pr-icon").textContent = "🗳"; $("pr-title").textContent = my ? tr("voted") : tr("noVote");
     $("pr-points").textContent = "";
-    $("pr-rank").textContent = `현재 ${myRank}위 · ${myScore.toLocaleString()}점`;
+    $("pr-rank").textContent = tr("rankLine")(myRank, myScore);
     show("view-pr");
     return;
   }
   if (my && my.correct) {
-    $("pr-icon").textContent = "✅"; $("pr-title").textContent = "정답!";
-    $("pr-points").textContent = `+${(my.points || 0).toLocaleString()}점`;
+    $("pr-icon").textContent = "✅"; $("pr-title").textContent = tr("correct");
+    $("pr-points").textContent = tr("plusPts")(my.points || 0);
     sfx.correct();
   } else if (my) {
-    $("pr-icon").textContent = "❌"; $("pr-title").textContent = "오답...";
-    $("pr-points").textContent = "+0점";
+    $("pr-icon").textContent = "❌"; $("pr-title").textContent = tr("wrong");
+    $("pr-points").textContent = tr("plusPts")(0);
     sfx.wrong();
   } else {
-    $("pr-icon").textContent = "⏰"; $("pr-title").textContent = "시간 초과";
-    $("pr-points").textContent = "+0점";
+    $("pr-icon").textContent = "⏰"; $("pr-title").textContent = tr("timeUp");
+    $("pr-points").textContent = tr("plusPts")(0);
   }
-  $("pr-rank").textContent = `현재 ${myRank}위 · ${myScore.toLocaleString()}점`;
+  $("pr-rank").textContent = tr("rankLine")(myRank, myScore);
   show("view-pr");
 }
 function playerShowFinal(game, myScore) {
@@ -1476,8 +1549,8 @@ function playerShowFinal(game, myScore) {
   const myRank = ranked.findIndex(p => p.name === player.name) + 1;
   const icons = ["🥇", "🥈", "🥉"];
   $("pf-icon").textContent = icons[myRank - 1] || "🏅";
-  $("pf-title").textContent = `최종 ${myRank}위!`;
-  $("pf-score").textContent = `${myScore.toLocaleString()}점`;
+  $("pf-title").textContent = tr("finalRank")(myRank);
+  $("pf-score").textContent = tr("scoreOf")(myScore);
   if (myRank <= 3) sfx.fanfare();
   show("view-pf");
 }
