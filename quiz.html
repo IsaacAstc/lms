@@ -315,6 +315,9 @@
           <div id="ed-choices"></div></div>
         <div class="field" id="ed-accepted-wrap" style="display:none;"><label>허용 답안 (쉼표로 구분 — 대소문자·공백 무시 비교)</label>
           <input type="text" id="ed-accepted" placeholder="예: 서울, 서울특별시"></div>
+        <div class="field" id="ed-body-wrap" style="display:none;"><label>본문 (미디어 아래에 표시)</label>
+          <textarea id="ed-body" rows="5" maxlength="2000" placeholder="안내 본문을 입력하세요 (줄바꿈 유지)"
+            style="width:100%;padding:12px;font-size:15px;border:2px solid #ccc;border-radius:var(--radius);font-family:inherit;"></textarea></div>
         <div class="q-actions">
           <button class="btn-sm" id="btn-q-dup">⧉ 문제 복제</button>
           <button class="btn-sm" id="btn-q-up">▲ 위로</button>
@@ -360,6 +363,7 @@
   </div>
   <div class="q-text-big" id="hq-text"></div>
   <div class="q-media" id="hq-media"></div>
+  <div id="hq-body" style="display:none;align-self:center;width:min(760px,92vw);background:rgba(255,255,255,0.1);border-radius:10px;padding:16px 20px;font-size:18px;line-height:1.7;white-space:pre-wrap;"></div>
   <div class="answered-count"><span id="hq-answered">0</span> / <span id="hq-total">0</span> 명 응답</div>
   <div class="answer-grid" id="hq-grid"></div>
 </div>
@@ -546,6 +550,7 @@ function normQ(x) {
     points: POINTS_OPTS.includes(x.points) ? x.points : "standard",
     shuffle: !!x.shuffle,
     media: (x.media && typeof x.media.url === "string" && x.media.url) ? { url: String(x.media.url).slice(0, 300000) } : null,
+    body: String(x.body || "").slice(0, 2000),
     timeLimit: TIME_OPTS.includes(x.timeLimit) ? x.timeLimit : 20,
   };
 }
@@ -561,7 +566,7 @@ function validateQuiz(quiz) {
   for (let i = 0; i < quiz.questions.length; i++) {
     const q = quiz.questions[i];
     if (q.type === "slide") {
-      if (!q.text.trim() && !q.media) return `${i + 1}번 안내 페이지에 메시지 또는 미디어를 넣으세요.`;
+      if (!q.text.trim() && !q.media && !(q.body || "").trim()) return `${i + 1}번 안내 페이지에 메시지·본문 또는 미디어를 넣으세요.`;
       continue;
     }
     if (!q.text.trim()) return `${i + 1}번 문제의 내용이 비어 있습니다.`;
@@ -706,7 +711,9 @@ function renderQuestionPanel() {
   const isSlide = q.type === "slide";
   $("ed-time").closest(".field").style.display = isSlide ? "none" : "";
   $("ed-points").closest(".field").style.display = isSlide ? "none" : "";
-  $("ed-qtext").placeholder = isSlide ? "안내 메시지를 입력하세요 (미디어만 넣을 경우 비워도 됨)" : "문제를 입력하세요";
+  $("ed-qtext").placeholder = isSlide ? "제목/메시지를 입력하세요 (본문·미디어만 넣을 경우 비워도 됨)" : "문제를 입력하세요";
+  $("ed-body-wrap").style.display = isSlide ? "" : "none";
+  if (isSlide) $("ed-body").value = q.body || "";
   // 미디어.
   $("ed-media-url").value = q.media && !q.media.url.startsWith("data:") ? q.media.url : "";
   renderMediaPreview(q);
@@ -764,6 +771,7 @@ $("ed-type").onchange = e => {
 $("ed-time").onchange = e => { edQuiz.questions[edIdx].timeLimit = +e.target.value; };
 $("ed-points").onchange = e => { edQuiz.questions[edIdx].points = e.target.value; };
 $("ed-shuffle").onchange = e => { edQuiz.questions[edIdx].shuffle = e.target.checked; };
+$("ed-body").oninput = e => { edQuiz.questions[edIdx].body = e.target.value; };
 $("ed-accepted").oninput = e => {
   edQuiz.questions[edIdx].accepted = e.target.value.split(",").map(x => x.trim()).filter(Boolean).slice(0, 10);
 };
@@ -947,7 +955,7 @@ async function hostGame(quiz) {
   const prepareForPlay = (raw) => {
     const q = normQ(raw);
     const base = { type: q.type, text: q.text, timeLimit: q.timeLimit, points: q.points, media: q.media || null };
-    if (q.type === "slide") return { type: "slide", text: q.text, media: q.media || null };
+    if (q.type === "slide") return { type: "slide", text: q.text, body: q.body || "", media: q.media || null };
     if (q.type === "short") return { ...base, accepted: q.accepted };
     if (q.type === "ox") return { ...base, answers: q.answers };
     let choices = effChoices(q);
@@ -1041,6 +1049,9 @@ function hostShowSlide(q) {
   $("hq-text").textContent = q.text || "";
   $("hq-media").innerHTML = mediaHTML(q, true);
   tryPlay($("hq-media"));
+  const body = $("hq-body");
+  body.textContent = q.body || "";
+  body.style.display = q.body ? "" : "none";
   $("hq-answered").parentElement.style.visibility = "hidden";
   const grid = $("hq-grid");
   grid.className = "answer-grid";
@@ -1061,6 +1072,7 @@ function hostShowQuestion(q) {
   $("hq-text").textContent = q.text;
   $("hq-media").innerHTML = mediaHTML(q, true); // 출제 화면에서는 동영상 즉시 재생.
   tryPlay($("hq-media"));
+  $("hq-body").style.display = "none";
   $("hq-answered").parentElement.style.visibility = "";
   $("btn-hq-skip").textContent = "넘어가기 ▶";
   $("hq-answered").textContent = "0";
