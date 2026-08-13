@@ -3,18 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Quiz Battle — 실시간 퀴즈 게임</title>
+<title>보안교육 퀴즈 — 실시간 퀴즈</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="scfe/js/qrcode.min.js"></script>
 <style>
   :root {
-    --purple: #46178f;
-    --purple-dark: #2e0f5e;
-    --red: #e21b3c;
-    --blue: #1368ce;
-    --yellow: #d89e00;
-    --green: #26890c;
+    /* 항공보안 교육 테마(LMS와 동일 계열) — 변수명은 호환을 위해 유지 */
+    --purple: #1a4d8f;        /* 주 색상(네이비) */
+    --purple-dark: #0c2a52;   /* 배경 짙은 네이비 */
+    --red: #c2503d;           /* 보기 1: 테라코타 */
+    --blue: #2b6cb0;          /* 보기 2: 스틸 블루 */
+    --yellow: #b7791f;        /* 보기 3: 앰버 */
+    --green: #2f855a;         /* 보기 4: 딥 그린 */
     --card: #ffffff;
     --text: #333333;
     --text2: #6e6e6e;
@@ -25,7 +27,7 @@
   html, body { height: 100%; }
   body {
     font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
-    background: linear-gradient(160deg, var(--purple) 0%, var(--purple-dark) 100%);
+    background: linear-gradient(165deg, #123c72 0%, var(--purple-dark) 60%, #081c38 100%);
     color: #fff; min-height: 100vh;
   }
   .view { display: none; min-height: 100vh; flex-direction: column; }
@@ -33,7 +35,7 @@
   .center { align-items: center; justify-content: center; padding: 20px; }
 
   h1.logo { font-size: 42px; font-weight: 900; letter-spacing: -1px; text-shadow: 0 3px 0 rgba(0,0,0,0.3); }
-  h1.logo span { color: #ffd54f; }
+  h1.logo span { color: #7fb7ff; }
   .tagline { opacity: 0.8; margin-top: 6px; font-size: 14px; }
 
   .card {
@@ -77,7 +79,7 @@
   .ed-body { flex: 1; display: flex; overflow: hidden; }
   .ed-side { width: 220px; min-width: 180px; background: #fff; border-right: 1px solid #ddd; overflow-y: auto; padding: 10px; }
   .ed-side .q-item { padding: 10px; border-radius: 6px; border: 2px solid #eee; margin-bottom: 8px; cursor: pointer; font-size: 13px; position: relative; }
-  .ed-side .q-item.sel { border-color: var(--purple); background: #f5f0fc; }
+  .ed-side .q-item.sel { border-color: var(--purple); background: #eef4fb; }
   .ed-side .q-item .q-num { font-weight: 700; color: var(--purple); font-size: 11px; }
   .ed-side .q-item .q-preview { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ed-main { flex: 1; overflow-y: auto; padding: 24px; }
@@ -190,8 +192,8 @@
 <!-- ============ 홈 ============ -->
 <div id="view-home" class="view center active" style="gap:22px;">
   <div style="text-align:center;">
-    <h1 class="logo">Quiz<span>!</span> Battle</h1>
-    <div class="tagline">카훗 스타일 실시간 퀴즈 게임</div>
+    <h1 class="logo">보안교육 <span>퀴즈</span></h1>
+    <div class="tagline">항공보안 교육 실시간 퀴즈</div>
   </div>
   <div id="fb-warning" class="notice" style="display:none;">
     ⚠️ <b>Firebase가 아직 설정되지 않았습니다.</b><br>
@@ -265,6 +267,7 @@
               <option value="ox">OX 퀴즈</option>
               <option value="short">주관식 단답형</option>
               <option value="poll">투표 (정답 없음)</option>
+              <option value="slide">안내 페이지 (문제 없음)</option>
             </select></div>
           <div class="field"><label>제한시간 (초)</label>
             <select id="ed-time">
@@ -293,7 +296,20 @@
             <button class="btn-sm danger" id="btn-media-clear" type="button">제거</button>
           </div>
           <div id="ed-media-prev" style="margin-top:6px;"></div>
-          <div style="font-size:12px;opacity:0.7;margin-top:4px;">이미지 파일은 자동 압축해 퀴즈에 내장됩니다. 동영상 파일은 저장소 media/ 폴더로 업로드됩니다(GitHub 토큰 1회 등록 필요, 공개 저장소이므로 공개 가능한 영상만 · 배포 1~2분 후 재생 가능). 유튜브/mp4 URL도 사용할 수 있습니다.</div>
+          <div style="font-size:12px;opacity:0.7;margin-top:4px;">이미지 파일은 자동 압축해 퀴즈에 내장됩니다. 동영상 파일은 저장소 media/ 폴더로 업로드됩니다(공개 저장소 — 공개 가능한 영상만 · 배포 1~2분 후 재생 가능). 유튜브/mp4 URL도 사용할 수 있습니다.</div>
+          <details style="font-size:12px;margin-top:4px;">
+            <summary style="cursor:pointer;font-weight:700;">🔑 동영상 업로드용 GitHub 토큰 발급 방법 <button class="btn-sm" id="btn-gh-token-reset" type="button" style="margin-left:8px;">토큰 재설정</button></summary>
+            <ol style="margin:6px 0 0 18px;line-height:1.7;">
+              <li>github.com 로그인 → 우측 상단 프로필 → <b>Settings</b></li>
+              <li>왼쪽 맨 아래 <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Fine-grained tokens</b> → <b>Generate new token</b></li>
+              <li>Token name 자유 입력, Expiration은 원하는 기간(예: 1년)</li>
+              <li><b>Repository access</b>: Only select repositories → <code>IsaacAstc/lms</code> 선택</li>
+              <li><b>Permissions → Repository permissions → Contents: Read and write</b>만 켜기 (나머지는 No access)</li>
+              <li>Generate token → 표시된 토큰(ghp_… 또는 github_pat_…)을 복사</li>
+              <li>여기서 <b>🎬 동영상 파일</b> 버튼을 누르면 나오는 입력창에 붙여넣기 — 이 브라우저에만 저장됩니다</li>
+            </ol>
+            <div style="margin-top:4px;opacity:0.8;">토큰이 만료되었거나 바꾸고 싶으면 위 <b>토큰 재설정</b>을 누른 뒤 다시 업로드하세요.</div>
+          </details>
         </div>
         <div class="field" id="ed-choices-wrap"><label id="ed-choices-label">보기 (정답에 체크 — 복수 정답 가능, 3·4번은 비우면 제외)</label>
           <div id="ed-choices"></div></div>
@@ -312,10 +328,16 @@
 
 <!-- ============ 호스트: 대기실 ============ -->
 <div id="view-lobby" class="view center" style="gap:18px;">
-  <div class="pin-banner">
-    <div class="pin-label">게임 PIN</div>
-    <div class="pin" id="lobby-pin">000000</div>
-    <div class="join-url" id="lobby-url"></div>
+  <div style="display:flex;gap:16px;align-items:stretch;flex-wrap:wrap;justify-content:center;">
+    <div class="pin-banner">
+      <div class="pin-label">게임 PIN</div>
+      <div class="pin" id="lobby-pin">000000</div>
+      <div class="join-url" id="lobby-url"></div>
+    </div>
+    <div class="pin-banner" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
+      <div class="pin-label">QR로 바로 입장</div>
+      <div id="lobby-qr"></div>
+    </div>
   </div>
   <div style="font-size:17px; font-weight:700;">👥 참가자 <span id="lobby-count">0</span>명</div>
   <div class="player-chips" id="lobby-players"></div>
@@ -424,7 +446,7 @@
 import { firebaseConfig as FIREBASE_CONFIG } from "./js/firebase-config.js";
 
 const COLORS = ["c0","c1","c2","c3"];
-const SHAPES = ["▲","◆","●","■"];
+const SHAPES = ["✈","◆","●","▣"];
 const SHAPE_BG = ["var(--red)","var(--blue)","var(--yellow)","var(--green)"];
 const OX_LABELS = ["O 맞다","X 아니다"];
 const GAME_TTL = 24*60*60*1000; // 24시간 지난 게임은 입장 불가
@@ -438,6 +460,15 @@ if (fbReady) {
   auth = firebase.auth();
 } else {
   document.getElementById("fb-warning").style.display = "block";
+}
+
+/* URL ?pin= 으로 진입하면(QR 스캔) PIN을 미리 채우고 닉네임 입력에 포커스. */
+const prefillPin = new URLSearchParams(location.search).get("pin");
+if (prefillPin && /^\d{6}$/.test(prefillPin)) {
+  window.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("join-pin").value = prefillPin;
+    document.getElementById("join-name").focus();
+  });
 }
 
 /* ---------------- 공통 유틸 ---------------- */
@@ -500,7 +531,7 @@ function youtubeEmbed(url) {
 }
 // 문제 정규화(편집기 로드·JSON 가져오기·과거 데이터 호환: answer → answers).
 function normQ(x) {
-  const type = ["mc", "ox", "short", "poll"].includes(x.type) ? x.type : "mc";
+  const type = ["mc", "ox", "short", "poll", "slide"].includes(x.type) ? x.type : "mc";
   let answers = Array.isArray(x.answers) ? x.answers.map(n => n | 0) : [Math.max(0, Math.min(3, x.answer | 0))];
   answers = [...new Set(answers)].filter(n => n >= 0 && n < 4).sort();
   if (!answers.length) answers = [0];
@@ -529,6 +560,10 @@ function validateQuiz(quiz) {
   if (!quiz.questions.length) return "문제가 최소 1개 필요합니다.";
   for (let i = 0; i < quiz.questions.length; i++) {
     const q = quiz.questions[i];
+    if (q.type === "slide") {
+      if (!q.text.trim() && !q.media) return `${i + 1}번 안내 페이지에 메시지 또는 미디어를 넣으세요.`;
+      continue;
+    }
     if (!q.text.trim()) return `${i + 1}번 문제의 내용이 비어 있습니다.`;
     if (q.type === "mc" || q.type === "poll") {
       const c = effChoices(q);
@@ -651,8 +686,8 @@ function renderEditor() {
   edQuiz.questions.forEach((q, i) => {
     const item = document.createElement("div");
     item.className = "q-item" + (i === edIdx ? " sel" : "");
-    const typeLabel = { mc: "선다형", ox: "OX", short: "단답형", poll: "투표" }[q.type] || "선다형";
-    item.innerHTML = `<div class="q-num">${i + 1}. ${typeLabel} · ${q.timeLimit}초${q.points === "double" ? " · 2배" : q.points === "none" ? " · 0점" : ""}</div>
+    const typeLabel = { mc: "선다형", ox: "OX", short: "단답형", poll: "투표", slide: "안내" }[q.type] || "선다형";
+    item.innerHTML = `<div class="q-num">${i + 1}. ${typeLabel}${q.type === "slide" ? "" : ` · ${q.timeLimit}초`}${q.points === "double" ? " · 2배" : q.points === "none" ? " · 0점" : ""}</div>
       <div class="q-preview">${esc(q.text) || "<i>(내용 없음)</i>"}</div>`;
     item.onclick = () => { edIdx = i; renderEditor(); };
     listEl.appendChild(item);
@@ -668,13 +703,18 @@ function renderQuestionPanel() {
   $("ed-shuffle").checked = !!q.shuffle;
   // 셔플은 보기가 있는 유형에서만 의미 있음.
   $("ed-shuffle-wrap").style.display = (q.type === "mc" || q.type === "poll") ? "" : "none";
+  const isSlide = q.type === "slide";
+  $("ed-time").closest(".field").style.display = isSlide ? "none" : "";
+  $("ed-points").closest(".field").style.display = isSlide ? "none" : "";
+  $("ed-qtext").placeholder = isSlide ? "안내 메시지를 입력하세요 (미디어만 넣을 경우 비워도 됨)" : "문제를 입력하세요";
   // 미디어.
   $("ed-media-url").value = q.media && !q.media.url.startsWith("data:") ? q.media.url : "";
   renderMediaPreview(q);
   // 유형별 입력 영역 전환.
   const isShort = q.type === "short";
-  $("ed-choices-wrap").style.display = isShort ? "none" : "";
+  $("ed-choices-wrap").style.display = (isShort || isSlide) ? "none" : "";
   $("ed-accepted-wrap").style.display = isShort ? "" : "none";
+  if (isSlide) return;
   if (isShort) { $("ed-accepted").value = (q.accepted || []).join(", "); return; }
   $("ed-choices-label").textContent =
     q.type === "poll" ? "보기 (투표 항목 — 정답 없음, 3·4번은 비우면 제외)"
@@ -774,6 +814,11 @@ function ghToken() {
   }
   return t;
 }
+$("btn-gh-token-reset").onclick = (e) => {
+  e.preventDefault(); e.stopPropagation();
+  localStorage.removeItem(GH_TOKEN_KEY);
+  toast("저장된 토큰을 삭제했습니다. 다음 업로드 시 새 토큰을 입력하세요.");
+};
 $("btn-media-video").onclick = () => $("ed-media-video").click();
 $("ed-media-video").onchange = async e => {
   const file = e.target.files[0]; e.target.value = "";
@@ -902,6 +947,7 @@ async function hostGame(quiz) {
   const prepareForPlay = (raw) => {
     const q = normQ(raw);
     const base = { type: q.type, text: q.text, timeLimit: q.timeLimit, points: q.points, media: q.media || null };
+    if (q.type === "slide") return { type: "slide", text: q.text, media: q.media || null };
     if (q.type === "short") return { ...base, accepted: q.accepted };
     if (q.type === "ox") return { ...base, answers: q.answers };
     let choices = effChoices(q);
@@ -926,6 +972,12 @@ async function hostGame(quiz) {
 
   $("lobby-pin").textContent = pin;
   $("lobby-url").textContent = location.host ? location.host + location.pathname : "";
+  // 접속 QR: 스캔하면 PIN이 미리 채워진 참가 페이지로 이동.
+  const qrBox = $("lobby-qr");
+  qrBox.innerHTML = "";
+  if (typeof QRCode !== "undefined") {
+    new QRCode(qrBox, { text: `${location.origin}${location.pathname}?pin=${pin}`, width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M });
+  }
   // 참가자 구독
   const pRef = ref.child("players");
   const onPlayers = pRef.on("value", snap => {
@@ -951,6 +1003,7 @@ function hostNextQuestion() {
   host.qIdx++;
   if (host.qIdx >= host.quiz.questions.length) return hostFinish();
   const q = host.quiz.questions[host.qIdx];
+  if (q.type === "slide") return hostShowSlide(q); // 안내 페이지: 카운트다운 없이 바로.
   // 3-2-1 카운트다운 (호스트 화면 로컬, 참가자는 '준비' 화면)
   host.ref.update({ status: "countdown", currentQ: host.qIdx });
   $("cd-label").textContent = `${host.qIdx + 1}번 문제`;
@@ -964,16 +1017,37 @@ function hostNextQuestion() {
     else { clearInterval(cd); sfx.go(); hostShowQuestion(q); }
   }, 900);
 }
-function mediaHTML(q) {
+function mediaHTML(q, autoplay = false) {
   if (!q.media || !q.media.url) return "";
   const url = q.media.url;
   const kind = url.startsWith("data:") ? "image" : mediaKindOf(url);
   if (kind === "youtube") {
     const em = youtubeEmbed(url);
-    return em ? `<iframe src="${esc(em)}" style="width:min(640px,90vw);aspect-ratio:16/9;border:none;border-radius:10px;" allow="autoplay; encrypted-media" allowfullscreen></iframe>` : "";
+    return em ? `<iframe src="${esc(em)}${autoplay ? "?autoplay=1&rel=0" : "?rel=0"}" style="width:min(640px,90vw);aspect-ratio:16/9;border:none;border-radius:10px;" allow="autoplay; encrypted-media" allowfullscreen></iframe>` : "";
   }
-  if (kind === "video") return `<video src="${esc(url)}" controls style="max-width:min(640px,90vw);max-height:38vh;border-radius:10px;"></video>`;
+  if (kind === "video") return `<video src="${esc(url)}" controls ${autoplay ? "autoplay" : ""} playsinline style="max-width:min(640px,90vw);max-height:38vh;border-radius:10px;"></video>`;
   return `<img src="${esc(url)}" alt="" style="max-width:min(640px,90vw);max-height:38vh;border-radius:10px;">`;
+}
+// autoplay가 정책으로 막히면 음소거 후 재생 재시도.
+function tryPlay(container) {
+  const v = container.querySelector("video[autoplay]");
+  if (v) v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+}
+function hostShowSlide(q) {
+  clearInterval(host.timer);
+  host.ref.update({ status: "slide", currentQ: host.qIdx });
+  $("hq-progress").textContent = `${host.qIdx + 1} / ${host.quiz.questions.length} · 안내`;
+  $("hq-timer").textContent = "—";
+  $("hq-text").textContent = q.text || "";
+  $("hq-media").innerHTML = mediaHTML(q, true);
+  tryPlay($("hq-media"));
+  $("hq-answered").parentElement.style.visibility = "hidden";
+  const grid = $("hq-grid");
+  grid.className = "answer-grid";
+  grid.innerHTML = "";
+  show("view-hq");
+  $("btn-hq-skip").textContent = "다음 ▶";
+  $("btn-hq-skip").onclick = () => hostNextQuestion();
 }
 function hostShowQuestion(q) {
   host.revealed = false;
@@ -985,7 +1059,10 @@ function hostShowQuestion(q) {
     + (q.points === "double" ? " · 더블 포인트!" : q.points === "none" ? " · 점수 없음" : "")
     + (q.type === "poll" ? " · 투표" : "");
   $("hq-text").textContent = q.text;
-  $("hq-media").innerHTML = mediaHTML(q);
+  $("hq-media").innerHTML = mediaHTML(q, true); // 출제 화면에서는 동영상 즉시 재생.
+  tryPlay($("hq-media"));
+  $("hq-answered").parentElement.style.visibility = "";
+  $("btn-hq-skip").textContent = "넘어가기 ▶";
   $("hq-answered").textContent = "0";
   const grid = $("hq-grid");
   if (q.type === "short") {
@@ -1220,6 +1297,11 @@ function playerOnState(game, pRef) {
     pRef.onDisconnect().cancel(); // 게임 시작 후에는 새로고침해도 점수 유지
     $("pw-icon").textContent = "👀";
     $("pw-msg").textContent = `${game.currentQ + 1}번 문제가 곧 시작됩니다!`;
+    show("view-pwait");
+  } else if (game.status === "slide") {
+    clearInterval(player.timer);
+    $("pw-icon").textContent = "📺";
+    $("pw-msg").textContent = "화면을 봐주세요!";
     show("view-pwait");
   } else if (game.status === "question") {
     playerShowQuestion(game);
