@@ -176,13 +176,17 @@
     for (i = 0; i < edu.length; i++) all.push({ kind: "edu", v: edu[i] });
     for (i = 0; i < rent.length; i++) all.push({ kind: "rent", v: rent[i] });
 
-    // 특별일정: 지정 이미지 하나만 전체화면 표시(일정과 무관, 최우선).
+    // 특별일정: 지정 이미지 하나만 전체화면 표시(최우선).
+    // 즉시 켜기(specialOn) 또는 예약 기간(specialStart~specialEnd, 일 단위) 내이면 활성.
     var specialEl = $("special");
-    if (didCfg.specialOn && didCfg.specialUrl) {
+    var specialScheduled = didCfg.specialStart && didCfg.specialEnd
+      && didCfg.specialStart <= today && today <= didCfg.specialEnd;
+    if ((didCfg.specialOn || specialScheduled) && didCfg.specialUrl) {
       specialEl.style.backgroundImage = 'url("' + String(didCfg.specialUrl).replace(/"/g, "") + '")';
       specialEl.style.display = "block";
       $("wrap").style.display = "none";
       $("idle").style.display = "none";
+      lastPages = 1; lastDay = today; // 날짜가 바뀔 때만 재평가(예약 종료 자동 복귀)
       return;
     }
     specialEl.style.display = "none";
@@ -205,6 +209,7 @@
       $("footer").style.display = "none";
       $("logo").style.visibility = "hidden";
       $("title").style.visibility = "hidden";
+      lastPages = 1; lastDay = today;
       return;
     }
     idleEl.style.display = "none";

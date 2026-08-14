@@ -245,6 +245,8 @@ function initDidConfig() {
         bgUrl: document.getElementById("did-bg").value.trim(),
         specialOn: document.getElementById("did-special-on").checked,
         specialUrl: document.getElementById("did-special").value.trim(),
+        specialStart: document.getElementById("did-special-start").value,
+        specialEnd: document.getElementById("did-special-end").value,
         updatedAtMs: Date.now(),
       }, { merge: true });
       alert("DID 설정을 저장했습니다. 표출 화면에 즉시 반영됩니다.");
@@ -262,5 +264,7 @@ async function loadDidConfig() {
     document.getElementById("did-bg").value = c.bgUrl || "";
     document.getElementById("did-special-on").checked = !!c.specialOn;
     document.getElementById("did-special").value = c.specialUrl || "";
+    document.getElementById("did-special-start").value = c.specialStart || "";
+    document.getElementById("did-special-end").value = c.specialEnd || "";
   } catch { /* */ }
 }
