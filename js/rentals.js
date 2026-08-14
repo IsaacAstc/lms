@@ -264,7 +264,9 @@ async function loadDidConfig() {
     document.getElementById("did-bg").value = c.bgUrl || "";
     document.getElementById("did-special-on").checked = !!c.specialOn;
     document.getElementById("did-special").value = c.specialUrl || "";
-    document.getElementById("did-special-start").value = c.specialStart || "";
-    document.getElementById("did-special-end").value = c.specialEnd || "";
+    // 과거(날짜만) 저장값 호환: datetime-local에 넣을 수 있게 시각 보정.
+    const dt = (v, t) => (v && !v.includes("T") ? `${v}T${t}` : (v || ""));
+    document.getElementById("did-special-start").value = dt(c.specialStart, "00:00");
+    document.getElementById("did-special-end").value = dt(c.specialEnd, "23:59");
   } catch { /* */ }
 }
