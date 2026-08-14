@@ -203,6 +203,7 @@ function wireDidUpload(btnId, fileId, inputId, opts) {
     const file = e.target.files[0]; e.target.value = "";
     if (!file) return;
     const btn = document.getElementById(btnId);
+    const origLabel = btn.textContent;
     btn.disabled = true; btn.textContent = "업로드 중…";
     try {
       const url = await uploadDidImage(file, opts);
@@ -211,14 +212,16 @@ function wireDidUpload(btnId, fileId, inputId, opts) {
         alert("업로드 완료. 'DID 설정 저장'을 눌러 반영하세요. (배포 1~2분 후 표시됩니다)");
       }
     } catch (err) { alert(err.message || "업로드에 실패했습니다."); }
-    finally { btn.disabled = false; btn.textContent = opts.prefix === "logo" ? "로고 파일 업로드" : "배경 파일 업로드"; }
+    finally { btn.disabled = false; btn.textContent = origLabel; }
   });
 }
 
 // ── DID 설정 ──
 function initDidConfig() {
   wireDidUpload("did-logo-upload", "did-logo-file", "did-logo", { maxDim: 400, keepAlpha: true, prefix: "logo" });
+  wireDidUpload("did-logo2-upload", "did-logo2-file", "did-logo2", { maxDim: 400, keepAlpha: true, prefix: "logo" });
   wireDidUpload("did-bg-upload", "did-bg-file", "did-bg", { maxDim: 3840, keepAlpha: false, prefix: "bg" });
+  wireDidUpload("did-special-upload", "did-special-file", "did-special", { maxDim: 3840, keepAlpha: false, prefix: "special" });
   const base = location.origin + location.pathname.replace(/[^/]*$/, "");
   const url = `${base}did.html${orgQuery(true)}`;
   document.getElementById("did-url").value = url;
@@ -233,7 +236,10 @@ function initDidConfig() {
         title: document.getElementById("did-title").value.trim(),
         notice: document.getElementById("did-notice").value.trim(),
         logoUrl: document.getElementById("did-logo").value.trim(),
+        logoUrl2: document.getElementById("did-logo2").value.trim(),
         bgUrl: document.getElementById("did-bg").value.trim(),
+        specialOn: document.getElementById("did-special-on").checked,
+        specialUrl: document.getElementById("did-special").value.trim(),
         updatedAtMs: Date.now(),
       }, { merge: true });
       alert("DID 설정을 저장했습니다. 표출 화면에 즉시 반영됩니다.");
@@ -247,6 +253,9 @@ async function loadDidConfig() {
     document.getElementById("did-title").value = c.title || "";
     document.getElementById("did-notice").value = c.notice || "";
     document.getElementById("did-logo").value = c.logoUrl || "";
+    document.getElementById("did-logo2").value = c.logoUrl2 || "";
     document.getElementById("did-bg").value = c.bgUrl || "";
+    document.getElementById("did-special-on").checked = !!c.specialOn;
+    document.getElementById("did-special").value = c.specialUrl || "";
   } catch { /* */ }
 }
