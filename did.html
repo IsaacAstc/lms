@@ -128,6 +128,20 @@
   var pageTick = 0;
   var lastPages = 1;
   var lastDay = "";
+  var lastSpecial = false;
+
+  // 특별일정 활성 판정: 즉시 켜기 또는 예약 기간(분 단위, 날짜만 저장된 과거값은 하루 전체) 내.
+  function specialActive() {
+    if (!didCfg.specialUrl) return false;
+    if (didCfg.specialOn) return true;
+    var s = didCfg.specialStart, e = didCfg.specialEnd;
+    if (!s || !e) return false;
+    if (s.indexOf("T") < 0) s += "T00:00";
+    if (e.indexOf("T") < 0) e += "T23:59";
+    var d = new Date();
+    var n = todayStr() + "T" + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    return s <= n && n <= e;
+  }
 
   function $(id) { return document.getElementById(id); }
   function esc(s) {
@@ -179,11 +193,9 @@
     for (i = 0; i < rent.length; i++) all.push({ kind: "rent", v: rent[i] });
 
     // 특별일정: 지정 이미지 하나만 전체화면 표시(최우선).
-    // 즉시 켜기(specialOn) 또는 예약 기간(specialStart~specialEnd, 일 단위) 내이면 활성.
     var specialEl = $("special");
-    var specialScheduled = didCfg.specialStart && didCfg.specialEnd
-      && didCfg.specialStart <= today && today <= didCfg.specialEnd;
-    if ((didCfg.specialOn || specialScheduled) && didCfg.specialUrl) {
+    lastSpecial = specialActive();
+    if (lastSpecial) {
       specialEl.style.backgroundImage = 'url("' + String(didCfg.specialUrl).replace(/"/g, "") + '")';
       specialEl.style.display = "block";
       $("wrap").style.display = "none";
@@ -357,7 +369,8 @@
     setInterval(checkUpdate, 600000);
     setInterval(function () {
       var dayChanged = todayStr() !== lastDay;
-      if (lastPages > 1 || dayChanged) { pageTick++; render(); }
+      var specialChanged = specialActive() !== lastSpecial; // 예약 시각 도달·종료 감지(분 단위)
+      if (lastPages > 1 || dayChanged || specialChanged) { pageTick++; render(); }
     }, PAGE_INTERVAL);
 
     db.collection("publicBoard").doc("__did").onSnapshot(function (snap) {
