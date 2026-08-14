@@ -70,7 +70,9 @@
     position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: none;
     align-items: center; justify-content: center; flex-direction: column;
   }
-  #idle img { max-height: 30vh; max-width: 60vw; margin: 3vh 0; }
+  /* 로고가 2개면 같은 폭으로 정렬(높이는 비율 유지), 1개면 크게 */
+  #idle img { width: 34vw; height: auto; max-height: 34vh; object-fit: contain; margin: 3vh 0; }
+  #idle.one img { width: 50vw; max-height: 40vh; }
   /* 특별일정: 이미지 하나만 전체화면 */
   #special {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: none;
@@ -202,6 +204,7 @@
         ih += '<img src="' + esc(logos[i]) + '" alt="">';
       }
       idleEl.innerHTML = ih;
+      idleEl.className = logos.length === 1 ? "one" : "";
       idleEl.style.display = "flex";
       // 우측 상단 시계는 유지: wrap은 두고 본문·하단·헤더 로고/제목만 숨긴다.
       $("wrap").style.display = "";
