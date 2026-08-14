@@ -65,6 +65,19 @@
   .two-col .sub { font-size: 2.2vh; }
   .two-col .room { font-size: 4.2vh; }
 
+  /* 일정 없는 날: 로고만 중앙 대형 표시 */
+  #idle {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: none;
+    align-items: center; justify-content: center; flex-direction: column;
+  }
+  #idle img { max-height: 30vh; max-width: 60vw; margin: 3vh 0; }
+  /* 특별일정: 이미지 하나만 전체화면 */
+  #special {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: none;
+    background-color: #000; background-size: contain; background-position: center; background-repeat: no-repeat;
+    z-index: 10;
+  }
+
   footer { margin-top: 0.4vh; min-height: 4.4vh; display: flex; align-items: center; }
   #notice {
     font-size: 2.4vh; font-weight: 700; background: rgba(12,42,82,0.1);
@@ -76,7 +89,9 @@
 <body>
 <div id="bg"></div>
 <div id="bg-overlay"></div>
-<div class="wrap">
+<div id="idle"></div>
+<div id="special"></div>
+<div class="wrap" id="wrap">
   <header>
     <img id="logo" alt="" style="display:none">
     <div id="title"></div>
@@ -107,6 +122,7 @@
 
   var courses = [];
   var rentals = [];
+  var didCfg = {};
   var pageTick = 0;
   var lastPages = 1;
   var lastDay = "";
@@ -159,6 +175,35 @@
     var all = [];
     for (i = 0; i < edu.length; i++) all.push({ kind: "edu", v: edu[i] });
     for (i = 0; i < rent.length; i++) all.push({ kind: "rent", v: rent[i] });
+
+    // 특별일정: 지정 이미지 하나만 전체화면 표시(일정과 무관, 최우선).
+    var specialEl = $("special");
+    if (didCfg.specialOn && didCfg.specialUrl) {
+      specialEl.style.backgroundImage = 'url("' + String(didCfg.specialUrl).replace(/"/g, "") + '")';
+      specialEl.style.display = "block";
+      $("wrap").style.display = "none";
+      $("idle").style.display = "none";
+      return;
+    }
+    specialEl.style.display = "none";
+
+    // 일정 없는 날: 등록된 로고(최대 2개)만 중앙 대형 표시.
+    var idleEl = $("idle");
+    var logos = [];
+    if (didCfg.logoUrl) logos.push(didCfg.logoUrl);
+    if (didCfg.logoUrl2) logos.push(didCfg.logoUrl2);
+    if (all.length === 0 && logos.length) {
+      var ih = "";
+      for (i = 0; i < logos.length; i++) {
+        ih += '<img src="' + esc(logos[i]) + '" alt="">';
+      }
+      idleEl.innerHTML = ih;
+      idleEl.style.display = "flex";
+      $("wrap").style.display = "none";
+      return;
+    }
+    idleEl.style.display = "none";
+    $("wrap").style.display = "";
 
     var big = all.length <= 3;              // 1열 대형 모드 여부
     var pageSize = big ? 3 : 6;
@@ -246,6 +291,7 @@
 
   function applyConfig(cfg) {
     cfg = cfg || {};
+    didCfg = cfg;
     $("title").textContent = cfg.title || "";
     document.title = cfg.title || "KAC 항공보안교육센터";
     $("title").style.display = cfg.title ? "" : "none";
@@ -263,6 +309,7 @@
       bg.style.backgroundImage = "";
       $("bg-overlay").style.display = "none";
     }
+    render(); // 특별일정·로고 설정 변경 즉시 반영
   }
 
   function getParam(name) {
