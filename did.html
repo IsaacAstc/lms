@@ -100,7 +100,7 @@
       <div id="clock"></div>
     </div>
   </header>
-  <main>
+  <main id="main">
     <section id="sec-edu">
       <h2><span class="ico">📚</span> 오늘의 교육 <span class="pageinfo" id="edu-page"></span></h2>
       <div id="edu-cards"></div>
@@ -110,7 +110,7 @@
       <div id="rent-cards"></div>
     </section>
   </main>
-  <footer><div id="notice"></div></footer>
+  <footer id="footer"><div id="notice"></div></footer>
 </div>
 
 <script>
@@ -199,11 +199,20 @@
       }
       idleEl.innerHTML = ih;
       idleEl.style.display = "flex";
-      $("wrap").style.display = "none";
+      // 우측 상단 시계는 유지: wrap은 두고 본문·하단·헤더 로고/제목만 숨긴다.
+      $("wrap").style.display = "";
+      $("main").style.display = "none";
+      $("footer").style.display = "none";
+      $("logo").style.visibility = "hidden";
+      $("title").style.visibility = "hidden";
       return;
     }
     idleEl.style.display = "none";
     $("wrap").style.display = "";
+    $("main").style.display = "";
+    $("footer").style.display = "";
+    $("logo").style.visibility = "";
+    $("title").style.visibility = "";
 
     var big = all.length <= 3;              // 1열 대형 모드 여부
     var pageSize = big ? 3 : 6;
