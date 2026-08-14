@@ -174,8 +174,13 @@ async function uploadDidImage(file, { maxDim, keepAlpha, prefix }) {
   let b64, ext;
   if (isSvg) {
     if (file.size > 1024 * 1024) throw new Error("SVG는 1MB 이하만 업로드할 수 있습니다.");
-    const text = await file.text();
-    b64 = btoa(String.fromCharCode(...new TextEncoder().encode(text)));
+    // 큰 파일에서 String.fromCharCode(...bytes) 전개는 스택 초과 — 청크 단위로 변환.
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 8192) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+    }
+    b64 = btoa(bin);
     ext = "svg";
   } else {
     const dataUrl = await compressImage(file, { maxDim, keepAlpha });
