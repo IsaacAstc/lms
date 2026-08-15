@@ -2,7 +2,8 @@
 import {
   collection, getDocs, getDoc, doc, setDoc, writeBatch, query, orderBy, limit,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { db } from "./firebase.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+import { db, app } from "./firebase.js";
 import { boardFields, isBoardExcluded } from "./courses.js";
 import { orgQuery } from "./orgs.js";
 
@@ -99,20 +100,54 @@ async function saveApplyEmail() {
   } catch (e) { alert("저장 실패: " + e.message); }
 }
 
-// 접수 이력(개인정보 없음 — 접수번호 해시·수치·상태만).
+// 접수 이력 + 반려 처리. 문서에는 접수번호 해시·수치·상태만 남고,
+// 신청자 이메일은 반려 통지용으로 마감일까지만 보관된다(서버가 자동 파기).
+const fns = getFunctions(app, "asia-northeast3");
+
 async function loadApplications() {
   const body = document.getElementById("board-apps-body");
   try {
     const snap = await getDocs(query(collection(db, "applications"), orderBy("createdAt", "desc"), limit(50)));
-    if (snap.empty) { body.innerHTML = `<tr><td colspan="4" class="empty">접수 이력이 없습니다.</td></tr>`; return; }
+    if (snap.empty) { body.innerHTML = `<tr><td colspan="5" class="empty">접수 이력이 없습니다.</td></tr>`; return; }
     const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    body.innerHTML = snap.docs.map((d) => {
+    const label = { cancelled: "취소됨", rejected: "반려됨" };
+    body.innerHTML = "";
+    snap.docs.forEach((d) => {
       const a = d.data();
       const t = a.createdAt?.toDate ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "short" }).format(a.createdAt.toDate()) : "-";
-      return `<tr><td>${t}</td><td>${esc(a.courseName || a.courseId)}</td><td>${a.count || 0}명</td>
-        <td>${a.status === "cancelled" ? "취소됨" : "신청"}</td></tr>`;
-    }).join("");
-  } catch (e) { body.innerHTML = `<tr><td colspan="4" class="empty">불러오기 실패: ${e.message}</td></tr>`; }
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${t}</td><td>${esc(a.courseName || a.courseId)}</td><td>${a.count || 0}명</td>
+        <td>${label[a.status] || "신청"}${a.rejectReason ? ` <small>(${esc(a.rejectReason)})</small>` : ""}</td>
+        <td class="actions">${a.status === "active" ? `<button type="button" class="reject">반려</button>` : ""}</td>`;
+      const btn = tr.querySelector(".reject");
+      if (btn) btn.addEventListener("click", () => rejectApplication(d.id, a, btn));
+      body.appendChild(tr);
+    });
+  } catch (e) { body.innerHTML = `<tr><td colspan="5" class="empty">불러오기 실패: ${e.message}</td></tr>`; }
+}
+
+// 반려: 잔여석 복구 + 상태 변경 + 신청자에게 사유 통지(서버에서 일괄 처리).
+async function rejectApplication(id, a, btn) {
+  const reason = prompt(
+    `'${a.courseName || a.courseId}' ${a.count}명 접수를 반려합니다.\n`
+    + "신청자에게 그대로 통지되는 사유를 입력하세요(예: 공문 누락, 명단 서식 미비).\n"
+    + "※ 잔여석은 즉시 복구되며 기존 접수번호는 사용할 수 없게 됩니다.");
+  if (reason == null) return;
+  if (!reason.trim()) return alert("반려 사유를 입력하세요.");
+  btn.disabled = true; btn.textContent = "처리 중…";
+  try {
+    const res = await httpsCallable(fns, "rejectApplication")({ applicationId: id, reason: reason.trim() });
+    const r = res.data || {};
+    alert(r.mailFailed
+      ? "반려 처리했습니다(잔여석 복구 완료). 다만 통지 메일 발송에 실패했습니다 — 접수 메일에 직접 회신해 주세요."
+      : r.noApplicantEmail
+        ? "반려 처리했습니다(잔여석 복구 완료). 신청자 이메일이 이미 파기되어(마감일 경과) 접수처에만 통지되었습니다."
+        : "반려 처리했습니다. 잔여석이 복구되고 신청자에게 사유가 통지되었습니다.");
+    loadApplications();
+  } catch (e) {
+    alert("반려 실패: " + (e.message || e));
+    btn.disabled = false; btn.textContent = "반려";
+  }
 }
 
 async function syncAll(force) {

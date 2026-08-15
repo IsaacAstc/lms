@@ -1,10 +1,12 @@
 // 교육 신청/취소 접수 Cloud Function.
 // - 이메일 발송(접수처 + 신청자 확인용) 후 신청건수를 트랜잭션으로 즉시 반영(실시간 잔여석).
 // - 첨부파일은 메모리에서 메일로 중계만 하고 어디에도 저장하지 않는다.
-// - 개인정보(이메일 주소·첨부)는 Firestore에 저장하지 않는다. 접수 문서에는
-//   접수번호 해시·과정ID·인원수·상태만 남는다.
+// - 첨부는 저장하지 않는다. 신청자 이메일은 '반려 통지' 목적으로만 한시 보관하며,
+//   반려·취소 처리 즉시 삭제하고 남은 건도 신청 마감일(교육 시작일) 경과 후 자동 파기한다.
 // - 취소는 신청 시 발급한 접수번호로 본인 확인(해시 대조) 후 잔여석 복구.
+// - 반려는 관리자만(rejectApplication): 잔여석 복구 + 사유 통지 + 이메일 즉시 파기.
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
@@ -23,6 +25,22 @@ const MAX_COUNT = 20;                     // 1회 신청 인원 상한
 const RATE_LIMIT_PER_HOUR = 10;           // IP당 시간당 요청 상한(남용 방지)
 
 const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
+
+// KST 기준 오늘(YYYY-MM-DD). 신청 마감 판정은 일 단위.
+function todayKST() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+}
+
+// 관리자 판정(Admin SDK는 보안규칙을 우회하므로 함수에서 직접 확인).
+const BOOTSTRAP_ADMINS = ["isaac@airport.co.kr"];
+async function requireAdmin(req) {
+  const email = String(req.auth?.token?.email || "").toLowerCase();
+  if (!email) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (BOOTSTRAP_ADMINS.includes(email)) return email;
+  const snap = await db.doc(`admins/${email}`).get();
+  if (!snap.exists) throw new HttpsError("permission-denied", "관리자만 사용할 수 있습니다.");
+  return email;
+}
 
 // 접수번호: 혼동 문자(0/O, 1/I/L) 제외 8자리.
 function newReceiptCode() {
@@ -126,6 +144,10 @@ exports.submitApplication = onCall(
         if (!cSnap.exists || !bSnap.exists) throw new HttpsError("not-found", "신청할 수 없는 과정입니다.");
         const c = cSnap.data();
         courseName = `${c.name || ""}${c.round ? ` ${c.round}차수` : ""}`;
+        // 신청 마감: 교육 시작일까지. 시작일이 지난 과정은 접수 불가(클라이언트 우회 차단).
+        if (c.startDate && c.startDate < todayKST()) {
+          throw new HttpsError("failed-precondition", "신청이 마감된 과정입니다(교육 시작일 경과).");
+        }
         const cap = c.capacity || 0;
         const applied = c.appliedCount || 0;
         if (cap > 0 && applied + count > cap) {
@@ -137,10 +159,13 @@ exports.submitApplication = onCall(
           remaining: Math.max(0, cap - (applied + count)),
           updatedAtMs: Date.now(),
         });
-        // 개인정보 없음: 접수번호 해시·수치·상태만.
+        // 접수 기록: 접수번호 해시·수치·상태.
+        // email은 '반려 통지' 목적으로만 보관하며, 반려·취소 처리 즉시 삭제하고
+        // 남은 건도 신청 마감일(교육 시작일) 경과 후 자동 삭제한다(purgeAfter).
         tx.set(appRef, {
           codeHash: sha256(code), courseId, courseName, count,
           status: "active", createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          email, purgeAfter: c.startDate || "",
         });
       });
 
@@ -181,6 +206,7 @@ exports.submitApplication = onCall(
     if (q.empty) throw new HttpsError("not-found", "접수번호를 찾을 수 없습니다.");
     const appDoc = q.docs[0];
     const app = appDoc.data();
+    if (app.status === "rejected") throw new HttpsError("failed-precondition", "반려 처리된 접수번호입니다. 접수 담당자에게 문의하세요.");
     if (app.status !== "active") throw new HttpsError("failed-precondition", "이미 취소된 접수번호입니다.");
 
     let courseName = app.courseName || "";
@@ -200,7 +226,11 @@ exports.submitApplication = onCall(
           tx.update(bRef, { appliedCount: applied, remaining: Math.max(0, (c.capacity || 0) - applied), updatedAtMs: Date.now() });
         }
       }
-      tx.update(appDoc.ref, { status: "cancelled", cancelledAt: admin.firestore.FieldValue.serverTimestamp() });
+      // 취소 완료 건은 보관 목적이 사라지므로 이메일을 즉시 삭제한다.
+      tx.update(appDoc.ref, {
+        status: "cancelled", cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+        email: admin.firestore.FieldValue.delete(),
+      });
     });
 
     try {
@@ -221,5 +251,98 @@ exports.submitApplication = onCall(
       return { ok: true, cancelled: true, courseName, mailFailed: true };
     }
     return { ok: true, cancelled: true, courseName };
+  }
+);
+
+/* ================================================================
+ *  반려 처리 (관리자 전용)
+ *  공문·명단 미비 등으로 접수를 반려한다: 잔여석 복구 + 상태 변경 +
+ *  신청자에게 반려 사유 통지 메일 발송 + 보관 중이던 이메일 즉시 삭제.
+ * ================================================================ */
+exports.rejectApplication = onCall(
+  { region: "asia-northeast3", secrets: [MAIL_USER, MAIL_PASS], memory: "256MiB", timeoutSeconds: 60, maxInstances: 5 },
+  async (req) => {
+    await requireAdmin(req);
+    const d = req.data || {};
+    const appId = str(d.applicationId, 64, "접수 ID", true);
+    const reason = str(d.reason, 1000, "반려 사유", true);
+
+    const appRef = db.doc(`applications/${appId}`);
+    const snap = await appRef.get();
+    if (!snap.exists) throw new HttpsError("not-found", "접수 기록을 찾을 수 없습니다.");
+    const app = snap.data();
+    if (app.status !== "active") throw new HttpsError("failed-precondition", "이미 취소·반려된 접수입니다.");
+
+    const applicantEmail = app.email || "";
+
+    // 잔여석 복구 + 상태를 'rejected'로 (이후 신청자가 접수번호로 취소해도 이중 차감되지 않음).
+    await db.runTransaction(async (tx) => {
+      const cRef = db.doc(`courses/${app.courseId}`);
+      const bRef = db.doc(`publicBoard/${app.courseId}`);
+      const [aSnap, cSnap, bSnap] = await Promise.all([tx.get(appRef), tx.get(cRef), tx.get(bRef)]);
+      if (!aSnap.exists || aSnap.data().status !== "active") {
+        throw new HttpsError("failed-precondition", "이미 취소·반려된 접수입니다.");
+      }
+      if (cSnap.exists) {
+        const c = cSnap.data();
+        const applied = Math.max(0, (c.appliedCount || 0) - (app.count || 0));
+        tx.update(cRef, { appliedCount: applied });
+        if (bSnap.exists) {
+          tx.update(bRef, { appliedCount: applied, remaining: Math.max(0, (c.capacity || 0) - applied), updatedAtMs: Date.now() });
+        }
+      }
+      tx.update(appRef, {
+        status: "rejected", rejectReason: reason,
+        rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
+        email: admin.firestore.FieldValue.delete(), // 통지 목적 종료 → 즉시 파기
+      });
+    });
+
+    // 통지 메일(접수처 + 신청자). 이메일이 이미 파기된 오래된 건은 접수처에만 발송.
+    const applySnap = await db.doc("settings/apply").get();
+    const applyTo = (applySnap.exists ? (applySnap.data().email || "") : "")
+      .split(/[,;\s]+/).filter((a) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a));
+    if (!applyTo.length) return { ok: true, rejected: true, mailFailed: true, noApplicantEmail: !applicantEmail };
+    try {
+      await mailer().sendMail({
+        from: `"교육신청 접수" <${MAIL_USER.value()}>`,
+        to: applyTo,
+        cc: applicantEmail || undefined,
+        subject: `[교육신청 반려] ${app.courseName || ""} ${app.count}명`,
+        text: [
+          `과정: ${app.courseName || ""}`, `신청 인원: ${app.count}명`, "",
+          "아래 사유로 접수가 반려되었습니다. 보완 후 다시 신청해 주세요.", "",
+          `[반려 사유] ${reason}`, "",
+          "※ 반려에 따라 잔여석은 복구되었습니다.",
+          "※ 기존 접수번호는 더 이상 사용할 수 없습니다(재신청 시 새 접수번호가 발급됩니다).",
+        ].join("\n"),
+      });
+    } catch (e) {
+      return { ok: true, rejected: true, mailFailed: true, noApplicantEmail: !applicantEmail };
+    }
+    return { ok: true, rejected: true, noApplicantEmail: !applicantEmail };
+  }
+);
+
+/* ================================================================
+ *  신청자 이메일 자동 파기 (매일 03:00 KST)
+ *  신청 마감일(= 교육 시작일)이 지난 접수 기록의 email 필드를 삭제한다.
+ *  개인정보 최소 보관 원칙 — 수치·상태·접수번호 해시는 그대로 남는다.
+ * ================================================================ */
+exports.purgeApplicationEmails = onSchedule(
+  { region: "asia-northeast3", schedule: "0 3 * * *", timeZone: "Asia/Seoul" },
+  async () => {
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+    const snap = await db.collection("applications")
+      .where("purgeAfter", "<", today).limit(500).get();
+    let n = 0;
+    let batch = db.batch();
+    snap.docs.forEach((d) => {
+      if (d.data().email == null) return; // 이미 파기됨
+      batch.update(d.ref, { email: admin.firestore.FieldValue.delete() });
+      n++;
+    });
+    if (n) await batch.commit();
+    console.log(`신청자 이메일 파기: ${n}건 (기준일 ${today})`);
   }
 );
