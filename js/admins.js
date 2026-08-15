@@ -10,10 +10,10 @@ import {
   updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot,
+  collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, deleteField,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db, auth, activeConfig } from "./firebase.js";
-import { escapeHtml, isMasterMode } from "./app.js";
+import { escapeHtml, isMasterMode, ASSIGNABLE_TABS } from "./app.js";
 
 let unsub = null;
 
@@ -120,14 +120,31 @@ function subscribe() {
   unsub = onSnapshot(collection(db, "admins"), (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.email.localeCompare(b.email));
     render(list);
-  }, () => { document.getElementById("admin-tbody").innerHTML = `<tr><td colspan="5" class="empty">목록을 불러오지 못했습니다.</td></tr>`; });
+  }, () => { document.getElementById("admin-tbody").innerHTML = `<tr><td colspan="6" class="empty">목록을 불러오지 못했습니다.</td></tr>`; });
+}
+
+// 계정별 허용 탭 셀. tabs 필드가 없으면 '전체 허용'(기존 계정 호환).
+function tabCell(a, master) {
+  const cur = Array.isArray(a.tabs) ? a.tabs : null;
+  if (!master) {
+    return cur === null ? "전체" : (cur.length
+      ? escapeHtml(ASSIGNABLE_TABS.filter((t) => cur.includes(t.id)).map((t) => t.label).join(", "))
+      : "<span class='warn'>없음</span>");
+  }
+  const boxes = ASSIGNABLE_TABS.map((t) =>
+    `<label class="tabchk"><input type="checkbox" class="a-tab" value="${t.id}"${cur && cur.includes(t.id) ? " checked" : ""}> ${escapeHtml(t.label)}</label>`
+  ).join("");
+  return `<details class="tabperm"><summary>${cur === null ? "전체 허용" : `${cur.length}개 탭`}</summary>
+      <label class="tabchk all"><input type="checkbox" class="a-taball"${cur === null ? " checked" : ""}> <b>전체 허용</b></label>
+      <div class="tabchk-grid">${boxes}</div>
+    </details>`;
 }
 
 function render(list) {
   const tbody = document.getElementById("admin-tbody");
   tbody.innerHTML = "";
   if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="5" class="empty">등록된 관리자가 없습니다. (부트스트랩 관리자는 보안규칙에 고정)</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">등록된 관리자가 없습니다. (부트스트랩 관리자는 보안규칙에 고정)</td></tr>`;
     return;
   }
   for (const a of list) {
@@ -144,6 +161,7 @@ function render(list) {
       <td>${escapeHtml(a.email)}</td>
       <td>${roleCell}</td>
       <td><input class="a-memo" value="${escapeHtml(a.memo || "")}" placeholder="메모"></td>
+      <td>${tabCell(a, master)}</td>
       <td>${escapeHtml(when)}</td>
       <td class="actions">
         <button type="button" class="a-save">저장</button>
@@ -154,9 +172,23 @@ function render(list) {
       const patch = { memo: tr.querySelector(".a-memo").value.trim() };
       const roleSel = tr.querySelector(".a-role");
       if (roleSel) patch.role = roleSel.value; // 역할 변경은 마스터만(규칙에서도 차단).
+      // 탭 권한(마스터만 편집). '전체 허용' 체크 시 tabs 필드를 제거해 제한 없음으로 둔다.
+      const allBox = tr.querySelector(".a-taball");
+      if (allBox) {
+        patch.tabs = allBox.checked
+          ? deleteField()
+          : [...tr.querySelectorAll(".a-tab:checked")].map((c) => c.value);
+      }
       try { await updateDoc(doc(db, "admins", a.id), patch); alert("저장했습니다."); }
       catch (e) { alert("저장 실패: " + e.message); }
     });
+    // '전체 허용' 체크 시 개별 탭 선택 비활성화.
+    const allBox = tr.querySelector(".a-taball");
+    if (allBox) {
+      const sync = () => tr.querySelectorAll(".a-tab").forEach((c) => { c.disabled = allBox.checked; });
+      allBox.addEventListener("change", sync);
+      sync();
+    }
     tr.querySelector(".a-reset").addEventListener("click", async () => {
       if (!confirm(`${a.email} 로 비밀번호 재설정 메일을 보낼까요?`)) return;
       try { await sendPasswordResetEmail(auth, a.email); alert("재설정 메일을 보냈습니다."); }
