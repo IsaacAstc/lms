@@ -1,5 +1,5 @@
 // 앱 셸: 로그인 게이트, 탭 라우팅, 화면 초기화.
-import { watchAuth, login, logout, isAdmin, isMaster, myAllowedTabs } from "./auth.js";
+import { watchAuth, login, logout, isAdmin, isMaster, myAllowedTabs, isObserver } from "./auth.js";
 import { initCourses } from "./courses.js";
 import { initSessions } from "./sessions.js";
 import { initRooms } from "./rooms.js";
@@ -57,6 +57,39 @@ export function isMasterMode() { return masterMode; }
 let allowedTabs = null;
 function accountAllows(tab) {
   return masterMode || allowedTabs === null || allowedTabs.includes(tab);
+}
+
+// 참관자(조회 전용) 모드. 실제 차단은 firestore.rules가 담당하고,
+// 여기서는 저장·삭제 등 쓰기 조작을 미리 막아 불필요한 오류를 줄인다.
+let observerMode = false;
+export function isObserverMode() { return observerMode; }
+// 쓰기성 버튼 판별(라벨 기준). '내보내기·복사·조회·필터' 등 읽기 동작은 제외한다.
+const WRITE_LABEL = /저장|등록|수정|삭제|추가|반려|파기|시드|업로드|동기화|발송|복제|가져오기|재설정|생성|승인|반영/;
+function blockWrites() {
+  document.body.classList.add("observer-mode");
+  const stop = (e, msg) => {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    alert(msg);
+  };
+  // capture 단계에서 가로채 각 모듈의 핸들러보다 먼저 차단한다.
+  // 본인 계정 비밀번호 변경·재설정은 Firestore 쓰기가 아니므로 허용.
+  const SELF_OK = new Set(["pw-change-btn", "admin-reset-btn"]);
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("button, input[type=submit]");
+    if (!b || b.disabled || SELF_OK.has(b.id)) return;
+    if (WRITE_LABEL.test(b.textContent || b.value || "")) {
+      stop(e, "참관자 계정은 조회만 가능합니다.");
+    }
+  }, true);
+  document.addEventListener("submit", (e) => stop(e, "참관자 계정은 조회만 가능합니다."), true);
+  // 체크박스 즉시저장(공개보드 숨김 등)도 차단.
+  document.addEventListener("change", (e) => {
+    if (e.target.matches("input[type=checkbox].r-hide, input[type=checkbox].c-hide")) {
+      e.target.checked = !e.target.checked;
+      stop(e, "참관자 계정은 조회만 가능합니다.");
+    }
+  }, true);
 }
 
 // 기관별 기능 취사선택: 추가 기관은 orgs 레지스트리의 features 목록에 있는 기능만 사용.
@@ -178,8 +211,14 @@ window.addEventListener("DOMContentLoaded", () => {
   // 기관 선택(로그인 화면·상단바) — 등록된 기관이 있을 때만 표시.
   initOrgSelectors();
 
+  // 계정 전환 시 이전 계정의 탭 구성·구독이 남지 않도록 완전 재초기화(새로고침)한다.
+  // (initApp은 1회성이라 재로그인만으로는 탭 바가 다시 그려지지 않는다)
+  let sessionUid = null;
+
   watchAuth(
     async (user) => {
+      if (initialized && sessionUid && user.uid !== sessionUid) { location.reload(); return; }
+      sessionUid = user.uid;
       // 인증됐더라도 관리자 권한(보안규칙 허용)이 없으면 앱 셸을 열지 않는다.
       const admin = await isAdmin();
       if (!admin) {
@@ -190,15 +229,20 @@ window.addEventListener("DOMContentLoaded", () => {
         return;
       }
       masterMode = await isMaster(); // 탭 구성 전에 역할 확정.
+      observerMode = masterMode ? false : await isObserver();
       allowedTabs = masterMode ? null : await myAllowedTabs(); // 계정별 탭 권한.
       loginView.hidden = true;
       appView.hidden = false;
-      userEmail.textContent = `${user.email || ""} (${masterMode ? "마스터 관리자" : "일반 관리자"})`;
+      const roleLabel = masterMode ? "마스터 관리자" : observerMode ? "참관자 · 조회 전용" : "일반 관리자";
+      userEmail.textContent = `${user.email || ""} (${roleLabel})`;
+      if (observerMode) blockWrites();
       initApp();
     },
     () => {
       appView.hidden = true;
       loginView.hidden = false;
+      // 로그인 상태였다가 로그아웃한 경우에만 새로고침(최초 진입 시에는 그대로).
+      if (initialized) location.reload();
     }
   );
 });

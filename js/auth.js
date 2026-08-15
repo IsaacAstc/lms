@@ -45,6 +45,16 @@ export async function myAllowedTabs() {
   } catch { return null; }
 }
 
+// 참관자(조회 전용) 여부. role === 'observer' — 모든 쓰기가 규칙에서 차단된다.
+export async function isObserver() {
+  const email = (auth.currentUser?.email || "").toLowerCase();
+  if (!email || BOOTSTRAP_MASTERS.includes(email)) return false;
+  try {
+    const d = await getDoc(doc(db, "admins", email));
+    return d.exists() && d.data().role === "observer";
+  } catch { return false; }
+}
+
 // 로그인 상태에 따라 콜백 실행. (관리자 계정은 Firebase 콘솔에서 사전 생성)
 export function watchAuth(onLogin, onLogout) {
   onAuthStateChanged(auth, (user) => {

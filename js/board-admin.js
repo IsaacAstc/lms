@@ -5,6 +5,7 @@ import {
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 import { db, app } from "./firebase.js";
 import { boardFields, isBoardExcluded } from "./courses.js";
+import { isObserverMode } from "./app.js";
 import { orgQuery } from "./orgs.js";
 
 export function initBoardAdmin() {
@@ -33,7 +34,8 @@ async function load() {
   } catch { /* */ }
   loadApplications();
   // 탭 진입 시 차이만 자동 동기화(변경 없으면 쓰기 없음). CSV 대량등록·시드분 자동 반영.
-  autoSync();
+  // 참관자는 쓰기 권한이 없으므로 건너뛴다(불필요한 권한 오류 방지).
+  if (!isObserverMode()) autoSync();
 }
 
 // 보드 미러 필드 비교(updatedAtMs 제외).

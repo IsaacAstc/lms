@@ -42,8 +42,19 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/admins/$(adminEmail()))
         ? myAdminDoc().get('tabs', null) : null;
     }
+    // 참관자(조회 전용): role == 'observer'. 읽기는 관리자와 동일, 쓰기는 전면 차단.
+    function isObserver() {
+      return request.auth != null
+        && !(adminEmail() in adminEmails())
+        && exists(/databases/$(database)/documents/admins/$(adminEmail()))
+        && myAdminDoc().get('role', 'admin') == 'observer';
+    }
+    // 쓰기 가능한 관리자(참관자 제외).
+    function canWrite() {
+      return isAdmin() && !isObserver();
+    }
     function canTab(t) {
-      return isAdmin() && (isMaster() || myTabs() == null || t in myTabs());
+      return canWrite() && (isMaster() || myTabs() == null || t in myTabs());
     }
 
     // 관리자 계정 목록(문서ID=이메일).
@@ -150,14 +161,14 @@ service cloud.firestore {
     // 행사(세션): 참가자 앱이 행사명·일정을 읽어야 하므로 공개 읽기, 쓰기는 관리자만.
     match /events/{eventId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if canWrite();
     }
 
     // 미션 설정(문구·항목·제한시간): 참가자 앱이 읽어야 하므로 공개 읽기, 쓰기는 관리자만.
     // (LMS의 관리자 전용 settings 와 분리된 별도 컬렉션)
     match /scfeSettings/{docId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if canWrite();
     }
 
     // 참가자(닉네임·점수만, 개인정보 없음): 리더보드용 공개 읽기.
@@ -172,10 +183,10 @@ service cloud.firestore {
                     && request.resource.data.eventId.size() <= 64
                     && request.resource.data.rewardGiven == false;
       // 관리자는 전체 수정 가능. 비로그인 참가자는 rewardGiven(기념품 지급)만 변경 불가.
-      allow update: if isAdmin()
+      allow update: if canWrite()
                     || !("rewardGiven" in request.resource.data.diff(resource.data).affectedKeys());
-      // 삭제(데이터 초기화)는 관리자만.
-      allow delete: if isAdmin();
+      // 삭제(데이터 초기화)는 관리자만(참관자 제외).
+      allow delete: if canWrite();
     }
 
     // 대관 행사(현장 안내 DID 표출용): 행사명·장소·시간만 저장(개인정보 없음).

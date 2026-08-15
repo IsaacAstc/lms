@@ -87,7 +87,9 @@ async function addAdmin() {
       authNote = " (Auth 계정 미생성 — 대상자가 로그인하려면 콘솔/재설정 메일로 계정 필요)";
     }
     // 2) allowlist(admins) 등록. 역할 부여는 마스터만(규칙에서도 차단).
-    const role = (isMasterMode() && document.getElementById("admin-role").value === "master") ? "master" : "admin";
+    // 마스터 부여는 마스터만(규칙에서도 차단). 참관자 지정은 권한 축소라 관리자도 가능.
+    const sel = document.getElementById("admin-role").value;
+    const role = sel === "master" ? (isMasterMode() ? "master" : "admin") : (sel === "observer" ? "observer" : "admin");
     await setDoc(doc(db, "admins", email), {
       email, memo, role, addedBy: auth.currentUser?.email || "", addedAtMs: Date.now(),
     }, { merge: true });
@@ -151,12 +153,14 @@ function render(list) {
     const tr = document.createElement("tr");
     const when = a.addedAtMs ? new Date(a.addedAtMs).toLocaleDateString("ko-KR") : "";
     const master = isMasterMode();
+    const roleName = { master: "마스터 관리자", observer: "참관자 (조회 전용)" }[a.role] || "일반 관리자";
     const roleCell = master
       ? `<select class="a-role">
-           <option value="admin"${a.role !== "master" ? " selected" : ""}>일반 관리자</option>
+           <option value="admin"${!a.role || a.role === "admin" ? " selected" : ""}>일반 관리자</option>
+           <option value="observer"${a.role === "observer" ? " selected" : ""}>참관자 (조회 전용)</option>
            <option value="master"${a.role === "master" ? " selected" : ""}>마스터 관리자</option>
          </select>`
-      : (a.role === "master" ? "마스터 관리자" : "일반 관리자");
+      : roleName;
     tr.innerHTML = `
       <td>${escapeHtml(a.email)}</td>
       <td>${roleCell}</td>
