@@ -1,0 +1,57 @@
+name: Deploy Functions & Rules
+
+# functions/ 또는 보안규칙이 바뀐 채로 main에 머지되면 자동 배포한다.
+# (PC에서 firebase deploy 를 돌리지 않아도 되도록 — 수동 실행도 가능)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "functions/**"
+      - "firestore.rules"
+      - "firebase.json"
+      - ".github/workflows/deploy-functions.yml"
+  workflow_dispatch:
+
+# 배포 1건만 실행(동시 배포 충돌 방지).
+concurrency:
+  group: firebase-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # 서비스 계정 시크릿이 등록된 경우에만 동작(미설정 시 조용히 건너뜀).
+    if: github.repository_owner != ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install function dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Check secrets
+        id: check
+        run: |
+          if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
+            echo "::warning::FIREBASE_SERVICE_ACCOUNT secret이 없어 배포를 건너뜁니다. README의 '함수 자동 배포' 절차를 참고하세요."
+            echo "ok=false" >> $GITHUB_OUTPUT
+          else
+            echo "ok=true" >> $GITHUB_OUTPUT
+          fi
+
+      # 서비스 계정으로 인증(GOOGLE_APPLICATION_CREDENTIALS 자동 설정).
+      - uses: google-github-actions/auth@v2
+        if: steps.check.outputs.ok == 'true'
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy functions & firestore rules
+        if: steps.check.outputs.ok == 'true'
+        run: npx --yes firebase-tools@latest deploy
+          --only functions,firestore:rules
+          --project "${{ secrets.FIREBASE_PROJECT_ID }}"
+          --non-interactive --force

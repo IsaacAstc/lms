@@ -33,6 +33,18 @@ export async function isMaster() {
   } catch { return false; }
 }
 
+// 내 계정에 허용된 탭 목록. null = 제한 없음(전체 허용 — 미지정 계정·부트스트랩).
+// 실제 차단은 firestore.rules가 담당하고, 여기서는 화면 구성용으로 읽는다.
+export async function myAllowedTabs() {
+  const email = (auth.currentUser?.email || "").toLowerCase();
+  if (!email || BOOTSTRAP_MASTERS.includes(email)) return null;
+  try {
+    const d = await getDoc(doc(db, "admins", email));
+    const t = d.exists() ? d.data().tabs : null;
+    return Array.isArray(t) ? t : null;
+  } catch { return null; }
+}
+
 // 로그인 상태에 따라 콜백 실행. (관리자 계정은 Firebase 콘솔에서 사전 생성)
 export function watchAuth(onLogin, onLogout) {
   onAuthStateChanged(auth, (user) => {

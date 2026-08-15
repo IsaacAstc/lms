@@ -1,5 +1,5 @@
 // 앱 셸: 로그인 게이트, 탭 라우팅, 화면 초기화.
-import { watchAuth, login, logout, isAdmin, isMaster } from "./auth.js";
+import { watchAuth, login, logout, isAdmin, isMaster, myAllowedTabs } from "./auth.js";
 import { initCourses } from "./courses.js";
 import { initSessions } from "./sessions.js";
 import { initRooms } from "./rooms.js";
@@ -52,6 +52,13 @@ const MASTER_ONLY_TABS = new Set(["data", "orgs"]);
 let masterMode = false;
 export function isMasterMode() { return masterMode; }
 
+// 계정별 허용 탭(admins/{email}.tabs). null = 제한 없음(전체).
+// 마스터는 항상 전체. 실제 차단은 firestore.rules가 담당한다.
+let allowedTabs = null;
+function accountAllows(tab) {
+  return masterMode || allowedTabs === null || allowedTabs.includes(tab);
+}
+
 // 기관별 기능 취사선택: 추가 기관은 orgs 레지스트리의 features 목록에 있는 기능만 사용.
 // 기본 기관은 항상 전체. features 미설정(구버전 등록분)도 전체 허용.
 function orgAllows(tab) {
@@ -66,10 +73,15 @@ function orgAllows(tab) {
 // 현재 역할·기관에서 접근 가능한 탭만 남긴 그룹 목록.
 function visibleGroups() {
   return TAB_GROUPS
-    .map((g) => ({ ...g, tabs: g.tabs.filter(([t]) => (masterMode || !MASTER_ONLY_TABS.has(t)) && orgAllows(t)) }))
+    .map((g) => ({ ...g, tabs: g.tabs.filter(([t]) => (masterMode || !MASTER_ONLY_TABS.has(t)) && orgAllows(t) && accountAllows(t)) }))
     .filter((g) => g.tabs.length);
 }
 const groupOfTab = (name) => visibleGroups().find((g) => g.tabs.some(([t]) => t === name));
+
+// 계정별 권한 지정 UI용 전체 탭 목록(마스터 전용 탭은 계정 지정 대상이 아니므로 제외).
+export const ASSIGNABLE_TABS = TAB_GROUPS.flatMap((g) =>
+  g.tabs.filter(([t]) => !MASTER_ONLY_TABS.has(t))
+    .map(([id, label]) => ({ id, label: label || g.label, group: g.label })));
 
 function showTab(name) {
   const group = groupOfTab(name);
@@ -178,6 +190,7 @@ window.addEventListener("DOMContentLoaded", () => {
         return;
       }
       masterMode = await isMaster(); // 탭 구성 전에 역할 확정.
+      allowedTabs = masterMode ? null : await myAllowedTabs(); // 계정별 탭 권한.
       loginView.hidden = true;
       appView.hidden = false;
       userEmail.textContent = `${user.email || ""} (${masterMode ? "마스터 관리자" : "일반 관리자"})`;

@@ -35,65 +35,94 @@ service cloud.firestore {
                 && myAdminDoc().get('role', 'admin') == 'master'));
     }
 
+    // 계정별 사용 가능 탭(admins/{email}.tabs). 필드가 없으면 제한 없음(기존 계정 호환).
+    // 마스터는 항상 전체 허용. 화면 숨김과 별개로 여기서 실제 쓰기를 차단한다.
+    // (읽기는 탭 간 참조가 많아 관리자 공통으로 두고, 편집 권한만 탭 단위로 나눈다)
+    function myTabs() {
+      return exists(/databases/$(database)/documents/admins/$(adminEmail()))
+        ? myAdminDoc().get('tabs', null) : null;
+    }
+    function canTab(t) {
+      return isAdmin() && (isMaster() || myTabs() == null || t in myTabs());
+    }
+
     // 관리자 계정 목록(문서ID=이메일).
     //  - 읽기: 관리자 공통
-    //  - 생성·수정: 관리자 가능하되 role='master' 부여는 마스터만(권한 상승 차단)
+    //  - 생성·수정: '관리자 계정' 탭 권한 필요.
+    //    role='master' 부여와 tabs(사용 가능 탭) 변경은 마스터만 —
+    //    일반 관리자가 자기 권한을 스스로 늘리는 것을 차단한다.
     //  - 삭제: 마스터만
     match /admins/{email} {
       allow read: if isAdmin();
-      allow create, update: if isAdmin()
-        && (request.resource.data.get('role', 'admin') != 'master' || isMaster());
+      allow create: if canTab('admins')
+        && (request.resource.data.get('role', 'admin') != 'master' || isMaster())
+        && (isMaster() || !('tabs' in request.resource.data.keys()));
+      allow update: if canTab('admins')
+        && (request.resource.data.get('role', 'admin') != 'master' || isMaster())
+        && (isMaster() || !('tabs' in request.resource.data.diff(resource.data).affectedKeys()));
       allow delete: if isMaster();
     }
 
     // 과정·차수 마스터: 읽기·쓰기 모두 관리자 전용.
     match /courses/{courseId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if canTab('courses');
     }
 
     // 강의 시간표: 읽기·쓰기 모두 관리자 전용.
     match /sessions/{sessionId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if canTab('courses');
     }
 
     // 강의실 마스터: 관리자 전용.
     match /rooms/{roomId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if canTab('rooms');
     }
 
     // 강사 마스터(개인정보 예외 — 강사에 한함): 관리자 전용, 공개 금지.
     match /instructors/{instructorId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if canTab('instructors');
     }
 
     // 과정 커리큘럼 마스터: 관리자 전용.
     match /programs/{programId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if canTab('programs');
     }
 
     // 기준값 설정(강사료·여비): 관리자 전용.
     // 단 데이터 보존정책(dataPolicy)·과정유형 목록(courseTypes)은 마스터만 변경.
     match /settings/{docId} {
       allow read: if isAdmin();
-      allow write: if (docId == 'dataPolicy' || docId == 'courseTypes') ? isMaster() : isAdmin();
+    // 문서별 담당 탭:
+    //   dataPolicy·courseTypes = 마스터, apply = 공개 보드, surveyCategories = 주관식 원문,
+    //   그 외(feeRates·travelRates·surveyItems) = 기준값 설정
+      allow write: if (docId == 'dataPolicy' || docId == 'courseTypes') ? isMaster()
+        : docId == 'apply' ? canTab('board')
+        : docId == 'surveyCategories' ? canTab('freetext')
+        : canTab('settings');
     }
 
     // 소요경비(월별): 관리자 전용.
     match /expenses/{docId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if canTab('expenses');
     }
 
     // 공개 설문 정의: 누구나 읽기(응답 페이지 렌더), 쓰기는 관리자만.
     match /publicSurveys/{courseId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if canTab('surveys') || canTab('courses');
     }
 
     // 공개 현황 보드(외부 열람용): 누구나 읽기, 쓰기는 관리자만.
     // 개인정보 없음 — 과정명·일자·정원·신청·잔여 등 수치·일정만 미러링.
     match /publicBoard/{docId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if canTab('courses') || canTab('rentals') || canTab('board');
     }
 
     // 설문 응답: create 만 공개 허용(완전 익명), 읽기·수정·삭제는 관리자만.
@@ -103,13 +132,16 @@ service cloud.firestore {
         && request.resource.data.expireAt > request.time + duration.value(178, 'd')
         && request.resource.data.expireAt < request.time + duration.value(182, 'd');
       // 원문 파기(삭제)는 되돌릴 수 없으므로 마스터 전용('데이터 관리' 메뉴).
-      allow read, update: if isAdmin();
+      allow read: if isAdmin();
+      allow update: if canTab('freetext');
       allow delete: if isMaster();
     }
 
-    // 집계 데이터(영구 보관): 관리자 전용.
+    // 집계 데이터(영구 보관): 읽기는 관리자 공통(집계·통계·보고서 탭에서 조회),
+    // 쓰기는 월별 스냅샷·시사점을 저장하는 '주관식 원문' 탭(+ 파기 스냅샷은 마스터).
     match /surveyAggregates/{aggregateId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if canTab('freetext');
     }
 
     // ── 동거 앱: 항공보안 히어로 미션(scfe/) — LMS Firebase 프로젝트로 통합 ──
@@ -150,7 +182,7 @@ service cloud.firestore {
     // DID는 로그인 없는 상시 화면이라 공개 읽기, 쓰기는 관리자만.
     match /rentals/{rentalId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if canTab('rentals');
     }
 
     // 교육 신청 접수 기록 — Cloud Function(Admin SDK)만 생성·갱신.

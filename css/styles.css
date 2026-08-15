@@ -300,6 +300,12 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .board-bar span { display: block; height: 100%; background: var(--primary); }
 .board-apply { margin-top: 1.5rem; }
 
+/* 관리자별 사용 가능 탭 지정 */
+.tabperm summary { cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+.tabperm .tabchk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 0.15rem 0.5rem; margin-top: 0.3rem; }
+.tabchk { display: flex; align-items: center; gap: 0.25rem; font-size: 0.82rem; font-weight: 400; white-space: nowrap; }
+.tabchk.all { margin-top: 0.35rem; }
+
 /* 온라인 신청/취소 */
 .board-actions { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
 .board-apply-btn {
