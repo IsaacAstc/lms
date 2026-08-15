@@ -169,6 +169,37 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
 
 기관(테넌트) 분리 운영 시 함수는 프로젝트별로 각각 배포해야 한다.
 
+### 함수 자동 배포 (GitHub Actions — PC 없이 배포)
+`.github/workflows/deploy-functions.yml`이 **main 머지 시 `functions/`·`firestore.rules`
+변경분을 자동 배포**한다. 아래 시크릿을 한 번만 등록하면 이후 PC 작업이 필요 없다.
+
+1. [Google Cloud 콘솔 → IAM 및 관리자 → 서비스 계정](https://console.cloud.google.com/iam-admin/serviceaccounts)
+   에서 해당 프로젝트에 서비스 계정 생성(예: `github-deploy`).
+2. 다음 역할 부여: **Firebase 관리자**, **Cloud Functions 관리자**,
+   **서비스 계정 사용자**, **Artifact Registry 관리자**, **Cloud Build 편집자**,
+   **Cloud Scheduler 관리자**. (간단히 하려면 **편집자**(Editor) 하나로도 가능하나
+   권한이 넓어지므로 권장하지 않음)
+3. 해당 서비스 계정 → 키 → **새 키 만들기(JSON)** → 파일 다운로드.
+4. GitHub 저장소 → Settings → Secrets and variables → Actions → **New repository secret**
+   - `FIREBASE_SERVICE_ACCOUNT` : 내려받은 JSON 파일 **내용 전체** 붙여넣기
+   - `FIREBASE_PROJECT_ID` : Firebase 프로젝트 ID
+5. 이후 Actions 탭에서 `Deploy Functions & Rules` 워크플로를 수동 실행(`Run workflow`)해
+   한 번 검증한다. 시크릿이 없으면 워크플로는 경고만 남기고 건너뛴다.
+
+> 비상 수단: 브라우저만으로 배포하려면 [Google Cloud Shell](https://shell.cloud.google.com)
+> 에서 `git clone` 후 `firebase deploy --only functions` 를 실행하면 된다(도구 사전 설치됨).
+
+## 관리자 권한 (역할 · 계정별 탭)
+
+- **마스터 관리자**: 모든 탭 + `데이터 관리`·`기관 관리` 전용 기능(원문 파기,
+  보존정책·과정유형 변경, 기관 등록, 다른 계정의 역할·탭 권한 변경).
+- **일반 관리자**: 마스터 전용 탭을 제외한 나머지. 여기에 더해 **계정별로 사용 가능한
+  탭을 지정**할 수 있다(`admins/{email}.tabs` 배열, 필드가 없으면 전체 허용).
+  설정 → 관리자 계정 탭의 '사용 가능 탭' 열에서 마스터가 체크로 지정한다.
+- 차단은 **화면(탭 숨김) + 보안규칙(쓰기 차단)** 두 단계로 적용된다. 읽기는 탭 간
+  데이터 참조가 많아 관리자 공통으로 두고, **편집 권한만 탭 단위로 분리**한다.
+- 권한 상승 방지: 일반 관리자는 자신·타인의 `tabs`와 `role`을 바꿀 수 없다(규칙에서 차단).
+
 ## 기관(테넌트) 분리 운영
 
 코드는 이 저장소 하나를 공유하고, **기관별로 별도 Firebase 프로젝트**를 사용해
