@@ -596,10 +596,12 @@
             <button id="board-apply-email-save" type="button">접수 설정 저장</button>
           </div>
           <h3>신청 접수 이력</h3>
-          <p class="hint">Cloud Function이 기록한 접수 현황입니다(접수번호 해시·수치만 저장, 개인정보 없음). 상세 내용·첨부는 접수 이메일함에서 확인하세요.</p>
+          <p class="hint">Cloud Function이 기록한 접수 현황입니다(접수번호 해시·수치·상태만 저장). 상세 내용·첨부는 접수 이메일함에서 확인하세요.
+            공문·명단이 미비하면 <b>반려</b>를 눌러 처리하세요 — <b>잔여석이 즉시 복구</b>되고 신청자에게 반려 사유가 메일로 통지되며, 해당 접수번호는 사용할 수 없게 됩니다.
+            반려 통지를 위해 신청자 이메일을 <b>신청 마감일(교육 시작일)까지만</b> 보관하며, 반려·취소 처리 시 즉시 파기합니다.</p>
           <div class="table-wrap"><table>
-            <thead><tr><th>일시</th><th>과정</th><th>인원</th><th>상태</th></tr></thead>
-            <tbody id="board-apps-body"><tr><td colspan="4" class="empty">불러오는 중…</td></tr></tbody>
+            <thead><tr><th>일시</th><th>과정</th><th>인원</th><th>상태</th><th>관리</th></tr></thead>
+            <tbody id="board-apps-body"><tr><td colspan="5" class="empty">불러오는 중…</td></tr></tbody>
           </table></div>
         </section>
 

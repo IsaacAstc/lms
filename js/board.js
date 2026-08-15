@@ -80,6 +80,8 @@ function card(c) {
   const applied = c.appliedCount || 0;
   const remaining = c.remaining != null ? c.remaining : Math.max(0, cap - applied);
   const full = cap > 0 && remaining <= 0;
+  // 신청 마감: 교육 시작일까지 접수(시작일이 지나면 신청 불가, 취소는 계속 가능).
+  const closed = !!c.startDate && c.startDate < todayStr();
   const pct = cap ? Math.min(100, Math.round((applied / cap) * 100)) : 0;
   const period = c.startDate ? `${esc(dot(c.startDate))}${c.endDate && c.endDate !== c.startDate ? " - " + esc(dot(c.endDate)) : ""}` : "-";
   return `
@@ -97,7 +99,9 @@ function card(c) {
       </dl>
       <div class="board-bar"><span style="width:${pct}%"></span></div>
       ${applyEnabled ? `<div class="board-actions no-print">
-        ${!full ? `<button type="button" class="board-apply-btn" data-id="${esc(c.id)}" data-kind="apply">신청</button>` : ""}
+        ${closed
+          ? `<button type="button" class="board-apply-btn" disabled title="교육 시작일이 지나 접수가 마감되었습니다">접수 마감</button>`
+          : (!full ? `<button type="button" class="board-apply-btn" data-id="${esc(c.id)}" data-kind="apply">신청</button>` : "")}
         <button type="button" class="board-apply-btn ghost" data-id="${esc(c.id)}" data-kind="cancel">신청 취소</button>
       </div>` : ""}
     </article>`;

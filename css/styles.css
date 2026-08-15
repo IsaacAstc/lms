@@ -307,6 +307,7 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
   background: var(--primary); color: #fff; font-weight: 700; cursor: pointer;
 }
 .board-apply-btn.ghost { background: transparent; color: var(--primary); border: 1px solid var(--primary); flex: 0 0 auto; }
+.board-apply-btn[disabled] { background: #d6d6d6; color: #6b6b6b; cursor: default; }
 .apply-dialog { border: none; border-radius: 12px; padding: 0; max-width: 26rem; width: calc(100vw - 2rem); }
 .apply-dialog::backdrop { background: rgba(0,0,0,0.45); }
 .apply-dialog form { padding: 1.2rem 1.3rem; display: flex; flex-direction: column; gap: 0.7rem; }

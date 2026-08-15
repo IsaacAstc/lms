@@ -154,7 +154,9 @@ service cloud.firestore {
     }
 
     // 교육 신청 접수 기록 — Cloud Function(Admin SDK)만 생성·갱신.
-    // 개인정보 없음: 접수번호 해시·과정ID·인원수·상태만. 관리자 열람용 읽기만 허용.
+    // 접수번호 해시·과정ID·인원수·상태. 신청자 이메일은 반려 통지 목적으로만
+    // 신청 마감일(교육 시작일)까지 한시 보관되고 서버가 자동 파기한다.
+    // 공개 노출 금지 — 관리자 열람용 읽기만 허용.
     match /applications/{id} {
       allow read: if isAdmin();
       allow write: if false;
