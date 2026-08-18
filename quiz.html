@@ -246,6 +246,22 @@
   </div>
 </div>
 
+<!-- ============ 퀴즈 미리보기 (게임 시작 없이 문제 확인) ============ -->
+<div id="view-preview" class="view">
+  <div class="host-topbar">
+    <button class="btn-sm" id="btn-pv-close">✕ 닫기</button>
+    <div id="pv-progress" style="font-weight:900;"></div>
+    <div id="pv-meta" style="margin-left:auto;font-size:13px;opacity:0.85;"></div>
+    <button class="btn-sm" id="btn-pv-prev">◀ 이전</button>
+    <button class="btn-sm primary" id="btn-pv-next">다음 ▶</button>
+  </div>
+  <div style="text-align:center;font-size:13px;opacity:0.7;padding:4px;">미리보기 — 정답이 ✔ 로 표시됩니다 (참가자에게는 보이지 않는 화면)</div>
+  <div class="q-text-big" id="pv-text"></div>
+  <div class="q-media" id="pv-media"></div>
+  <div id="pv-body" style="display:none;align-self:center;width:min(760px,92vw);background:rgba(255,255,255,0.1);border-radius:10px;padding:16px 20px;font-size:18px;line-height:1.7;white-space:pre-wrap;"></div>
+  <div class="answer-grid" id="pv-grid" style="flex:initial;"></div>
+</div>
+
 <!-- ============ 게임 기록 목록 ============ -->
 <div id="view-reports" class="view center" style="justify-content:flex-start; padding-top:40px;">
   <div style="width:100%; max-width:640px;">
@@ -278,6 +294,7 @@
       <input type="checkbox" id="ed-lang-en"> 영문 진행</label>
     <button class="btn-sm" id="btn-export">💾 JSON 내보내기</button>
     <button class="btn-sm primary" id="btn-ed-save">저장</button>
+    <button class="btn-sm" id="btn-ed-preview" title="미리보기 (게임 시작 없이 문제 확인)">👁 미리보기</button>
     <button class="btn-sm primary" id="btn-ed-host" style="background:var(--green);">▶ 게임 시작</button>
   </div>
   <div class="ed-body">
@@ -813,9 +830,11 @@ function renderQuizList() {
       </div>
       <button class="btn-sm primary" data-act="edit">편집</button>
       <button class="btn-sm" data-act="dup" title="퀴즈 복제">⧉</button>
+      <button class="btn-sm" data-act="preview" title="미리보기 (게임 시작 없이 문제 확인)">👁</button>
       <button class="btn-sm primary" data-act="host" style="background:var(--green);" ${fbReady ? "" : "disabled"}>▶ 시작</button>
       <button class="btn-sm danger" data-act="del">삭제</button>`;
     div.querySelector('[data-act=edit]').onclick = () => openEditor(quiz.id);
+    div.querySelector('[data-act=preview]').onclick = () => openPreview(quiz);
     div.querySelector('[data-act=host]').onclick = () => hostGame(quiz);
     div.querySelector('[data-act=dup]').onclick = () => {
       const copy = JSON.parse(JSON.stringify(quiz));
@@ -1145,6 +1164,73 @@ $("btn-export").onclick = () => {
 $("btn-ed-host").onclick = () => {
   if (!saveEditorQuiz()) return;
   hostGame(edQuiz);
+};
+$("btn-ed-preview").onclick = () => openPreview(edQuiz, true); // 저장 전 편집 상태 그대로 미리보기
+
+/* ================================================================
+ *  미리보기 — 게임 시작(PIN·참가자) 없이 문제를 순서대로 확인. 정답 ✔ 표시.
+ * ================================================================ */
+const preview = { qs: [], idx: 0, fromEditor: false };
+
+function openPreview(quiz, fromEditor = false) {
+  const qs = (quiz.questions || []).map(normQ);
+  if (!qs.length) return toast("문제가 없습니다.");
+  preview.qs = qs; preview.idx = 0; preview.fromEditor = fromEditor;
+  renderPreview();
+  show("view-preview");
+}
+
+function renderPreview() {
+  const q = preview.qs[preview.idx];
+  const typeLabel = { mc: "선다형", ox: "OX", short: "단답형", poll: "투표", slide: "안내 페이지" }[q.type] || q.type;
+  $("pv-progress").textContent = `${preview.idx + 1} / ${preview.qs.length}`;
+  $("pv-meta").textContent = typeLabel
+    + (q.type === "slide" ? "" : ` · ${q.timeLimit}초`)
+    + (q.points === "double" ? " · 더블 포인트" : q.points === "none" ? " · 점수 없음" : "")
+    + (q.shuffle ? " · 보기 셔플" : "");
+  // 안내 페이지와 동일 규칙: 문제란이 비면 미디어만 크게.
+  $("pv-text").textContent = q.text || "";
+  $("pv-text").style.display = q.text ? "" : "none";
+  $("pv-media").innerHTML = mediaHTML(q, false);
+  if (q.type === "slide" && !q.text && !(q.body || "").trim() && q.media) {
+    const m = $("pv-media").firstElementChild;
+    if (m) { m.style.maxHeight = "72vh"; m.style.maxWidth = "min(1100px, 94vw)"; }
+  }
+  const body = $("pv-body");
+  body.textContent = q.type === "slide" ? (q.body || "") : "";
+  body.style.display = q.type === "slide" && q.body ? "" : "none";
+
+  const grid = $("pv-grid");
+  if (q.type === "slide") {
+    grid.className = "answer-grid"; grid.innerHTML = "";
+  } else if (q.type === "short") {
+    grid.className = "answer-grid";
+    grid.innerHTML = `<div class="notice" style="grid-column:1/-1;font-size:16px;">✍ 단답형 — 허용 답안: <b>${q.accepted.map(esc).join(", ")}</b></div>`;
+  } else {
+    const labels = choicesOf(q);
+    const isAns = (i) => q.type !== "poll" && (q.answers || []).includes(i);
+    grid.className = "answer-grid" + (q.type === "ox" ? " ox" : "");
+    grid.innerHTML = labels.map((c, i) => `
+      <div class="ans-tile ${COLORS[i]} ${q.type === "poll" || isAns(i) ? "" : "dim"}">
+        <span class="shape">${q.type === "ox" ? (i === 0 ? "O" : "X") : SHAPES[i]}</span>
+        <span>${esc(c)}</span>
+        ${isAns(i) ? '<span class="mark">✔</span>' : ""}
+      </div>`).join("")
+      + (q.multi || (q.type === "mc" && (q.answers || []).length > 1)
+        ? `<div style="grid-column:1/-1;text-align:center;font-weight:700;">복수 정답 문제</div>` : "");
+  }
+  $("btn-pv-prev").disabled = preview.idx === 0;
+  $("btn-pv-next").textContent = preview.idx === preview.qs.length - 1 ? "처음으로 ↺" : "다음 ▶";
+}
+
+$("btn-pv-prev").onclick = () => { if (preview.idx > 0) { preview.idx--; renderPreview(); } };
+$("btn-pv-next").onclick = () => {
+  preview.idx = preview.idx === preview.qs.length - 1 ? 0 : preview.idx + 1;
+  renderPreview();
+};
+$("btn-pv-close").onclick = () => {
+  if (preview.fromEditor) show("view-editor");
+  else { renderQuizList(); show("view-quizzes"); }
 };
 
 /* ================================================================
