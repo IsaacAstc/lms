@@ -210,6 +210,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // 퀴즈 세트(문제·보기·정답): 관리자 전용 — 어느 기기에서든 동일 목록.
+    // 정답이 들어 있으므로 공개 읽기 금지(참가자는 RTDB 게임 데이터만 사용).
+    match /quizzes/{id} {
+      allow read: if isAdmin();
+      allow write: if canWrite();
+    }
+
     // 퀴즈 게임 기록(리포트): 게임 종료 시 호스트(관리자)가 저장.
     // 닉네임·점수·문항별 정오답 수만(단답형 응답 원문 미저장). 계속 보관, 수동 삭제.
     match /quizReports/{id} {
