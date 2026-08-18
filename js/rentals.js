@@ -49,6 +49,7 @@ export function initRentals() {
   });
 
   initDidConfig();
+  document.getElementById("media-refresh").addEventListener("click", loadMediaList);
   document.addEventListener("tabshown", (e) => { if (e.detail === "rentals") loadDidConfig(); });
 }
 
@@ -219,6 +220,74 @@ function wireDidUpload(btnId, fileId, inputId, opts) {
     } catch (err) { alert(err.message || "업로드에 실패했습니다."); }
     finally { btn.disabled = false; btn.textContent = origLabel; }
   });
+}
+
+// ── 업로드 미디어 관리 (media/ 폴더 — 퀴즈·DID 업로드분 조회·삭제) ──
+const MEDIA_KIND = (name) => {
+  if (/\.(mp4|webm|ogg)$/i.test(name)) return "동영상";
+  if (/\.svg$/i.test(name)) return "SVG";
+  if (/\.(png|jpe?g|gif|webp)$/i.test(name)) return "이미지";
+  return "기타";
+};
+// 파일명 접두어로 업로드 출처 표시(logo-/bg-/special- = DID, video- 등 = 퀴즈).
+const MEDIA_SOURCE = (name) =>
+  /^logo-/.test(name) ? "DID 로고" : /^bg-/.test(name) ? "DID 배경"
+    : /^special-/.test(name) ? "DID 특별일정" : "퀴즈";
+const fmtSize = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+
+async function loadMediaList() {
+  const tbody = document.getElementById("media-tbody");
+  const note = document.getElementById("media-note");
+  const token = ghToken();
+  if (!token) return;
+  tbody.innerHTML = `<tr><td colspan="6" class="empty">불러오는 중…</td></tr>`;
+  note.textContent = "";
+  try {
+    const resp = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/media`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+    });
+    if (resp.status === 401 || resp.status === 403) {
+      localStorage.removeItem(GH_TOKEN_KEY);
+      throw new Error("토큰이 유효하지 않습니다. 다시 조회해 토큰을 재등록하세요.");
+    }
+    if (resp.status === 404) { tbody.innerHTML = `<tr><td colspan="6" class="empty">media/ 폴더에 파일이 없습니다.</td></tr>`; return; }
+    if (!resp.ok) throw new Error(`조회 실패 (HTTP ${resp.status})`);
+    const files = (await resp.json()).filter((f) => f.type === "file" && f.name !== "README.md");
+    if (!files.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty">업로드된 미디어가 없습니다.</td></tr>`; return; }
+    files.sort((a, b) => a.name.localeCompare(b.name));
+    note.textContent = `${files.length}개 · 합계 ${fmtSize(files.reduce((s, f) => s + (f.size || 0), 0))}`;
+    tbody.innerHTML = "";
+    for (const f of files) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(f.name)}</td>
+        <td>${MEDIA_KIND(f.name)}</td>
+        <td>${fmtSize(f.size || 0)}</td>
+        <td>${MEDIA_SOURCE(f.name)}</td>
+        <td><a href="${escapeHtml(f.download_url)}" target="_blank" rel="noopener" class="btn-link">열기</a></td>
+        <td class="actions"><button type="button" class="del m-del">삭제</button></td>`;
+      tr.querySelector(".m-del").addEventListener("click", async (e) => {
+        if (!confirm(`'${f.name}' 파일을 저장소에서 삭제할까요?\n퀴즈·DID에서 참조 중이면 해당 화면에 더 이상 표시되지 않습니다.`)) return;
+        const btn = e.target;
+        btn.disabled = true; btn.textContent = "삭제 중…";
+        try {
+          const del = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${f.path}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+            body: JSON.stringify({ message: `media: ${f.name} 삭제 (관리자 화면)`, sha: f.sha }),
+          });
+          if (!del.ok) throw new Error(`삭제 실패 (HTTP ${del.status})`);
+          loadMediaList();
+        } catch (err) {
+          alert(err.message || "삭제에 실패했습니다.");
+          btn.disabled = false; btn.textContent = "삭제";
+        }
+      });
+      tbody.appendChild(tr);
+    }
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">${escapeHtml(e.message || "목록을 불러오지 못했습니다.")}</td></tr>`;
+  }
 }
 
 // ── DID 설정 ──

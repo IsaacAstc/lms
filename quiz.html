@@ -1251,8 +1251,14 @@ function hostShowSlide(q) {
   host.ref.update({ status: "slide", currentQ: host.qIdx });
   $("hq-progress").textContent = `${host.qIdx + 1} / ${host.quiz.questions.length}${tr("slideTag")}`;
   $("hq-timer").textContent = "—";
+  // 문제란이 비어 있으면 문제 영역을 숨기고 미디어만 크게 표시(전면 안내 이미지·영상용).
   $("hq-text").textContent = q.text || "";
+  $("hq-text").style.display = q.text ? "" : "none";
   $("hq-media").innerHTML = mediaHTML(q, true);
+  if (!q.text && !q.body && q.media) {
+    const m = $("hq-media").firstElementChild;
+    if (m) { m.style.maxHeight = "72vh"; m.style.maxWidth = "min(1100px, 94vw)"; }
+  }
   tryPlay($("hq-media"));
   const body = $("hq-body");
   body.textContent = q.body || "";
@@ -1275,6 +1281,7 @@ function hostShowQuestion(q) {
     + (q.points === "double" ? tr("double") : q.points === "none" ? tr("noPts") : "")
     + (q.type === "poll" ? tr("pollTag") : "");
   $("hq-text").textContent = q.text;
+  $("hq-text").style.display = ""; // 안내 페이지에서 숨겼을 수 있으므로 복원
   $("hq-media").innerHTML = mediaHTML(q, true); // 출제 화면에서는 동영상 즉시 재생.
   tryPlay($("hq-media"));
   $("hq-body").style.display = "none";
