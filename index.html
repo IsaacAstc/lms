@@ -679,6 +679,61 @@
           </div>
         </section>
 
+        <!-- 수업 지원: 수업 보드(협업 게시판) -->
+        <section class="tab-panel" data-tab="pad" hidden>
+          <h2>수업 지원 — 수업 보드</h2>
+          <p class="hint">수강생이 링크·QR로 접속해 <b>로그인 없이</b> 의견·자료를 게시하는 협업 게시판입니다(조별 토의·주제별 의견 수집·아이스브레이킹).
+            게시물에는 개인 식별정보를 수집하지 않으며(닉네임은 자유 필명), 이미지 첨부는 자동 압축되어 저장됩니다. 링크를 공유하기 전에 보드를 먼저 만들어 설정을 확인하세요.</p>
+
+          <h3>보드 만들기</h3>
+          <form id="pad-form" class="entry-form">
+            <div class="grid">
+              <label>보드 제목<input name="ptitle" maxlength="60" required /></label>
+              <label>설명(선택)<input name="pdesc" maxlength="200" placeholder="상단에 표시됩니다" /></label>
+              <label>형식<select name="playout">
+                <option value="shelf">셸프 (주제별 칼럼)</option>
+                <option value="wall">담벼락 (그리드)</option>
+                <option value="stream">스트림 (세로 피드)</option>
+              </select></label>
+              <label id="pad-cols-wrap">칼럼 (쉼표 구분)<input name="pcols" placeholder="예: 1조, 2조, 3조 또는 찬성, 반대" /></label>
+              <label>반응<select name="preaction">
+                <option value="like">좋아요 ❤️</option>
+                <option value="vote">투표 👍 (추천순 정렬)</option>
+                <option value="none">없음</option>
+              </select></label>
+              <label>작성자 표시<select name="pauthor">
+                <option value="nickname">닉네임 입력(자유 필명)</option>
+                <option value="anon">완전 익명</option>
+              </select></label>
+              <label class="chk">댓글 허용<input name="pcomments" type="checkbox" checked /></label>
+              <label class="chk">승인제(승인 후 공개)<input name="pmoderated" type="checkbox" /></label>
+            </div>
+            <div class="form-actions">
+              <button id="pad-submit" type="submit">보드 만들기</button>
+              <button id="pad-cancel" type="button" hidden>취소</button>
+            </div>
+          </form>
+
+          <h3>보드 목록</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>제목</th><th>설정</th><th>칼럼</th><th>공유</th><th>게시물</th><th>관리</th></tr></thead>
+              <tbody id="pad-tbody"><tr><td colspan="6" class="empty">불러오는 중…</td></tr></tbody>
+            </table>
+          </div>
+
+          <div id="pad-posts" hidden>
+            <h3 id="pad-posts-title">게시물 관리</h3>
+            <p class="hint">승인제 보드의 <b>승인 대기</b> 게시물이 위에 표시됩니다. 승인하면 즉시 참여자 화면에 공개되고, 부적절한 게시물은 삭제하세요.</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>상태</th><th>칼럼</th><th>제목</th><th>본문</th><th>관리</th></tr></thead>
+                <tbody id="pad-posts-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <!-- 기관 관리 (마스터 전용, 허브에서만 편집) -->
         <section class="tab-panel" data-tab="orgs" hidden>
           <h2>기관 관리</h2>

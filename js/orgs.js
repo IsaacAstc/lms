@@ -20,6 +20,7 @@ export const ORG_FEATURES = [
   ["reportdoc", "운영 보고서"],
   ["rentals", "현장 안내(대관·DID)"],
   ["board", "공개 현황 보드"],
+  ["pad", "수업 보드(협업)"],
   // 상단바 바로가기(퀴즈·히어로 미션은 기본 기관 백엔드로 연결되는 링크).
   ["quiz", "퀴즈 바로가기"],
   ["scfe", "히어로 미션 바로가기"],
@@ -35,6 +36,7 @@ const TAB_FEATURE = {
   reportdoc: "reportdoc",
   rentals: "rentals",
   board: "board",
+  pad: "pad",
 };
 export function tabFeature(tab) { return TAB_FEATURE[tab] || null; }
 

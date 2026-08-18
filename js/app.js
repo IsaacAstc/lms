@@ -21,6 +21,7 @@ import { initCsvImport } from "./csv-import.js";
 import { initSeed } from "./seed.js";
 import { initOrgSelectors, initOrgAdmin, tabFeature } from "./orgs.js";
 import { initRentals } from "./rentals.js";
+import { initPadAdmin } from "./pad-admin.js";
 import { currentOrg } from "./firebase.js";
 
 // 공용 유틸: HTML 이스케이프 (XSS 방지).
@@ -45,6 +46,7 @@ const TAB_GROUPS = [
   { id: "stats", label: "통계", tabs: [["stats", ""]] },
   { id: "reportdoc", label: "운영 보고서", tabs: [["reportdoc", ""]] },
   { id: "site", label: "현장 안내", tabs: [["rentals", ""]] },
+  { id: "class", label: "수업 지원", tabs: [["pad", "수업 보드"]] },
   { id: "admin", label: "설정", tabs: [["settings", "기준값 설정"], ["admins", "관리자 계정"], ["data", "데이터 관리"], ["board", "공개 현황 보드"], ["orgs", "기관 관리"]] },
 ];
 // 마스터 전용 탭(일반 관리자에게는 숨김 — 실제 차단은 firestore.rules).
@@ -64,7 +66,7 @@ function accountAllows(tab) {
 let observerMode = false;
 export function isObserverMode() { return observerMode; }
 // 쓰기성 버튼 판별(라벨 기준). '내보내기·복사·조회·필터' 등 읽기 동작은 제외한다.
-const WRITE_LABEL = /저장|등록|수정|삭제|추가|반려|파기|시드|업로드|동기화|발송|복제|가져오기|재설정|생성|승인|반영/;
+const WRITE_LABEL = /저장|등록|수정|삭제|추가|반려|파기|시드|업로드|동기화|발송|복제|가져오기|재설정|생성|승인|반영|만들기|보관|복원/;
 function blockWrites() {
   document.body.classList.add("observer-mode");
   const stop = (e, msg) => {
@@ -184,6 +186,7 @@ function initApp() {
   initAdmins();
   initBoardAdmin();
   initRentals();
+  initPadAdmin();
   initExportButtons();
   initCsvImport();
   initSeed();

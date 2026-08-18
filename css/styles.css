@@ -404,3 +404,48 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .org-features .chk { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; }
 .org-features .chk input { width: auto; }
 .org-feats { white-space: normal; max-width: 16rem; font-size: 0.8rem; }
+
+/* ── 수업 보드(협업 게시판) 참여자 페이지 ── */
+.pad-main { max-width: 1200px; margin: 0 auto; padding: 1rem 1rem 5rem; }
+.pad-header h1 { color: var(--primary); margin: 0.4rem 0 0.2rem; }
+.pad-desc { color: var(--muted, #666); margin: 0 0 0.3rem; }
+.pad-privacy { font-size: 0.8rem; color: #a33; margin: 0 0 1rem; }
+.pad-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.8rem; align-items: start; }
+.pad-stream { display: flex; flex-direction: column; gap: 0.8rem; max-width: 560px; margin: 0 auto; }
+.pad-shelf { display: flex; gap: 0.8rem; overflow-x: auto; align-items: flex-start; padding-bottom: 1rem; }
+.pad-col { flex: 0 0 270px; background: #eef2f8; border-radius: 10px; padding: 0.6rem; }
+.pad-col-head { font-weight: 700; color: var(--primary); padding: 0.2rem 0.3rem 0.5rem; display: flex; justify-content: space-between; }
+.pad-col-cnt { font-weight: 400; color: var(--muted, #666); }
+.pad-col-body { display: flex; flex-direction: column; gap: 0.6rem; }
+.pad-card { border: 1px solid #dde4ee; border-radius: 10px; padding: 0.7rem 0.8rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.pad-pending { font-size: 0.75rem; color: #a60; background: #fff6e0; border-radius: 6px; padding: 0.2rem 0.4rem; margin-bottom: 0.4rem; }
+.pad-card-title { margin: 0 0 0.3rem; font-size: 1rem; color: #222; }
+.pad-card-body { margin: 0 0 0.4rem; font-size: 0.9rem; white-space: pre-wrap; word-break: break-word; }
+.pad-card-img { max-width: 100%; border-radius: 8px; margin-bottom: 0.4rem; }
+.pad-embed { position: relative; padding-top: 56.25%; margin-bottom: 0.4rem; }
+.pad-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 8px; }
+.pad-link { display: inline-block; font-size: 0.85rem; color: var(--primary); background: #eef3fa; border-radius: 6px; padding: 0.2rem 0.5rem; margin-bottom: 0.4rem; text-decoration: none; }
+.pad-card-foot { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; }
+.pad-nick { color: var(--muted, #666); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pad-react { border: 1px solid #d5dce8; background: #fff; border-radius: 999px; padding: 0.15rem 0.6rem; cursor: pointer; font-size: 0.8rem; }
+.pad-react.on { background: var(--primary); color: #fff; border-color: var(--primary); cursor: default; }
+.pad-mini { border: none; background: transparent; color: var(--muted, #666); cursor: pointer; font-size: 0.78rem; text-decoration: underline; padding: 0; }
+.pad-comments { border-top: 1px dashed #dde4ee; margin-top: 0.5rem; padding-top: 0.4rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.pad-comment { font-size: 0.82rem; word-break: break-word; }
+.pad-comment b { color: var(--primary); font-weight: 600; }
+.pad-comment-input { width: 100%; border: 1px solid #d5dce8; border-radius: 6px; padding: 0.3rem 0.5rem; font: inherit; font-size: 0.82rem; }
+.pad-fab {
+  position: fixed; right: 1.2rem; bottom: 1.2rem; z-index: 20;
+  background: var(--primary); color: #fff; border: none; border-radius: 999px;
+  padding: 0.8rem 1.4rem; font-size: 1rem; font-weight: 700; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+}
+.pad-form { padding: 1.2rem 1.3rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.pad-form label { display: flex; flex-direction: column; gap: 0.2rem; font-weight: 600; font-size: 0.88rem; }
+.pad-form label small { color: var(--muted, #666); font-weight: 400; }
+.pad-form input[type=text], .pad-form input[type=url], .pad-form textarea, .pad-form select {
+  padding: 0.45rem 0.5rem; border: 1px solid #ccc; border-radius: 6px; font: inherit;
+}
+.pad-colors { display: flex; gap: 0.4rem; }
+.pad-color { width: 1.8rem; height: 1.8rem; border-radius: 50%; border: 2px solid #ccc; cursor: pointer; }
+.pad-color.sel { border-color: var(--primary); outline: 2px solid var(--primary); }

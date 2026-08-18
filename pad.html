@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>수업 보드</title>
+    <link rel="icon" href="favicon.ico" sizes="any" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <main class="pad-main">
+      <header class="pad-header">
+        <h1 id="pad-title">수업 보드</h1>
+        <p id="pad-desc" class="pad-desc"></p>
+        <p class="pad-privacy">⚠️ 개인을 식별할 수 있는 정보(성명, 소속, 연락처 등)는 기재하지 마십시오.</p>
+      </header>
+
+      <div id="pad-root"><p class="empty">보드를 불러오는 중…</p></div>
+
+      <button id="pad-write-btn" class="pad-fab" hidden>＋ 글쓰기</button>
+
+      <!-- 게시/수정 양식 -->
+      <dialog id="pad-dialog" class="apply-dialog">
+        <form method="dialog" class="pad-form">
+          <h2 id="pd-heading">게시물 작성</h2>
+          <label id="pd-col-wrap" hidden>칼럼
+            <select id="pd-col"></select>
+          </label>
+          <label>제목
+            <input type="text" id="pd-title" maxlength="100" required />
+          </label>
+          <label>내용 <small>(선택)</small>
+            <textarea id="pd-body" rows="4" maxlength="2000"></textarea>
+          </label>
+          <label id="pd-nick-wrap">닉네임 <small>(자유 필명 — 실명 금지)</small>
+            <input type="text" id="pd-nick" maxlength="20" />
+          </label>
+          <label>링크 <small>(선택 — 유튜브·자료 URL)</small>
+            <input type="url" id="pd-link" maxlength="500" placeholder="https://…" />
+          </label>
+          <label>이미지 <small>(선택 — 자동 압축)</small>
+            <input type="file" id="pd-image" accept="image/*" />
+          </label>
+          <div id="pd-image-prev"></div>
+          <label>카드 색
+            <div id="pd-colors" class="pad-colors"></div>
+          </label>
+          <p id="pd-status" class="apply-status"></p>
+          <div class="form-actions">
+            <button type="button" id="pd-save">게시</button>
+            <button type="button" id="pd-close">닫기</button>
+          </div>
+        </form>
+      </dialog>
+    </main>
+    <script type="module" src="js/pad.js"></script>
+  </body>
+</html>
