@@ -177,8 +177,9 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
    에서 해당 프로젝트에 서비스 계정 생성(예: `github-deploy`).
 2. 다음 역할 부여: **Firebase 관리자**, **Cloud Functions 관리자**,
    **서비스 계정 사용자**, **Artifact Registry 관리자**, **Cloud Build 편집자**,
-   **Cloud Scheduler 관리자**. (간단히 하려면 **편집자**(Editor) 하나로도 가능하나
-   권한이 넓어지므로 권장하지 않음)
+   **Cloud Scheduler 관리자**, **Secret Manager 관리자**(함수가 쓰는
+   `MAIL_USER`/`MAIL_PASS` 접근에 필요 — 없으면 배포가 403으로 실패).
+   (간단히 하려면 **편집자**(Editor) 하나로도 가능하나 권한이 넓어지므로 권장하지 않음)
 3. 해당 서비스 계정 → 키 → **새 키 만들기(JSON)** → 파일 다운로드.
 4. GitHub 저장소 → Settings → Secrets and variables → Actions → **New repository secret**
    - `FIREBASE_SERVICE_ACCOUNT` : 내려받은 JSON 파일 **내용 전체** 붙여넣기
