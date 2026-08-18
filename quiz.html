@@ -650,10 +650,60 @@ $("btn-mute").addEventListener("click", toggleMute);
 updateMuteBtn();
 
 /* ---------------- 퀴즈 저장소 (localStorage) ---------------- */
-function loadQuizzes() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch (e) { return []; }
+/* 퀴즈 세트 저장소: Firestore quizzes 컬렉션(관리자 전용) — 어느 기기에서든 동일 목록.
+ * 과거 이 기기(localStorage)에 저장된 세트는 최초 1회 자동 이관한다. */
+let quizzesCache = [];
+let quizzesLoaded = false;
+
+async function ensureQuizzes(force) {
+  if (!fsdb || (quizzesLoaded && !force)) return;
+  const snap = await fsdb.collection("quizzes").get();
+  const cloud = snap.docs.map((d) => d.data());
+  // 기기 저장분 이관: 클라우드에 없는 id만 업로드 후 로컬 키는 백업으로 이름 변경.
+  try {
+    const local = JSON.parse(localStorage.getItem(LS_KEY)) || [];
+    const ids = new Set(cloud.map((q) => q.id));
+    const toUp = local.filter((q) => q && q.id && q.title !== undefined && !ids.has(q.id));
+    for (const q of toUp) {
+      await fsdb.collection("quizzes").doc(q.id).set(q);
+      cloud.push(q);
+    }
+    if (local.length) {
+      localStorage.setItem(LS_KEY + "_backup", JSON.stringify(local));
+      localStorage.removeItem(LS_KEY);
+    }
+    if (toUp.length) toast(`이 기기에 있던 퀴즈 ${toUp.length}개를 클라우드로 이관했습니다.`);
+  } catch (e) { /* 이관 실패해도 클라우드 목록은 표시 */ }
+  cloud.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+  quizzesCache = cloud;
+  quizzesLoaded = true;
 }
-function saveQuizzes(list) { localStorage.setItem(LS_KEY, JSON.stringify(list)); }
+
+// 호출부 호환: 목록의 얕은 복사본을 돌려준다(객체 교체가 diff로 감지되도록).
+function loadQuizzes() { return quizzesCache.slice(); }
+
+// 변경분만 Firestore에 반영(삭제 + 바뀐 문서 set). 실패는 toast로 알린다.
+function saveQuizzes(list) {
+  const newIds = new Set(list.map((q) => q.id));
+  const removed = quizzesCache.filter((q) => !newIds.has(q.id));
+  const prev = {};
+  quizzesCache.forEach((q) => { prev[q.id] = JSON.stringify(q); });
+  quizzesCache = list;
+  if (!fsdb) return;
+  removed.forEach((q) =>
+    fsdb.collection("quizzes").doc(q.id).delete()
+      .catch((e) => toast("클라우드 삭제 실패: " + (e.message || e))));
+  list.forEach((q) => {
+    const s = JSON.stringify(q);
+    if (prev[q.id] === s) return; // 변경 없음
+    fsdb.collection("quizzes").doc(q.id).set(JSON.parse(s)).catch((e) => {
+      const m = String(e.message || e);
+      toast(`'${q.title}' 저장 실패: ` + (/size|exceeds|1048576/i.test(m)
+        ? "퀴즈가 너무 큽니다(1MB 초과). 내장 이미지를 줄이고 URL/업로드 미디어를 사용하세요."
+        : m));
+    });
+  });
+}
 const TIME_OPTS = [5, 10, 20, 30, 60, 90, 120];
 const POINTS_OPTS = ["standard", "double", "none"];
 function newQuestion() {
@@ -785,7 +835,12 @@ $("btn-login").onclick = async () => {
 };
 $("btn-login-back").onclick = () => { afterLogin = null; show("view-home"); };
 
-$("btn-goto-quizzes").onclick = () => requireAdmin(() => { renderQuizList(); show("view-quizzes"); });
+$("btn-goto-quizzes").onclick = () => requireAdmin(async () => {
+  show("view-quizzes");
+  if (!quizzesLoaded) $("quiz-list").innerHTML = `<div class="notice" style="margin-bottom:12px;">퀴즈 목록 불러오는 중…</div>`;
+  try { await ensureQuizzes(); } catch (e) { toast("퀴즈 목록을 불러오지 못했습니다: " + (e.message || e)); }
+  renderQuizList();
+});
 $("btn-back-home").onclick = () => show("view-home");
 $("btn-new-quiz").onclick = () => openEditor(null);
 
