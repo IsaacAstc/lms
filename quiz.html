@@ -7,6 +7,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="scfe/js/qrcode.min.js"></script>
 <style>
   :root {
@@ -240,8 +241,32 @@
     <div style="display:flex; gap:8px; margin-top:10px;">
       <button class="btn-big gray" id="btn-import" style="margin-top:0;">📂 JSON 가져오기</button>
       <input type="file" id="import-file" accept=".json" style="display:none;">
+      <button class="btn-big gray" id="btn-goto-reports" style="margin-top:0;">📊 게임 기록</button>
     </div>
   </div>
+</div>
+
+<!-- ============ 게임 기록 목록 ============ -->
+<div id="view-reports" class="view center" style="justify-content:flex-start; padding-top:40px;">
+  <div style="width:100%; max-width:640px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+      <h1 style="font-size:24px;">📊 게임 기록</h1>
+      <button class="btn-sm" id="btn-rp-list-back">← 내 퀴즈</button>
+    </div>
+    <p style="font-size:13px;opacity:0.8;margin-bottom:12px;">게임 종료 시 자동 저장됩니다(닉네임·점수·문항별 정오답만 — 단답형 응답 원문은 저장하지 않음). 기록은 계속 보관되며 상세 화면에서 삭제할 수 있습니다.</p>
+    <div id="report-list"></div>
+  </div>
+</div>
+
+<!-- ============ 게임 기록 상세 ============ -->
+<div id="view-report" class="view" style="overflow:auto;">
+  <div class="ed-header">
+    <button class="btn-sm" id="btn-rp-back">← 기록 목록</button>
+    <div style="flex:1;font-weight:900;font-size:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="rp-title"></div>
+    <button class="btn-sm" id="btn-rp-csv">⬇ CSV</button>
+    <button class="btn-sm danger" id="btn-rp-del">🗑 삭제</button>
+  </div>
+  <div id="rp-body" style="flex:1;overflow:auto;padding:18px;width:min(780px,100vw);margin:0 auto;"></div>
 </div>
 
 <!-- ============ 퀴즈 편집기 ============ -->
@@ -395,6 +420,7 @@
   <h1 style="font-size:34px;" id="hf-title">🎉 최종 결과</h1>
   <div class="podium" id="hf-podium"></div>
   <div class="board" id="hf-board" style="margin-top:28px;"></div>
+  <div id="hf-report-note" style="margin-top:14px;font-size:14px;opacity:0.85;"></div>
   <button class="btn-big" id="btn-hf-done" style="max-width:300px;">끝내기</button>
 </div>
 
@@ -544,12 +570,13 @@ function applyJoinLang() {
 const GAME_TTL = 24*60*60*1000; // 24시간 지난 게임은 입장 불가
 const LS_KEY = "qb_quizzes";
 
-let db = null, auth = null;
+let db = null, auth = null, fsdb = null;
 const fbReady = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseURL);
 if (fbReady) {
   firebase.initializeApp(FIREBASE_CONFIG);
   db = firebase.database();
   auth = firebase.auth();
+  fsdb = firebase.firestore(); // 게임 리포트 저장(quizReports, 관리자 전용)
 } else {
   document.getElementById("fb-warning").style.display = "block";
 }
@@ -1052,7 +1079,7 @@ function hostCleanup(removeGame) {
   host.unsub.forEach(fn => fn()); host.unsub = [];
   clearInterval(host.timer);
   if (removeGame && host.ref) host.ref.remove();
-  host.ref = null; host.pin = null; host.players = {}; host.answers = {}; host.qIdx = -1;
+  host.ref = null; host.pin = null; host.players = {}; host.answers = {}; host.qIdx = -1; host.reportSaved = false;
 }
 async function hostGame(quiz) {
   if (!fbReady) return toast("Firebase 설정이 필요합니다. README를 참고하세요.");
@@ -1345,10 +1372,64 @@ function hostShowBoard() {
   $("hb-board").innerHTML = boardRowsHtml(rankedPlayers(), 5);
   show("view-hb");
 }
+// 게임 리포트 저장(카훗식 결과 기록 — 계속 보관, 관리자 화면에서 수동 삭제).
+// 단답형 응답 원문은 저장하지 않는다(자유 입력에 개인정보가 섞일 수 있음 — 정오답 수만).
+async function saveGameReport(ranked) {
+  if (!fsdb || host.reportSaved) return;
+  host.reportSaved = true;
+  try {
+    const snap = await host.ref.child("answers").get();
+    const answers = snap.val() || {};
+    const perPlayer = {}; // pid → { answered, correct }
+    const questions = [];
+    host.quiz.questions.forEach((q, i) => {
+      if (q.type === "slide") return;
+      const a = answers[i] || {};
+      const pids = Object.keys(a);
+      let correctCount = 0;
+      const labels = q.type === "short" ? [] : choicesOf(q);
+      const counts = labels.map(() => 0);
+      pids.forEach((pid) => {
+        const r = a[pid] || {};
+        perPlayer[pid] = perPlayer[pid] || { answered: 0, correct: 0 };
+        perPlayer[pid].answered++;
+        if (r.correct) { correctCount++; perPlayer[pid].correct++; }
+        const sel = Array.isArray(r.choices) ? r.choices : (r.choice >= 0 ? [r.choice] : []);
+        sel.forEach((c) => { if (c >= 0 && c < counts.length) counts[c]++; });
+      });
+      questions.push({
+        n: i + 1, text: q.text || "", type: q.type,
+        respondents: pids.length, correctCount,
+        correctRate: q.type === "poll" ? null : (pids.length ? Math.round(100 * correctCount / pids.length) : null),
+        labels, counts, answers: Array.isArray(q.answers) ? q.answers : [],
+      });
+    });
+    await fsdb.collection("quizReports").add({
+      quizTitle: host.quiz.title || "(제목 없음)",
+      lang: host.quiz.lang || "ko",
+      playedAtMs: Date.now(),
+      playerCount: ranked.length,
+      questionCount: questions.length,
+      players: ranked.map((p, i) => ({
+        rank: i + 1, name: p.name, score: p.score,
+        answered: (perPlayer[p.pid] || {}).answered || 0,
+        correct: (perPlayer[p.pid] || {}).correct || 0,
+      })),
+      questions,
+    });
+    const note = $("hf-report-note");
+    if (note) note.textContent = "📊 게임 기록이 저장되었습니다 (내 퀴즈 → 게임 기록)";
+  } catch (e) {
+    const note = $("hf-report-note");
+    if (note) note.textContent = "게임 기록 저장 실패: " + (e.message || e);
+  }
+}
+
 function hostFinish() {
   const ranked = rankedPlayers();
   host.ref.update({ status: "finished" });
   sfx.fanfare();
+  saveGameReport(ranked); // 방 제거 전에 응답 데이터를 읽어 기록(비동기).
   // 시상대 (1~3위)
   const pods = [
     { cls: "p2", p: ranked[1], n: 2 },
@@ -1579,6 +1660,104 @@ function playerShowFinal(game, myScore) {
   show("view-pf");
 }
 $("btn-pf-home").onclick = () => { playerCleanup(); show("view-home"); };
+
+/* ================================================================
+ *  게임 기록 리포트 (quizReports — Firestore, 관리자 전용)
+ * ================================================================ */
+let currentReport = null; // { id, data }
+
+$("btn-goto-reports").onclick = () => requireAdmin(showReports);
+$("btn-rp-list-back").onclick = () => { renderQuizList(); show("view-quizzes"); };
+$("btn-rp-back").onclick = () => showReports();
+
+const fmtWhen = (ms) => new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(ms || 0));
+
+async function showReports() {
+  show("view-reports");
+  const box = $("report-list");
+  box.innerHTML = `<div class="notice">불러오는 중…</div>`;
+  try {
+    const snap = await fsdb.collection("quizReports").orderBy("playedAtMs", "desc").limit(100).get();
+    if (snap.empty) { box.innerHTML = `<div class="notice">저장된 게임 기록이 없습니다. 게임을 끝까지 진행하면 자동 저장됩니다.</div>`; return; }
+    box.innerHTML = "";
+    snap.docs.forEach((d) => {
+      const r = d.data();
+      const avg = r.players?.length ? Math.round(r.players.reduce((s, p) => s + (p.score || 0), 0) / r.players.length) : 0;
+      const item = document.createElement("div");
+      item.className = "q-item";
+      item.style.cursor = "pointer";
+      item.innerHTML = `<div class="q-num">${esc(fmtWhen(r.playedAtMs))} · 참가 ${r.playerCount || 0}명 · ${r.questionCount || 0}문항 · 평균 ${avg.toLocaleString()}점</div>
+        <div class="q-preview" style="font-weight:700;">${esc(r.quizTitle || "(제목 없음)")}</div>`;
+      item.onclick = () => openReport(d.id, r);
+      box.appendChild(item);
+    });
+  } catch (e) { box.innerHTML = `<div class="notice">기록을 불러오지 못했습니다: ${esc(e.message || e)}<br>보안규칙(quizReports) 배포 여부를 확인하세요.</div>`; }
+}
+
+function openReport(id, r) {
+  currentReport = { id, data: r };
+  $("rp-title").textContent = `${r.quizTitle || "(제목 없음)"} — ${fmtWhen(r.playedAtMs)}`;
+  const qRows = (r.questions || []).map((q) => {
+    const rate = q.correctRate;
+    const bar = rate == null ? "" :
+      `<div style="height:8px;background:rgba(255,255,255,0.15);border-radius:4px;overflow:hidden;margin-top:6px;">
+         <div style="height:100%;width:${rate}%;background:${rate >= 70 ? "var(--green)" : rate >= 40 ? "#ffd54f" : "var(--red)"};"></div></div>`;
+    const dist = (q.labels || []).map((l, i) =>
+      `<span style="opacity:0.85;">${q.type === "ox" ? (i === 0 ? "O" : "X") : SHAPES[i]} ${esc(l)}: <b>${(q.counts || [])[i] || 0}</b>${(q.answers || []).includes(i) ? " ✔" : ""}</span>`
+    ).join(" · ");
+    return `<div style="background:rgba(255,255,255,0.08);border-radius:10px;padding:12px 14px;margin-bottom:10px;">
+      <div style="display:flex;gap:10px;align-items:baseline;">
+        <b style="flex:1;">${q.n}. ${esc(q.text)}</b>
+        <span style="white-space:nowrap;">${rate == null ? "투표" : `정답률 <b>${rate}%</b>`} · 응답 ${q.respondents}명</span>
+      </div>
+      ${bar}
+      ${dist ? `<div style="font-size:13px;margin-top:8px;">${dist}</div>` : `<div style="font-size:13px;margin-top:8px;opacity:0.8;">단답형 — 정답 ${q.correctCount}명 (원문 미저장)</div>`}
+    </div>`;
+  }).join("");
+  const pRows = (r.players || []).map((p) => `
+    <tr><td style="text-align:center;">${p.rank}</td><td>${esc(p.name)}</td>
+      <td style="text-align:right;">${(p.score || 0).toLocaleString()}</td>
+      <td style="text-align:center;">${p.correct}/${p.answered}</td></tr>`).join("");
+  $("rp-body").innerHTML = `
+    <h2 style="margin:6px 0 12px;">문항별 결과</h2>${qRows || `<div class="notice">문항 데이터가 없습니다.</div>`}
+    <h2 style="margin:20px 0 12px;">참가자 순위 (${r.playerCount || 0}명)</h2>
+    <table style="width:100%;border-collapse:collapse;font-size:15px;">
+      <thead><tr style="opacity:0.75;"><th style="width:3.5em;">순위</th><th style="text-align:left;">닉네임</th><th style="text-align:right;">점수</th><th style="width:6em;">정답</th></tr></thead>
+      <tbody>${pRows}</tbody>
+    </table>`;
+  show("view-report");
+}
+
+$("btn-rp-csv").onclick = () => {
+  if (!currentReport) return;
+  const r = currentReport.data;
+  const q2 = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines = [
+    ["퀴즈", r.quizTitle, "일시", fmtWhen(r.playedAtMs), "참가", r.playerCount, "문항", r.questionCount].map(q2).join(","),
+    "",
+    ["순위", "닉네임", "점수", "정답수", "응답수"].map(q2).join(","),
+    ...(r.players || []).map((p) => [p.rank, p.name, p.score, p.correct, p.answered].map(q2).join(",")),
+    "",
+    ["문항", "내용", "유형", "응답수", "정답수", "정답률(%)"].map(q2).join(","),
+    ...(r.questions || []).map((q) => [q.n, q.text, q.type, q.respondents, q.correctCount, q.correctRate ?? ""].map(q2).join(",")),
+  ];
+  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `퀴즈기록_${(r.quizTitle || "무제").replace(/[\\/:*?"<>|\s]+/g, "_")}_${new Date(r.playedAtMs || Date.now()).toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+$("btn-rp-del").onclick = async () => {
+  if (!currentReport) return;
+  if (!confirm("이 게임 기록을 삭제할까요? 복구할 수 없습니다.")) return;
+  try {
+    await fsdb.collection("quizReports").doc(currentReport.id).delete();
+    currentReport = null;
+    showReports();
+  } catch (e) { toast("삭제 실패: " + (e.message || e)); }
+};
 
 /* URL 해시로 PIN 미리 채우기 (#123456) */
 if (/^#\d{6}$/.test(location.hash)) $("join-pin").value = location.hash.slice(1);

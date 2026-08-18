@@ -210,6 +210,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // 퀴즈 게임 기록(리포트): 게임 종료 시 호스트(관리자)가 저장.
+    // 닉네임·점수·문항별 정오답 수만(단답형 응답 원문 미저장). 계속 보관, 수동 삭제.
+    match /quizReports/{id} {
+      allow read: if isAdmin();
+      allow create, delete: if canWrite();
+      allow update: if false; // 기록 변조 방지 — 저장 후 수정 불가.
+    }
+
     // 기관(테넌트) 레지스트리 — 허브 프로젝트에서만 의미 있음.
     // config는 공개값(도메인·보안규칙이 실제 방어선)이라 공개 읽기, 등록·편집은 마스터만.
     match /orgs/{orgId} {
