@@ -722,6 +722,16 @@
             </table>
           </div>
 
+          <!-- 보드 QR 표시 (강의실 화면 공유·인쇄용) -->
+          <dialog id="pad-qr-dialog" class="apply-dialog">
+            <div style="padding:1.3rem;display:flex;flex-direction:column;align-items:center;gap:0.7rem;">
+              <h2 id="pad-qr-title" style="margin:0;font-size:1.05rem;"></h2>
+              <div id="pad-qr-box"></div>
+              <div id="pad-qr-url" style="font-size:0.75rem;color:var(--muted);word-break:break-all;text-align:center;"></div>
+              <button type="button" id="pad-qr-close">닫기</button>
+            </div>
+          </dialog>
+
           <div id="pad-posts" hidden>
             <h3 id="pad-posts-title">게시물 관리</h3>
             <p class="hint">승인제 보드의 <b>승인 대기</b> 게시물이 위에 표시됩니다. 승인하면 즉시 참여자 화면에 공개되고, 부적절한 게시물은 삭제하세요.</p>

@@ -28,6 +28,7 @@ export function initPadAdmin() {
   const form = document.getElementById("pad-form");
   form.addEventListener("submit", onSave);
   document.getElementById("pad-cancel").addEventListener("click", resetForm);
+  document.getElementById("pad-qr-close").addEventListener("click", () => document.getElementById("pad-qr-dialog").close());
   // 셸프일 때만 칼럼 입력 노출.
   form.playout.addEventListener("change", () => {
     document.getElementById("pad-cols-wrap").hidden = form.playout.value !== "shelf";
@@ -113,6 +114,7 @@ function renderList() {
       <td class="actions">
         <a href="${escapeHtml(padUrl(b.id))}" target="_blank" rel="noopener" class="btn-link">열기</a>
         <button type="button" class="p-copy">URL 복사</button>
+        <button type="button" class="p-qr">QR</button>
       </td>
       <td class="actions">
         <button type="button" class="p-mod">${b.moderated ? "승인 대기" : "게시물"}</button>
@@ -165,10 +167,38 @@ function renderList() {
         await deleteDoc(doc(db, "collabBoards", b.id));
       } catch (err) { alert("삭제 실패: " + err.message); }
     });
+    tr.querySelector(".p-qr").addEventListener("click", () => showQr(b));
     tr.querySelector(".p-mod").addEventListener("click", () => openPosts(b));
     tr.querySelector(".p-csv").addEventListener("click", () => exportCsv(b));
     tbody.appendChild(tr);
   }
+}
+
+// ── QR 표시 (qrcode 라이브러리는 최초 사용 시 지연 로드 — scfe와 공유) ──
+let qrLibLoading = null;
+function loadQrLib() {
+  if (typeof QRCode !== "undefined") return Promise.resolve();
+  if (!qrLibLoading) {
+    qrLibLoading = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "scfe/js/qrcode.min.js";
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("QR 라이브러리를 불러오지 못했습니다."));
+      document.head.appendChild(s);
+    });
+  }
+  return qrLibLoading;
+}
+
+async function showQr(b) {
+  try { await loadQrLib(); } catch (e) { return alert(e.message); }
+  const url = padUrl(b.id);
+  document.getElementById("pad-qr-title").textContent = b.title || "수업 보드";
+  document.getElementById("pad-qr-url").textContent = url;
+  const box = document.getElementById("pad-qr-box");
+  box.innerHTML = "";
+  new QRCode(box, { text: url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  document.getElementById("pad-qr-dialog").showModal();
 }
 
 // ── 게시물 관리(승인 대기 포함) ──
