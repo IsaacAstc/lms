@@ -210,6 +210,59 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ── 수업 보드(협업 게시판, 패들렛 벤치마킹) ──
+    // 보드 설정: 참여 페이지가 읽어야 하므로 공개 읽기, 쓰기는 '수업 보드' 탭 권한.
+    match /collabBoards/{boardId} {
+      allow read: if true;
+      allow write: if canTab('pad');
+    }
+
+    // 게시물: 익명 참여(개인정보 없음 — 닉네임은 자유 필명, deviceKey는 무작위 기기 문자열).
+    // 승인제 보드의 미승인 글은 관리자만 읽음(참여자 본인 표시는 클라이언트 캐시로 처리).
+    match /collabPosts/{postId} {
+      function boardOf(bid) {
+        return get(/databases/$(database)/documents/collabBoards/$(bid)).data;
+      }
+      function keysOk() {
+        return request.resource.data.keys().hasOnly(
+          ['boardId','columnId','title','body','nickname','linkUrl','imageData','color',
+           'deviceKey','likes','comments','approved','deleted','createdAtMs','updatedAtMs']);
+      }
+      function textOk() {
+        return request.resource.data.title is string && request.resource.data.title.size() > 0
+          && request.resource.data.title.size() <= 100
+          && request.resource.data.get('body', '').size() <= 2000
+          && request.resource.data.get('nickname', '').size() <= 20
+          && request.resource.data.get('linkUrl', '').size() <= 500
+          && request.resource.data.get('imageData', '').size() <= 400000
+          && request.resource.data.get('color', '').size() <= 20;
+      }
+      allow read: if resource.data.approved == true || isAdmin();
+      // 생성: 활성 보드에만, 승인 상태는 보드의 승인제 설정을 강제(클라이언트 조작 방지).
+      allow create: if keysOk() && textOk()
+        && request.resource.data.boardId is string && request.resource.data.boardId.size() <= 64
+        && boardOf(request.resource.data.boardId).active != false
+        && request.resource.data.approved == !boardOf(request.resource.data.boardId).get('moderated', false)
+        && request.resource.data.likes == 0
+        && request.resource.data.comments == []
+        && request.resource.data.deleted == false;
+      allow update: if isAdmin()
+        // 반응: likes만 +1 (보드 반응 설정이 켜진 경우)
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+            && request.resource.data.likes == resource.data.likes + 1
+            && boardOf(resource.data.boardId).get('reaction', 'like') != 'none')
+        // 댓글: comments 배열에 1건 추가 (보드 댓글 설정이 켜진 경우)
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comments'])
+            && request.resource.data.comments.size() == resource.data.comments.size() + 1
+            && boardOf(resource.data.boardId).get('comments', false) == true)
+        // 본인 글 수정·삭제표시: 작성 기기 키 일치 시(내부 교육용 수준의 신뢰).
+        || (request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['title','body','nickname','linkUrl','imageData','color','columnId','deleted','updatedAtMs'])
+            && request.resource.data.deviceKey == resource.data.deviceKey
+            && keysOk() && textOk());
+      allow delete: if canTab('pad');
+    }
+
     // 퀴즈 세트(문제·보기·정답): 관리자 전용 — 어느 기기에서든 동일 목록.
     // 정답이 들어 있으므로 공개 읽기 금지(참가자는 RTDB 게임 데이터만 사용).
     match /quizzes/{id} {
