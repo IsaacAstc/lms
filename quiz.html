@@ -386,6 +386,7 @@
   <div class="host-topbar">
     <div id="hq-progress">1 / 10</div>
     <div class="timer-wrap"><div class="timer-circle" id="hq-timer">20</div></div>
+    <button class="btn-sm" id="btn-hq-board" title="현재 순위 보기">🏆</button>
     <button class="btn-sm" id="btn-mute" title="효과음 켜기/끄기">🔊</button>
     <button class="btn-sm" id="btn-hq-skip">넘어가기 ▶</button>
   </div>
@@ -465,6 +466,13 @@
     <div class="rs-points" id="pf-score"></div>
     <button class="btn-big" id="btn-pf-home" style="max-width:260px; margin:24px auto 0;">홈으로</button>
   </div>
+</div>
+
+<!-- 호스트: 진행 중 순위 오버레이 (아무 때나 🏆 버튼으로 호출, 진행에 영향 없음) -->
+<div id="board-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(10,25,50,0.92);z-index:60;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;">
+  <h1 style="font-size:26px;">🏆 <span id="bo-title">현재 순위</span></h1>
+  <div class="board" id="bo-board" style="max-height:64vh;overflow:auto;"></div>
+  <button class="btn-sm" id="btn-bo-close">닫기 ✕</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -602,6 +610,8 @@ const $ = id => document.getElementById(id);
 function show(viewId) {
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   $(viewId).classList.add("active");
+  const bo = $("board-overlay"); // 화면 전환 시 순위 오버레이 자동 닫기
+  if (bo) bo.style.display = "none";
 }
 let toastTimer;
 function toast(msg) {
@@ -649,6 +659,17 @@ function toggleMute() {
 }
 $("btn-mute").addEventListener("click", toggleMute);
 updateMuteBtn();
+
+// 진행 중 순위 오버레이: 직전 문제까지 반영된 점수 기준(현재 문제는 정답 공개 후 합산).
+$("btn-hq-board").addEventListener("click", () => {
+  $("bo-title").textContent = LANG === "en" ? "Current Standings" : "현재 순위";
+  $("btn-bo-close").textContent = LANG === "en" ? "Close ✕" : "닫기 ✕";
+  $("bo-board").innerHTML = boardRowsHtml(rankedPlayers(), 10)
+    || `<div class="notice">${LANG === "en" ? "No players yet." : "참가자가 없습니다."}</div>`;
+  $("board-overlay").style.display = "flex";
+});
+$("btn-bo-close").addEventListener("click", () => { $("board-overlay").style.display = "none"; });
+$("board-overlay").addEventListener("click", (e) => { if (e.target.id === "board-overlay") $("board-overlay").style.display = "none"; });
 
 /* ---------------- 퀴즈 저장소 (localStorage) ---------------- */
 /* 퀴즈 세트 저장소: Firestore quizzes 컬렉션(관리자 전용) — 어느 기기에서든 동일 목록.
