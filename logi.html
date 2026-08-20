@@ -6,6 +6,12 @@
     <title>Course Logiboard</title>
     <link rel="icon" href="favicon.ico" sizes="any" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <!-- 홈 화면 추가(PWA-lite): start_url을 생략해 현재 URL(?course=…)이 그대로 저장되게 한다 -->
+    <link rel="manifest" href="logi.webmanifest" />
+    <meta name="theme-color" content="#1a4d8f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Logiboard" />
+    <link rel="apple-touch-icon" href="icons/logi-192.png" />
     <link rel="stylesheet" href="css/styles.css" />
   </head>
   <body>
@@ -15,7 +21,24 @@
         <p id="lg-sub" class="pad-desc"></p>
         <p id="lg-welcome" class="pad-desc" style="font-weight:600;"></p>
         <p class="pad-privacy">⚠️ Please do not post personal information (full name, phone number, passport number, etc.).</p>
+        <div class="logi-actions">
+          <button type="button" id="lg-a2hs" hidden>📲 Add to Home Screen</button>
+          <button type="button" id="lg-notify" hidden>🔔 Enable notifications</button>
+        </div>
       </header>
+
+      <!-- iOS 홈 화면 추가 안내 (Safari는 설치 프롬프트 미지원) -->
+      <dialog id="lg-ios-guide" class="apply-dialog">
+        <div style="padding:1.2rem 1.3rem;display:flex;flex-direction:column;gap:0.6rem;">
+          <h2 style="margin:0;font-size:1.05rem;">Add to Home Screen</h2>
+          <ol style="margin:0;padding-left:1.2rem;line-height:1.7;font-size:0.9rem;">
+            <li>Tap the <b>Share</b> button <span style="font-size:1.1rem;">⎋</span> at the bottom of Safari</li>
+            <li>Scroll down and tap <b>“Add to Home Screen”</b></li>
+            <li>Tap <b>Add</b> — the Logiboard icon will appear on your home screen</li>
+          </ol>
+          <button type="button" id="lg-ios-close">Close</button>
+        </div>
+      </dialog>
 
       <nav class="logi-tabs" id="lg-tabs"></nav>
 

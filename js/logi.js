@@ -33,6 +33,8 @@ const TABS = [
 ];
 let activeTab = "";
 let wired = false;
+// 새 항목 감지 상태(알림·배지용)
+const seen = { bul: new Set(), poll: new Map(), qna: new Set(), chat: new Set() };
 
 function fail(msg) { $("lg-empty").hidden = false; $("lg-empty").textContent = msg; $("lg-tabs").innerHTML = ""; }
 
@@ -57,8 +59,9 @@ if (!courseId) {
 function renderTabs() {
   const avail = TABS.filter(([, , ok]) => ok(board));
   if (!activeTab || !avail.some(([id]) => id === activeTab)) activeTab = avail[0]?.[0] || "";
+  clearBadge(activeTab);
   $("lg-tabs").innerHTML = avail.map(([id, label]) =>
-    `<button type="button" class="logi-tab${id === activeTab ? " active" : ""}" data-t="${id}">${label}</button>`).join("");
+    `<button type="button" class="logi-tab${id === activeTab ? " active" : ""}" data-t="${id}">${label}${badges[id] ? ` <span class="logi-badge">${badges[id]}</span>` : ""}</button>`).join("");
   $("lg-tabs").querySelectorAll(".logi-tab").forEach((b) =>
     b.addEventListener("click", () => { activeTab = b.dataset.t; renderTabs(); }));
   TABS.forEach(([id]) => { $(`lg-${id}`).hidden = id !== activeTab; });
@@ -89,6 +92,12 @@ onSnapshotSafe(() => courseId && onSnapshot(
   query(collection(db, "logiBulletins"), where("courseId", "==", courseId)), (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (b.pinned - a.pinned) || (b.createdAtMs || 0) - (a.createdAtMs || 0));
+    for (const bl of list) {
+      if (!seen.bul.has(bl.id)) {
+        if ((bl.createdAtMs || 0) > loadedAt) announce("bulletins", "New announcement", bl.title);
+        seen.bul.add(bl.id);
+      }
+    }
     const box = $("lg-bul-body");
     box.innerHTML = list.length ? "" : `<p class="empty">No announcements yet.</p>`;
     for (const bl of list) {
@@ -109,6 +118,15 @@ onSnapshotSafe(() => courseId && onSnapshot(
   query(collection(db, "logiPolls"), where("courseId", "==", courseId)), (snap) => {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (b.open - a.open) || (b.createdAtMs || 0) - (a.createdAtMs || 0));
+    for (const p of list) {
+      const prev = seen.poll.get(p.id);
+      if (!prev) {
+        if ((p.createdAtMs || 0) > loadedAt) announce("polls", "New poll", p.question);
+      } else if (prev.open && !p.open) {
+        announce("polls", "Poll closed — results available", p.question);
+      }
+      seen.poll.set(p.id, { open: !!p.open });
+    }
     const box = $("lg-poll-body");
     box.innerHTML = list.length ? "" : `<p class="empty">No polls yet.</p>`;
     for (const p of list) box.appendChild(pollCard(p));
@@ -151,7 +169,14 @@ function wire() {
   if (!rtdb) return;
   // Q&A: 내 스레드만 구독.
   onValue(ref(rtdb, `logi/${courseId}/qna/${threadKey}`), (snap) => {
-    const msgs = Object.values(snap.val() || {}).sort((a, b) => a.atMs - b.atMs);
+    const entries = Object.entries(snap.val() || {});
+    for (const [mid, m] of entries) {
+      if (!seen.qna.has(mid)) {
+        if (m.from === "staff" && (m.atMs || 0) > loadedAt) announce("qna", "Reply from course staff", m.text);
+        seen.qna.add(mid);
+      }
+    }
+    const msgs = entries.map(([, m]) => m).sort((a, b) => a.atMs - b.atMs);
     const box = $("lg-qna-msgs");
     box.innerHTML = msgs.length ? "" : `<p class="empty">No messages yet — ask us anything about the course, venue, meals, or transportation.</p>`;
     for (const m of msgs) {
@@ -167,7 +192,15 @@ function wire() {
 
   // Group chat.
   onValue(ref(rtdb, `logi/${courseId}/chat`), (snap) => {
-    const msgs = Object.values(snap.val() || {}).sort((a, b) => a.atMs - b.atMs).slice(-150);
+    const entries = Object.entries(snap.val() || {});
+    const myName = localStorage.getItem("logiName") || "";
+    for (const [mid, m] of entries) {
+      if (!seen.chat.has(mid)) {
+        if ((m.atMs || 0) > loadedAt && m.name !== myName) announce("chat", `Chat — ${m.name}`, m.text);
+        seen.chat.add(mid);
+      }
+    }
+    const msgs = entries.map(([, m]) => m).sort((a, b) => a.atMs - b.atMs).slice(-150);
     const box = $("lg-chat-msgs");
     box.innerHTML = msgs.length ? "" : `<p class="empty">No messages yet — say hello! 👋</p>`;
     for (const m of msgs) {
@@ -206,3 +239,54 @@ async function sendChat() {
 
 // 구독 시작 헬퍼(초기 로드 전 courseId 검증용).
 function onSnapshotSafe(fn) { try { fn(); } catch { /* */ } }
+
+/* ── 홈 화면 추가 (PWA-lite) ── */
+let installPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  installPrompt = e;
+  $("lg-a2hs").hidden = false;
+});
+const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+const isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+if (isIos && !isStandalone) $("lg-a2hs").hidden = false;
+$("lg-a2hs").addEventListener("click", async () => {
+  if (installPrompt) {
+    installPrompt.prompt();
+    const r = await installPrompt.userChoice.catch(() => null);
+    if (r?.outcome === "accepted") $("lg-a2hs").hidden = true;
+    installPrompt = null;
+  } else if (isIos) {
+    $("lg-ios-guide").showModal();
+  } else {
+    alert("Use your browser menu → “Add to Home screen” / “Install app”.");
+  }
+});
+$("lg-ios-close").addEventListener("click", () => $("lg-ios-guide").close());
+window.addEventListener("appinstalled", () => { $("lg-a2hs").hidden = true; });
+
+/* ── 알림(페이지·설치 앱이 열려 있을 때) + 탭 미확인 배지 ──
+ * 완전한 푸시(앱 종료 상태)는 FCM이 필요해 미포함 — 열려 있는 동안
+ * 새 공지·투표·운영진 답장·채팅을 브라우저 알림/배지로 표시한다. */
+if ("Notification" in window && Notification.permission === "default") $("lg-notify").hidden = false;
+$("lg-notify").addEventListener("click", async () => {
+  const p = await Notification.requestPermission();
+  if (p !== "default") $("lg-notify").hidden = true;
+});
+
+const loadedAt = Date.now();
+const badges = { bulletins: 0, polls: 0, qna: 0, chat: 0 };
+function notify(title, body) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  try { new Notification(title, { body: String(body || "").slice(0, 120), icon: "icons/logi-192.png" }); } catch { /* */ }
+}
+// 활성 탭이 아니거나 화면이 백그라운드면 배지+알림, 활성 탭이면 조용히.
+function announce(tab, title, body) {
+  const inView = !document.hidden && activeTab === tab;
+  if (inView) return;
+  badges[tab]++;
+  renderTabs();
+  notify(title, body);
+}
+// 탭을 열면 해당 배지 해제.
+function clearBadge(tab) { if (badges[tab]) { badges[tab] = 0; } }
