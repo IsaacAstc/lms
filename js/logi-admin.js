@@ -32,6 +32,7 @@ export function initLogiAdmin() {
   document.getElementById("logi-bul-add").addEventListener("click", addBulletin);
   document.getElementById("logi-poll-add").addEventListener("click", addPoll);
   document.getElementById("logi-qna-send").addEventListener("click", sendQnaReply);
+  document.getElementById("logi-qr-close").addEventListener("click", () => document.getElementById("logi-qr-dialog").close());
   document.addEventListener("tabshown", (e) => { if (e.detail === "logi") loadCourseOptions(); });
 
   unsubs.boards = onSnapshot(collection(db, "logiBoards"), (snap) => {
@@ -105,6 +106,7 @@ function renderBoards() {
       <td class="actions">
         <a href="${esc(logiUrl(b.id))}" target="_blank" rel="noopener" class="btn-link">열기</a>
         <button type="button" class="l-copy">URL 복사</button>
+        <button type="button" class="l-qr">QR</button>
       </td>
       <td class="actions">
         <button type="button" class="l-manage">관리</button>
@@ -140,9 +142,36 @@ function renderBoards() {
         if (currentBoard?.id === b.id) closeManage();
       } catch (e) { alert("삭제 실패: " + e.message); }
     });
+    tr.querySelector(".l-qr").addEventListener("click", () => showQr(b));
     tr.querySelector(".l-manage").addEventListener("click", () => openManage(b));
     tbody.appendChild(tr);
   }
+}
+
+// ── QR 표시 (라이브러리는 최초 사용 시 지연 로드 — scfe·수업보드와 공유) ──
+let qrLibLoading = null;
+function loadQrLib() {
+  if (typeof QRCode !== "undefined") return Promise.resolve();
+  if (!qrLibLoading) {
+    qrLibLoading = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "scfe/js/qrcode.min.js";
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("QR 라이브러리를 불러오지 못했습니다."));
+      document.head.appendChild(s);
+    });
+  }
+  return qrLibLoading;
+}
+async function showQr(b) {
+  try { await loadQrLib(); } catch (e) { return alert(e.message); }
+  const url = logiUrl(b.id);
+  document.getElementById("logi-qr-title").textContent = b.titleEn || "Logiboard";
+  document.getElementById("logi-qr-url").textContent = url;
+  const box = document.getElementById("logi-qr-box");
+  box.innerHTML = "";
+  new QRCode(box, { text: url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  document.getElementById("logi-qr-dialog").showModal();
 }
 
 function closeManage() {
