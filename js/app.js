@@ -39,16 +39,13 @@ let initialized = false;
 
 // 상단 그룹(1단계) → 서브탭(2단계). 패널은 기존 그대로(data-tab)이며 표시만 제어.
 const TAB_GROUPS = [
-  { id: "courses", label: "차수·시간표", tabs: [["courses", ""]] },
-  { id: "master", label: "마스터", tabs: [["programs", "과정 커리큘럼"], ["rooms", "강의실"], ["instructors", "강사"]] },
+  { id: "operate", label: "교육 운영", tabs: [["courses", "차수·시간표"], ["programs", "과정 커리큘럼"], ["rooms", "강의실"], ["instructors", "강사"]] },
   { id: "finance", label: "강사료·경비", tabs: [["payroll", "강사료·집계"], ["expenses", "소요경비"]] },
-  { id: "surveys", label: "설문 관리", tabs: [["surveys", ""]] },
-  { id: "survey-result", label: "설문 결과", tabs: [["reports", "설문 집계"], ["freetext", "주관식 원문"]] },
-  { id: "stats", label: "통계", tabs: [["stats", ""]] },
-  { id: "reportdoc", label: "운영 보고서", tabs: [["reportdoc", ""]] },
-  { id: "site", label: "현장 안내", tabs: [["rentals", ""]] },
+  { id: "surveys", label: "설문", tabs: [["surveys", "설문 관리"], ["reports", "설문 집계"], ["freetext", "주관식 원문"]] },
+  { id: "stats", label: "통계·보고서", tabs: [["stats", "통계 대시보드"], ["reportdoc", "운영 보고서"]] },
+  { id: "site", label: "현장·공개", tabs: [["board", "공개 현황 보드"], ["rentals", "현장 안내(DID)"]] },
   { id: "class", label: "수업 지원", tabs: [["pad", "수업 보드"], ["logi", "ICAO 로지보드"]] },
-  { id: "admin", label: "설정", tabs: [["settings", "기준값 설정"], ["admins", "관리자 계정"], ["data", "데이터 관리"], ["board", "공개 현황 보드"], ["orgs", "기관 관리"]] },
+  { id: "admin", label: "설정", tabs: [["settings", "기준값 설정"], ["admins", "관리자 계정"], ["data", "데이터 관리"], ["orgs", "기관 관리"]] },
 ];
 // 마스터 전용 탭(일반 관리자에게는 숨김 — 실제 차단은 firestore.rules).
 const MASTER_ONLY_TABS = new Set(["data", "orgs"]);

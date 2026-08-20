@@ -1,27 +1,41 @@
-// ICAO Course Logiboard — 참가자(공개) 페이지. 영어 전용, 로그인 없음, 개인정보 미수집.
+// ICAO Course Logiboard — 참가자(공개) 페이지. 영어 전용, 개인정보 미수집.
 // Schedule/Bulletins/Polls는 Firestore, Q&A/Chat은 RTDB 실시간.
+// 계정(선택): 아이디+비밀번호 가상 계정(내부 id@trainee.local, 이메일 미수집).
+//  - 관리자 세션과 분리하기 위해 이름 붙은 보조 앱("logi-trainee")의 Auth를 쓴다.
+//  - RTDB도 보조 앱 인스턴스를 사용해 trainee 인증이 요청에 실리게 한다(본인 메시지 수정·삭제 규칙).
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   collection, doc, onSnapshot, updateDoc, query, where,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  getDatabase, ref, onValue, push, set,
+  getDatabase, ref, onValue, push, set, update, remove,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { db, app } from "./firebase.js";
+import {
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { db, activeConfig } from "./firebase.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const courseId = new URLSearchParams(location.search).get("course") || "";
 
+// 보조 앱: 로그인 세션이 기본 앱(관리자)과 공유되지 않는다(persistence 키에 앱 이름 포함).
+const traineeApp = initializeApp(activeConfig, "logi-trainee");
+const tAuth = getAuth(traineeApp);
 let rtdb = null;
-try { rtdb = getDatabase(app); } catch { /* 메신저 비활성 */ }
+try { rtdb = getDatabase(traineeApp); } catch { /* 메신저 비활성 */ }
 
-// 기기 키: Q&A 스레드 식별용 무작위 문자열(개인정보 아님).
+// 기기 키: 비로그인 Q&A 스레드 식별용 무작위 문자열(개인정보 아님).
 const TK = "logiThreadKey";
-let threadKey = localStorage.getItem(TK);
-if (!threadKey) {
-  threadKey = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(36).padStart(2, "0")).join("").slice(0, 24);
-  localStorage.setItem(TK, threadKey);
+let deviceKey = localStorage.getItem(TK);
+if (!deviceKey) {
+  deviceKey = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(36).padStart(2, "0")).join("").slice(0, 24);
+  localStorage.setItem(TK, deviceKey);
 }
+
+// 현재 계정(null = 게스트). 로그인 시 Q&A 스레드는 uid, 메시지에 uid를 실어 수정·삭제 가능.
+let me = null; // { uid, id }
+let threadKey = deviceKey;
 
 let board = null;
 const TABS = [
@@ -164,11 +178,101 @@ function pollCard(p) {
   return div;
 }
 
+/* ── 계정 (가상 ID — 이메일 미수집) ── */
+const ID_RE = /^[a-z0-9](?:[a-z0-9._-]{1,18})[a-z0-9]$/;
+const traineeEmail = (id) => `${id}@trainee.local`;
+let accMode = "in"; // in | up
+
+function updateAccountUi() {
+  $("lg-account").hidden = !!me;
+  $("lg-me").hidden = !me;
+  $("lg-signout").hidden = !me;
+  if (me) {
+    $("lg-me").textContent = `👤 ${me.id}`;
+    if (!$("lg-chat-name").value) $("lg-chat-name").value = me.id.slice(0, 20);
+  }
+}
+
+function accError(e) {
+  const c = e?.code || "";
+  if (c.includes("email-already-in-use")) return "This ID is already taken. Please choose another.";
+  if (c.includes("weak-password")) return "Password must be at least 6 characters.";
+  if (c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found")) return "Wrong ID or password. (Lost passwords cannot be recovered — create a new account.)";
+  if (c.includes("too-many-requests")) return "Too many attempts. Please try again later.";
+  if (c.includes("operation-not-allowed") || c.includes("admin-restricted")) return "Account sign-up is currently disabled. Please contact the course staff.";
+  return e?.message || String(e);
+}
+
+function setAccMode(m) {
+  accMode = m;
+  $("lg-acc-title").textContent = m === "up" ? "Create an account" : "Sign in";
+  $("lg-acc-submit").textContent = m === "up" ? "Create account" : "Sign in";
+  $("lg-acc-switch").textContent = m === "up" ? "I already have an account" : "Create an account";
+  $("lg-acc-err").hidden = true;
+}
+
+$("lg-account").addEventListener("click", () => { setAccMode("in"); $("lg-account-dialog").showModal(); });
+$("lg-acc-switch").addEventListener("click", () => setAccMode(accMode === "up" ? "in" : "up"));
+$("lg-acc-close").addEventListener("click", () => $("lg-account-dialog").close());
+$("lg-acc-submit").addEventListener("click", async () => {
+  const id = $("lg-acc-id").value.trim().toLowerCase();
+  const pw = $("lg-acc-pw").value;
+  const err = $("lg-acc-err");
+  err.hidden = true;
+  if (!ID_RE.test(id)) { err.textContent = "ID must be 3–20 characters: letters, numbers, . _ - (start/end with a letter or number)."; err.hidden = false; return; }
+  if (pw.length < 6) { err.textContent = "Password must be at least 6 characters."; err.hidden = false; return; }
+  $("lg-acc-submit").disabled = true;
+  try {
+    if (accMode === "up") await createUserWithEmailAndPassword(tAuth, traineeEmail(id), pw);
+    else await signInWithEmailAndPassword(tAuth, traineeEmail(id), pw);
+    $("lg-acc-pw").value = "";
+    $("lg-account-dialog").close();
+  } catch (e) { err.textContent = accError(e); err.hidden = false; }
+  $("lg-acc-submit").disabled = false;
+});
+$("lg-signout").addEventListener("click", () => { if (confirm("Sign out?")) signOut(tAuth).catch(() => {}); });
+
+onAuthStateChanged(tAuth, (u) => {
+  const isTrainee = u && (u.email || "").endsWith("@trainee.local");
+  me = isTrainee ? { uid: u.uid, id: (u.email || "").split("@")[0] } : null;
+  threadKey = me ? me.uid : deviceKey;
+  updateAccountUi();
+  if (wired) { subscribeQna(); renderChat(); }
+});
+
 /* ── Q&A (1:1) + Group Chat — RTDB ── */
-function wire() {
+let qnaUnsub = null;
+let chatEntries = []; // 마지막 스냅샷 [mid, m] — 로그인 상태 변화 시 재렌더용
+
+// 본인 메시지 수정·삭제(로그인 시 uid 일치 메시지만 — RTDB 규칙에서도 검증).
+function ownTools(path, m) {
+  const wrap = document.createElement("span");
+  wrap.className = "logi-msg-tools";
+  const eBtn = document.createElement("button");
+  eBtn.type = "button"; eBtn.className = "pad-mini"; eBtn.textContent = "✎"; eBtn.title = "Edit";
+  eBtn.addEventListener("click", async () => {
+    const t = prompt("Edit your message:", m.text);
+    if (t == null) return;
+    const text = t.trim().slice(0, 500);
+    if (!text) return alert("Message cannot be empty. Use 🗑 to delete instead.");
+    try { await update(ref(rtdb, path), { text, edited: true }); }
+    catch (e) { alert("Edit failed: " + (e.message || e)); }
+  });
+  const dBtn = document.createElement("button");
+  dBtn.type = "button"; dBtn.className = "pad-mini"; dBtn.textContent = "🗑"; dBtn.title = "Delete";
+  dBtn.addEventListener("click", async () => {
+    if (!confirm("Delete this message?")) return;
+    try { await remove(ref(rtdb, path)); }
+    catch (e) { alert("Delete failed: " + (e.message || e)); }
+  });
+  wrap.append(eBtn, dBtn);
+  return wrap;
+}
+
+function subscribeQna() {
   if (!rtdb) return;
-  // Q&A: 내 스레드만 구독.
-  onValue(ref(rtdb, `logi/${courseId}/qna/${threadKey}`), (snap) => {
+  if (qnaUnsub) { qnaUnsub(); qnaUnsub = null; }
+  const off = onValue(ref(rtdb, `logi/${courseId}/qna/${threadKey}`), (snap) => {
     const entries = Object.entries(snap.val() || {});
     for (const [mid, m] of entries) {
       if (!seen.qna.has(mid)) {
@@ -176,40 +280,53 @@ function wire() {
         seen.qna.add(mid);
       }
     }
-    const msgs = entries.map(([, m]) => m).sort((a, b) => a.atMs - b.atMs);
+    const msgs = entries.map(([mid, m]) => ({ mid, ...m })).sort((a, b) => a.atMs - b.atMs);
     const box = $("lg-qna-msgs");
-    box.innerHTML = msgs.length ? "" : `<p class="empty">No messages yet — ask us anything about the course, venue, meals, or transportation.</p>`;
+    box.innerHTML = msgs.length ? "" : `<p class="empty">No messages yet — ask us anything about the course, venue, meals, or transportation.${me ? "" : " Sign in to keep this conversation when you switch devices."}</p>`;
     for (const m of msgs) {
       const div = document.createElement("div");
       div.className = `logi-msg ${m.from}`;
-      div.innerHTML = `<b>${m.from === "staff" ? "Staff" : "You"}</b> ${esc(m.text)}`;
+      div.innerHTML = `<b>${m.from === "staff" ? "Staff" : "You"}</b> ${esc(m.text)}${m.edited ? ` <small class="logi-edited">(edited)</small>` : ""}`;
+      if (me && m.uid === me.uid) div.appendChild(ownTools(`logi/${courseId}/qna/${threadKey}/${m.mid}`, m));
       box.appendChild(div);
     }
     box.scrollTop = box.scrollHeight;
   });
+  qnaUnsub = () => off();
+}
+
+function renderChat() {
+  const msgs = chatEntries.map(([mid, m]) => ({ mid, ...m })).sort((a, b) => a.atMs - b.atMs).slice(-150);
+  const box = $("lg-chat-msgs");
+  box.innerHTML = msgs.length ? "" : `<p class="empty">No messages yet — say hello! 👋</p>`;
+  for (const m of msgs) {
+    const div = document.createElement("div");
+    div.className = "logi-msg" + (me && m.uid === me.uid ? " mine" : "");
+    div.innerHTML = `<b>${esc(m.name)}</b> ${esc(m.text)}${m.edited ? ` <small class="logi-edited">(edited)</small>` : ""}`;
+    if (me && m.uid === me.uid) div.appendChild(ownTools(`logi/${courseId}/chat/${m.mid}`, m));
+    box.appendChild(div);
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+function wire() {
+  updateAccountUi();
+  if (!rtdb) return;
+  subscribeQna();
   $("lg-qna-send").addEventListener("click", sendQna);
   $("lg-qna-input").addEventListener("keydown", (e) => { if (e.key === "Enter") sendQna(); });
 
   // Group chat.
   onValue(ref(rtdb, `logi/${courseId}/chat`), (snap) => {
-    const entries = Object.entries(snap.val() || {});
+    chatEntries = Object.entries(snap.val() || {});
     const myName = localStorage.getItem("logiName") || "";
-    for (const [mid, m] of entries) {
+    for (const [mid, m] of chatEntries) {
       if (!seen.chat.has(mid)) {
         if ((m.atMs || 0) > loadedAt && m.name !== myName) announce("chat", `Chat — ${m.name}`, m.text);
         seen.chat.add(mid);
       }
     }
-    const msgs = entries.map(([, m]) => m).sort((a, b) => a.atMs - b.atMs).slice(-150);
-    const box = $("lg-chat-msgs");
-    box.innerHTML = msgs.length ? "" : `<p class="empty">No messages yet — say hello! 👋</p>`;
-    for (const m of msgs) {
-      const div = document.createElement("div");
-      div.className = "logi-msg";
-      div.innerHTML = `<b>${esc(m.name)}</b> ${esc(m.text)}`;
-      box.appendChild(div);
-    }
-    box.scrollTop = box.scrollHeight;
+    renderChat();
   });
   $("lg-chat-name").value = localStorage.getItem("logiName") || "";
   $("lg-chat-send").addEventListener("click", sendChat);
@@ -221,7 +338,9 @@ async function sendQna() {
   const text = input.value.trim().slice(0, 500);
   if (!text) return;
   input.value = "";
-  try { await set(push(ref(rtdb, `logi/${courseId}/qna/${threadKey}`)), { from: "trainee", text, atMs: Date.now() }); }
+  const msg = { from: "trainee", text, atMs: Date.now() };
+  if (me) msg.uid = me.uid;
+  try { await set(push(ref(rtdb, `logi/${courseId}/qna/${threadKey}`)), msg); }
   catch (e) { alert("Send failed: " + (e.message || e)); input.value = text; }
 }
 
@@ -233,7 +352,9 @@ async function sendChat() {
   if (!text) return;
   localStorage.setItem("logiName", name);
   input.value = "";
-  try { await set(push(ref(rtdb, `logi/${courseId}/chat`)), { name, text, atMs: Date.now() }); }
+  const msg = { name, text, atMs: Date.now() };
+  if (me) msg.uid = me.uid;
+  try { await set(push(ref(rtdb, `logi/${courseId}/chat`)), msg); }
   catch (e) { alert("Send failed: " + (e.message || e)); input.value = text; }
 }
 
