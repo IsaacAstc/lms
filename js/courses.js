@@ -194,12 +194,16 @@ export function boardFields(data) {
     startDate: data.startDate || "", endDate: data.endDate || "", venue: data.venue || "",
     capacity: data.capacity || 0, appliedCount: data.appliedCount || 0,
     remaining: Math.max(0, (data.capacity || 0) - (data.appliedCount || 0)),
-    hasEvaluation: !!data.hasEvaluation, planned: !!data.planned, updatedAtMs: Date.now(),
+    hasEvaluation: !!data.hasEvaluation, planned: !!data.planned,
+    // 비공개 운영 유형(특별·재교육): 공개 현황 보드에는 숨기고 현장 안내 DID에만 표시.
+    didOnly: BOARD_EXCLUDED_TYPES.includes(data.courseType || ""),
+    updatedAtMs: Date.now(),
   };
 }
-// 공개 보드 게시 제외 대상: 숨김 처리했거나, 비공개 운영 과정유형(특별·재교육 등).
+// 공개 게시 제외 대상: 숨김 처리한 차수만(어디에도 미게시).
+// 특별·재교육은 didOnly 플래그로 게시된다(보드 숨김·DID 표시).
 export function isBoardExcluded(data) {
-  return !!data.hidden || BOARD_EXCLUDED_TYPES.includes(data.courseType || "");
+  return !!data.hidden;
 }
 
 // 공개 보드 미러. 실패는 호출부에서 처리(조용히 삼키면 숨김이 안 먹힌 채 노출될 수 있음).
