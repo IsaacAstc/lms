@@ -804,7 +804,10 @@
               <label class="chk"><input id="logi-bul-pin" type="checkbox" /> 상단 고정</label>
             </div>
             <textarea id="logi-bul-text" rows="3" maxlength="2000" placeholder="내용(영문)"></textarea>
-            <div class="form-actions"><button id="logi-bul-add" type="button">공지 등록</button></div>
+            <div class="form-actions">
+              <button id="logi-bul-add" type="button">공지 등록</button>
+              <button id="logi-bul-cancel" type="button" hidden>수정 취소</button>
+            </div>
             <div class="table-wrap"><table>
               <thead><tr><th></th><th>제목</th><th>등록</th><th>관리</th></tr></thead>
               <tbody id="logi-bul-body"></tbody>
@@ -820,7 +823,10 @@
               </select></label>
             </div>
             <textarea id="logi-poll-opts" rows="3" placeholder="보기 입력 — 한 줄에 하나씩 (최대 8개)"></textarea>
-            <div class="form-actions"><button id="logi-poll-add" type="button">투표 등록</button></div>
+            <div class="form-actions">
+              <button id="logi-poll-add" type="button">투표 등록</button>
+              <button id="logi-poll-cancel" type="button" hidden>수정 취소</button>
+            </div>
             <div id="logi-poll-list"></div>
 
             <h3>Q&amp;A 수신함 (1:1 운영지원 문의)</h3>
