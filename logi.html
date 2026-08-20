@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Course Logiboard</title>
+    <link rel="icon" href="favicon.ico" sizes="any" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <main class="pad-main">
+      <header class="pad-header">
+        <h1 id="lg-title">Course Logiboard</h1>
+        <p id="lg-sub" class="pad-desc"></p>
+        <p id="lg-welcome" class="pad-desc" style="font-weight:600;"></p>
+        <p class="pad-privacy">⚠️ Please do not post personal information (full name, phone number, passport number, etc.).</p>
+      </header>
+
+      <nav class="logi-tabs" id="lg-tabs"></nav>
+
+      <section id="lg-schedule" class="logi-panel" hidden>
+        <div id="lg-schedule-body"></div>
+      </section>
+
+      <section id="lg-bulletins" class="logi-panel" hidden>
+        <div id="lg-bul-body"></div>
+      </section>
+
+      <section id="lg-polls" class="logi-panel" hidden>
+        <div id="lg-poll-body"></div>
+      </section>
+
+      <section id="lg-qna" class="logi-panel" hidden>
+        <p class="hint">Private support channel — only you and the course staff can see this conversation.</p>
+        <div id="lg-qna-msgs" class="logi-chatbox"></div>
+        <div class="load-row">
+          <input id="lg-qna-input" style="flex:1;min-width:200px" maxlength="500" placeholder="Ask the course staff anything…" />
+          <button id="lg-qna-send" type="button">Send</button>
+        </div>
+      </section>
+
+      <section id="lg-chat" class="logi-panel" hidden>
+        <div id="lg-chat-msgs" class="logi-chatbox"></div>
+        <div class="load-row">
+          <input id="lg-chat-name" style="width:9rem" maxlength="20" placeholder="Display name" />
+          <input id="lg-chat-input" style="flex:1;min-width:180px" maxlength="500" placeholder="Message to everyone…" />
+          <button id="lg-chat-send" type="button">Send</button>
+        </div>
+      </section>
+
+      <p id="lg-empty" class="empty">Loading…</p>
+    </main>
+    <script type="module" src="js/logi.js"></script>
+  </body>
+</html>
