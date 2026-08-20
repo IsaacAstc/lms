@@ -114,7 +114,10 @@ service cloud.firestore {
       allow write: if (docId == 'dataPolicy' || docId == 'courseTypes') ? isMaster()
         : docId == 'apply' ? canTab('board')
         : docId == 'surveyCategories' ? canTab('freetext')
+        : docId == 'logiPush' ? canTab('logi')
         : canTab('settings');
+      // 로지보드 푸시 공개키(VAPID public key — 원래 공개값): 참가자 페이지가 읽는다.
+      allow read: if docId == 'logiPush';
     }
 
     // 소요경비(월별): 관리자 전용.
@@ -228,6 +231,18 @@ service cloud.firestore {
       allow update: if canTab('logi')
         || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes'])
             && resource.data.get('open', true) == true);
+    }
+
+    // 푸시 토큰(FCM): 참가자 기기가 자기 토큰을 등록·갱신·해제한다(문서ID=토큰 — 토큰을 아는
+    // 본인 기기만 조작 가능). 목록 읽기는 관리자만(발송은 Cloud Function이 Admin SDK로 조회).
+    match /logiTokens/{token} {
+      allow read: if isAdmin();
+      allow create, update: if request.resource.data.keys().hasOnly(['token', 'courseId', 'threadKey', 'createdAtMs', 'updatedAtMs'])
+        && request.resource.data.token == token
+        && request.resource.data.token is string && request.resource.data.token.size() >= 20 && request.resource.data.token.size() <= 4096
+        && request.resource.data.courseId is string && request.resource.data.courseId.size() <= 100
+        && request.resource.data.get('threadKey', '') is string && request.resource.data.get('threadKey', '').size() <= 60;
+      allow delete: if true;
     }
 
     // ── 수업 보드(협업 게시판, 패들렛 벤치마킹) ──

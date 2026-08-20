@@ -9,12 +9,20 @@ import {
 import {
   getDatabase, ref, onValue, push, remove, set,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 import { db, app } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import { orgQuery } from "./orgs.js";
 
 let rtdb = null;
 try { rtdb = getDatabase(app); } catch { /* databaseURL 미설정 — 메신저만 비활성 */ }
+
+// FCM 푸시: 관리자 조작(공지·투표·답장) 직후 sendLogiPush 함수로 발송(실패해도 본 작업엔 영향 없음).
+const fns = getFunctions(app, "asia-northeast3");
+function pushNotify(courseId, title, body, threadKey) {
+  httpsCallable(fns, "sendLogiPush")({ courseId, title, body: String(body || "").slice(0, 200), threadKey: threadKey || "", link: logiUrl(courseId) })
+    .catch((e) => console.warn("푸시 발송 실패(무시):", e.message || e));
+}
 
 let boards = [];
 let currentBoard = null; // 상세 관리 중인 보드
@@ -33,8 +41,9 @@ export function initLogiAdmin() {
   document.getElementById("logi-poll-add").addEventListener("click", addPoll);
   document.getElementById("logi-qna-send").addEventListener("click", sendQnaReply);
   document.getElementById("logi-period-save").addEventListener("click", savePeriod);
+  document.getElementById("logi-vapid-save").addEventListener("click", saveVapidKey);
   document.getElementById("logi-qr-close").addEventListener("click", () => document.getElementById("logi-qr-dialog").close());
-  document.addEventListener("tabshown", (e) => { if (e.detail === "logi") loadCourseOptions(); });
+  document.addEventListener("tabshown", (e) => { if (e.detail === "logi") { loadCourseOptions(); loadVapidKey(); } });
 
   unsubs.boards = onSnapshot(collection(db, "logiBoards"), (snap) => {
     boards = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
@@ -134,7 +143,7 @@ function renderBoards() {
     tr.querySelector(".l-del").addEventListener("click", async () => {
       if (!confirm(`'${b.titleEn}' 로지보드와 공지·투표·메시지 전체를 삭제할까요? 복구할 수 없습니다.`)) return;
       try {
-        for (const col of ["logiBulletins", "logiPolls"]) {
+        for (const col of ["logiBulletins", "logiPolls", "logiTokens"]) {
           const s = await getDocs(query(collection(db, col), where("courseId", "==", b.id)));
           for (const d of s.docs) await deleteDoc(d.ref);
         }
@@ -232,8 +241,12 @@ function openManage(b) {
           <button type="button" class="q-toggle">${p.open ? "마감" : "다시 열기"}</button>
           <button type="button" class="del q-del">삭제</button>
         </div>`;
-      div.querySelector(".q-toggle").addEventListener("click", () =>
-        updateDoc(doc(db, "logiPolls", p.id), { open: !p.open }).catch((e) => alert(e.message)));
+      div.querySelector(".q-toggle").addEventListener("click", async () => {
+        try {
+          await updateDoc(doc(db, "logiPolls", p.id), { open: !p.open });
+          if (p.open) pushNotify(b.id, "Poll closed — results available", p.question);
+        } catch (e) { alert(e.message); }
+      });
       div.querySelector(".q-del").addEventListener("click", () => {
         if (confirm("이 투표를 삭제할까요?")) deleteDoc(doc(db, "logiPolls", p.id)).catch((e) => alert(e.message));
       });
@@ -309,6 +322,7 @@ async function addBulletin() {
     });
     ["logi-bul-title", "logi-bul-text", "logi-bul-link"].forEach((id) => { document.getElementById(id).value = ""; });
     document.getElementById("logi-bul-pin").checked = false;
+    pushNotify(currentBoard.id, "New announcement", title);
   } catch (e) { alert("공지 등록 실패: " + e.message); }
 }
 
@@ -328,7 +342,23 @@ async function addPoll() {
     });
     document.getElementById("logi-poll-q").value = "";
     document.getElementById("logi-poll-opts").value = "";
+    pushNotify(currentBoard.id, "New poll", question);
   } catch (e) { alert("투표 등록 실패: " + e.message); }
+}
+
+// 푸시 VAPID 공개키(settings/logiPush — 공개 읽기, 원래 공개값).
+async function loadVapidKey() {
+  try {
+    const s = await getDoc(doc(db, "settings", "logiPush"));
+    document.getElementById("logi-vapid").value = s.exists() ? (s.data().vapidKey || "") : "";
+  } catch { /* */ }
+}
+async function saveVapidKey() {
+  const vapidKey = document.getElementById("logi-vapid").value.trim();
+  try {
+    await setDoc(doc(db, "settings", "logiPush"), { vapidKey, updatedAtMs: Date.now() });
+    alert(vapidKey ? "푸시 키를 저장했습니다." : "푸시 키를 비웠습니다(푸시 비활성).");
+  } catch (e) { alert("저장 실패: " + e.message); }
 }
 
 // 운영기간 수정: 교육기간 전후로도 보드를 운영하는 경우가 많아 차수와 독립적으로 조정한다.
@@ -354,5 +384,6 @@ async function sendQnaReply() {
   try {
     await set(push(ref(rtdb, `logi/${currentBoard.id}/qna/${tid}`)), { from: "staff", text, atMs: Date.now() });
     document.getElementById("logi-qna-text").value = "";
+    pushNotify(currentBoard.id, "Reply from course staff", text, tid);
   } catch (e) { alert("발송 실패: " + e.message); }
 }

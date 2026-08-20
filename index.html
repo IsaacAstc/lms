@@ -763,6 +763,14 @@
             <button id="logi-activate" type="button">로지보드 만들기</button>
           </div>
 
+          <h3>푸시 알림 설정 (FCM)</h3>
+          <p class="hint">Firebase 콘솔 → 프로젝트 설정 → 클라우드 메시징 → <b>웹 푸시 인증서</b>의 '키 쌍(VAPID 공개키)' 값을 저장하세요.
+            저장 후 참가자가 기기에서 알림을 켜면, 새 공지·투표·마감·Q&amp;A 답장이 <b>앱이 닫혀 있어도</b> 푸시로 전달됩니다(iPhone은 홈 화면 추가 후 수신).</p>
+          <div class="load-row">
+            <input id="logi-vapid" style="flex:1;min-width:280px" placeholder="VAPID 공개키(키 쌍) — 미설정 시 푸시 비활성" />
+            <button id="logi-vapid-save" type="button">푸시 키 저장</button>
+          </div>
+
           <h3>활성 로지보드</h3>
           <div class="table-wrap"><table>
             <thead><tr><th>과정(영문)</th><th>기간</th><th>기능</th><th>공유</th><th>관리</th></tr></thead>
