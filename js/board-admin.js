@@ -41,7 +41,7 @@ async function load() {
 // 보드 미러 필드 비교(updatedAtMs 제외).
 function boardDiffers(a, b) {
   const keys = ["code", "name", "courseType", "round", "startDate", "endDate", "venue", "capacity", "appliedCount", "remaining"];
-  const boolKeys = ["hasEvaluation", "planned"]; // 미설정(undefined)과 false는 같은 값으로 취급.
+  const boolKeys = ["hasEvaluation", "planned", "didOnly"]; // 미설정(undefined)과 false는 같은 값으로 취급.
   return keys.some((k) => (a?.[k] ?? "") !== (b[k] ?? ""))
     || boolKeys.some((k) => !!a?.[k] !== !!b[k]);
 }
@@ -57,7 +57,7 @@ async function autoSync() {
     ]);
     const boardById = {};
     bsnap.docs.forEach((d) => { if (!d.id.startsWith("__")) boardById[d.id] = d.data(); });
-    // 숨김 차수·비공개 과정유형은 게시 대상에서 제외(보드에 있으면 제거).
+    // 숨김 차수만 게시 대상에서 제외(특별·재교육은 didOnly 플래그로 게시 — 보드 숨김·DID 표시).
     const visible = csnap.docs.filter((d) => !isBoardExcluded(d.data()));
     const visibleIds = new Set(visible.map((d) => d.id));
     const toWrite = visible.filter((d) => { const cur = boardById[d.id]; return !cur || boardDiffers(cur, boardFields(d.data())); });
@@ -72,8 +72,8 @@ async function autoSync() {
       stale.slice(i, i + 450).forEach((d) => batch.delete(d.ref));
       await batch.commit();
     }
-    const hiddenCount = csnap.size - visible.length; // 숨김 + 비공개 과정유형
-    log.textContent = `게시 ${visible.length}건` + (hiddenCount ? ` (숨김·비공개유형 ${hiddenCount}건 제외)` : "") +
+    const hiddenCount = csnap.size - visible.length; // 숨김 처리분
+    log.textContent = `게시 ${visible.length}건` + (hiddenCount ? ` (숨김 ${hiddenCount}건 제외)` : "") +
       (toWrite.length || stale.length ? ` · 자동 반영: 갱신 ${toWrite.length}건${stale.length ? `, 정리 ${stale.length}건` : ""}` : " · 최신 상태");
   } catch (e) { log.textContent = "현황 확인 실패: " + e.message; }
 }
@@ -177,8 +177,8 @@ async function syncAll(force) {
       stale.slice(i, i + 450).forEach((d) => batch.delete(d.ref));
       await batch.commit();
     }
-    const hiddenCount = csnap.size - visible.length; // 숨김 + 비공개 과정유형
-    log.textContent = `동기화 완료: 게시 ${visible.length}건` + (hiddenCount ? ` (숨김·비공개유형 ${hiddenCount}건 제외)` : "") + (stale.length ? `, 정리 ${stale.length}건` : "");
+    const hiddenCount = csnap.size - visible.length; // 숨김 처리분
+    log.textContent = `동기화 완료: 게시 ${visible.length}건` + (hiddenCount ? ` (숨김 ${hiddenCount}건 제외)` : "") + (stale.length ? `, 정리 ${stale.length}건` : "");
   } catch (e) { log.textContent = "동기화 실패: " + e.message; }
   finally { btn.disabled = false; }
 }
