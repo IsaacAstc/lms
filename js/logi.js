@@ -60,7 +60,8 @@ if (!courseId) {
     board = snap.data();
     $("lg-title").textContent = board.titleEn || "Course Logiboard";
     document.title = board.titleEn || "Course Logiboard";
-    $("lg-sub").textContent = [board.startDate && `${board.startDate} ~ ${board.endDate}`, board.venue].filter(Boolean).join(" · ");
+    // 장소는 영문 표기(venueEn) 우선 — 미입력 시 차수 원본(venue)으로 폴백.
+    $("lg-sub").textContent = [board.startDate && `${board.startDate} ~ ${board.endDate}`, board.venueEn || board.venue].filter(Boolean).join(" · ");
     $("lg-welcome").textContent = board.welcome || "";
     if (board.active === false) return fail("This course board has been closed. Thank you for participating!");
     $("lg-empty").hidden = true;
