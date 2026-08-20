@@ -32,6 +32,7 @@ export function initLogiAdmin() {
   document.getElementById("logi-bul-add").addEventListener("click", addBulletin);
   document.getElementById("logi-poll-add").addEventListener("click", addPoll);
   document.getElementById("logi-qna-send").addEventListener("click", sendQnaReply);
+  document.getElementById("logi-period-save").addEventListener("click", savePeriod);
   document.getElementById("logi-qr-close").addEventListener("click", () => document.getElementById("logi-qr-dialog").close());
   document.addEventListener("tabshown", (e) => { if (e.detail === "logi") loadCourseOptions(); });
 
@@ -184,6 +185,8 @@ function openManage(b) {
   currentBoard = b;
   document.getElementById("logi-manage").hidden = false;
   document.getElementById("logi-manage-title").textContent = `'${b.titleEn}' 관리`;
+  document.getElementById("logi-period-start").value = b.startDate || "";
+  document.getElementById("logi-period-end").value = b.endDate || "";
   document.getElementById("logi-manage").scrollIntoView({ behavior: "smooth" });
 
   // 공지 목록
@@ -260,7 +263,7 @@ function openManage(b) {
       const needReply = t.last?.from === "trainee";
       div.innerHTML = `<b>${needReply ? "🔴 " : ""}스레드 ${esc(t.tid.slice(0, 6))}…</b> <small>${fmtWhen(t.last?.atMs)}</small>
         <div class="logi-msgs">${t.msgs.slice(-20).map((m) =>
-          `<div class="logi-msg ${m.from}"><b>${m.from === "staff" ? "Staff" : "Trainee"}</b> ${esc(m.text)}</div>`).join("")}</div>
+          `<div class="logi-msg ${m.from}"><b>${m.from === "staff" ? "Staff" : "Trainee"}</b> ${esc(m.text)}${m.edited ? ` <small class="logi-edited">(수정됨)</small>` : ""}</div>`).join("")}</div>
         <button type="button" class="t-reply">답장</button>`;
       div.querySelector(".t-reply").addEventListener("click", () => {
         document.getElementById("logi-qna-target").value = t.tid;
@@ -280,7 +283,7 @@ function openManage(b) {
     for (const m of msgs) {
       const div = document.createElement("div");
       div.className = "logi-msg";
-      div.innerHTML = `<b>${esc(m.name)}</b> ${esc(m.text)} <small>${fmtWhen(m.atMs)}</small>
+      div.innerHTML = `<b>${esc(m.name)}</b> ${esc(m.text)}${m.edited ? ` <small class="logi-edited">(수정됨)</small>` : ""} <small>${fmtWhen(m.atMs)}</small>
         <button type="button" class="pad-mini c-del">삭제</button>`;
       div.querySelector(".c-del").addEventListener("click", () => {
         if (confirm("이 메시지를 삭제할까요?")) remove(ref(rtdb, `logi/${b.id}/chat/${m.mid}`)).catch((e) => alert(e.message));
@@ -326,6 +329,20 @@ async function addPoll() {
     document.getElementById("logi-poll-q").value = "";
     document.getElementById("logi-poll-opts").value = "";
   } catch (e) { alert("투표 등록 실패: " + e.message); }
+}
+
+// 운영기간 수정: 교육기간 전후로도 보드를 운영하는 경우가 많아 차수와 독립적으로 조정한다.
+async function savePeriod() {
+  if (!currentBoard) return;
+  const startDate = document.getElementById("logi-period-start").value;
+  const endDate = document.getElementById("logi-period-end").value;
+  if (!startDate || !endDate) return alert("시작·종료일을 모두 입력하세요.");
+  if (endDate < startDate) return alert("종료일이 시작일보다 빠릅니다.");
+  try {
+    await updateDoc(doc(db, "logiBoards", currentBoard.id), { startDate, endDate, updatedAtMs: Date.now() });
+    currentBoard = { ...currentBoard, startDate, endDate };
+    alert("운영기간을 저장했습니다.");
+  } catch (e) { alert("저장 실패: " + e.message); }
 }
 
 async function sendQnaReply() {

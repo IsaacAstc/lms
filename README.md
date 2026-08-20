@@ -218,6 +218,24 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
 - 규칙: `collabBoards`(공개 읽기/pad 탭 쓰기), `collabPosts`(공개 글 읽기·형식
   검증 create·반응/댓글/본인수정 update 제한) — 자동 배포에 포함.
 
+## ICAO 로지보드 (`logi.html` — 국제과정 참가자 포털, 영어 전용)
+
+Daily Schedule(강사명 미표시 스냅샷)·Bulletins·Polls·Ask Staff(1:1 Q&A)·Group Chat.
+- 관리: **수업 지원 → ICAO 로지보드** 탭 — 차수 선택 후 활성화, 공지/투표 CRUD,
+  Q&A 수신함(🔴 답장 필요), 채팅 모니터(삭제), QR·URL 공유, 시간표 재동기화,
+  **운영기간 수정**(교육기간 전후 운영 대응 — 차수 데이터와 독립).
+- 수강생 계정(선택, 가상 ID): 아이디+비밀번호만으로 가입 — **이메일 미수집**,
+  내부적으로 `id@trainee.local` 형식 Firebase Auth 가상 계정. 기기가 바뀌어도
+  Q&A 스레드가 유지되고, 채팅·Q&A **본인 메시지 수정('edited' 표시)·삭제** 가능.
+  비밀번호 분실 시 복구 불가(새 계정 생성). 관리자 세션과 분리된 보조 앱
+  인증이라 같은 브라우저의 관리자 로그인에 영향 없음.
+  - Firebase 콘솔 주의: Authentication → 이메일/비밀번호 공급자가 켜져 있어야
+    하고, "사용자 계정 만들기(가입) 차단"을 켜면 수강생 가입이 막힌다.
+  - 보안: `@trainee.local` 계정은 admins 컬렉션에 없으므로 관리자 권한 불가.
+    RTDB 규칙이 staff 쓰기를 비-trainee 이메일 계정으로 제한한다.
+- 규칙: `logiBoards`/`logiBulletins`(공개 읽기/logi 탭 쓰기), `logiPolls`(투표
+  update만 익명 허용), RTDB `logi/*`(본인 uid 메시지만 수정·삭제) — 자동 배포 포함.
+
 ## 기관(테넌트) 분리 운영
 
 코드는 이 저장소 하나를 공유하고, **기관별로 별도 Firebase 프로젝트**를 사용해

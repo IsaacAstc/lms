@@ -24,20 +24,20 @@
       "$courseId": {
         "chat": {
           ".read": true,
-          ".write": "auth != null",
+          ".write": "auth != null && auth.token.email != null && !auth.token.email.endsWith('@trainee.local')",
           "$msgId": {
-            ".write": "!data.exists()",
-            ".validate": "newData.hasChildren(['name', 'text', 'atMs']) && newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 20 && newData.child('text').isString() && newData.child('text').val().length >= 1 && newData.child('text').val().length <= 500 && newData.child('atMs').isNumber()"
+            ".write": "!data.exists() || (auth != null && data.child('uid').val() === auth.uid)",
+            ".validate": "newData.hasChildren(['name', 'text', 'atMs']) && newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 20 && newData.child('text').isString() && newData.child('text').val().length >= 1 && newData.child('text').val().length <= 500 && newData.child('atMs').isNumber() && (!newData.child('uid').exists() || (auth != null && newData.child('uid').val() === auth.uid)) && (!data.exists() || !data.child('uid').exists() || newData.child('uid').val() === data.child('uid').val()) && (!newData.child('edited').exists() || newData.child('edited').isBoolean())"
           }
         },
         "qna": {
-          ".read": "auth != null",
-          ".write": "auth != null",
+          ".read": "auth != null && auth.token.email != null && !auth.token.email.endsWith('@trainee.local')",
+          ".write": "auth != null && auth.token.email != null && !auth.token.email.endsWith('@trainee.local')",
           "$threadId": {
             ".read": true,
             "$msgId": {
-              ".write": "!data.exists()",
-              ".validate": "newData.hasChildren(['from', 'text', 'atMs']) && (newData.child('from').val() === 'trainee' || (newData.child('from').val() === 'staff' && auth != null)) && newData.child('text').isString() && newData.child('text').val().length >= 1 && newData.child('text').val().length <= 500 && newData.child('atMs').isNumber()"
+              ".write": "!data.exists() || (auth != null && data.child('uid').val() === auth.uid)",
+              ".validate": "newData.hasChildren(['from', 'text', 'atMs']) && (newData.child('from').val() === 'trainee' || (newData.child('from').val() === 'staff' && auth != null && auth.token.email != null && !auth.token.email.endsWith('@trainee.local'))) && newData.child('text').isString() && newData.child('text').val().length >= 1 && newData.child('text').val().length <= 500 && newData.child('atMs').isNumber() && (!newData.child('uid').exists() || (auth != null && newData.child('uid').val() === auth.uid)) && (!data.exists() || !data.child('uid').exists() || newData.child('uid').val() === data.child('uid').val()) && (!newData.child('edited').exists() || newData.child('edited').isBoolean())"
             }
           }
         }
