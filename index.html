@@ -755,6 +755,7 @@
             <label>차수 <select id="logi-course"><option value="">차수 선택</option></select></label>
             <label>영문 과정명 <input id="logi-title-en" style="min-width:260px" placeholder="e.g. ICAO AVSEC Basic Course" /></label>
             <label>환영 문구(영문, 선택) <input id="logi-welcome" style="min-width:260px" placeholder="e.g. Welcome to Seoul ASTC!" /></label>
+            <label>장소(영문, 선택) <input id="logi-venue-en" style="min-width:220px" placeholder="e.g. Classroom A, 2F" /></label>
           </div>
           <div class="load-row" style="margin-top:0.4rem">
             <label class="chk"><input id="logi-opt-schedule" type="checkbox" checked /> Daily Schedule</label>
@@ -789,12 +790,13 @@
           <div id="logi-manage" hidden>
             <h3 id="logi-manage-title">보드 관리</h3>
 
-            <h3>운영기간</h3>
-            <p class="hint">보드 상단에 표시되는 운영기간입니다. 교육기간 전후로도 운영하는 경우 조정하세요(차수 데이터에는 영향 없음).</p>
+            <h3>운영기간·장소</h3>
+            <p class="hint">보드 상단에 표시되는 운영기간과 장소(영문)입니다. 교육기간 전후로도 운영하는 경우 조정하세요(차수 데이터에는 영향 없음).</p>
             <div class="load-row">
               <label>시작 <input id="logi-period-start" type="date" /></label>
               <label>종료 <input id="logi-period-end" type="date" /></label>
-              <button id="logi-period-save" type="button">운영기간 저장</button>
+              <label>장소(영문) <input id="logi-period-venue" style="min-width:200px" placeholder="e.g. Classroom A, 2F" /></label>
+              <button id="logi-period-save" type="button">운영기간·장소 저장</button>
             </div>
 
             <h3>Bulletins (공지 — 영문 작성)</h3>

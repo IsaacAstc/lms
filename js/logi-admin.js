@@ -92,6 +92,7 @@ async function activateBoard() {
     await setDoc(doc(db, "logiBoards", courseId), {
       titleEn,
       welcome: document.getElementById("logi-welcome").value.trim(),
+      venueEn: document.getElementById("logi-venue-en").value.trim(),
       startDate: c.startDate || "", endDate: c.endDate || "", venue: c.venue || "",
       showSchedule: document.getElementById("logi-opt-schedule").checked,
       qnaEnabled: document.getElementById("logi-opt-qna").checked,
@@ -101,6 +102,7 @@ async function activateBoard() {
     });
     document.getElementById("logi-title-en").value = "";
     document.getElementById("logi-welcome").value = "";
+    document.getElementById("logi-venue-en").value = "";
     loadCourseOptions();
     alert(`로지보드를 활성화했습니다. (시간표 ${schedule.length}건 동기화)`);
   } catch (e) { alert("활성화 실패: " + e.message); }
@@ -203,6 +205,7 @@ function openManage(b) {
   document.getElementById("logi-manage-title").textContent = `'${b.titleEn}' 관리`;
   document.getElementById("logi-period-start").value = b.startDate || "";
   document.getElementById("logi-period-end").value = b.endDate || "";
+  document.getElementById("logi-period-venue").value = b.venueEn || "";
   document.getElementById("logi-manage").scrollIntoView({ behavior: "smooth" });
 
   // 공지 목록
@@ -441,17 +444,19 @@ async function saveVapidKey() {
   } catch (e) { alert("저장 실패: " + e.message); }
 }
 
-// 운영기간 수정: 교육기간 전후로도 보드를 운영하는 경우가 많아 차수와 독립적으로 조정한다.
+// 운영기간·장소 수정: 교육기간 전후로도 보드를 운영하는 경우가 많아 차수와 독립적으로 조정한다.
+// 장소는 영문 표기(venueEn)를 별도로 두고, 참가자 화면은 영문을 우선 표시한다.
 async function savePeriod() {
   if (!currentBoard) return;
   const startDate = document.getElementById("logi-period-start").value;
   const endDate = document.getElementById("logi-period-end").value;
+  const venueEn = document.getElementById("logi-period-venue").value.trim();
   if (!startDate || !endDate) return alert("시작·종료일을 모두 입력하세요.");
   if (endDate < startDate) return alert("종료일이 시작일보다 빠릅니다.");
   try {
-    await updateDoc(doc(db, "logiBoards", currentBoard.id), { startDate, endDate, updatedAtMs: Date.now() });
-    currentBoard = { ...currentBoard, startDate, endDate };
-    alert("운영기간을 저장했습니다.");
+    await updateDoc(doc(db, "logiBoards", currentBoard.id), { startDate, endDate, venueEn, updatedAtMs: Date.now() });
+    currentBoard = { ...currentBoard, startDate, endDate, venueEn };
+    alert("운영기간·장소를 저장했습니다.");
   } catch (e) { alert("저장 실패: " + e.message); }
 }
 
