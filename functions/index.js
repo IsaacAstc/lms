@@ -346,3 +346,51 @@ exports.purgeApplicationEmails = onSchedule(
     console.log(`신청자 이메일 파기: ${n}건 (기준일 ${today})`);
   }
 );
+
+/* ================================================================
+ *  sendLogiPush — 로지보드 FCM 푸시 발송 (관리자 전용 callable)
+ *  Firestore/RTDB 트리거 대신 관리자 조작(공지·투표·Q&A 답장) 직후
+ *  화면에서 호출한다(트리거 리전 제약 회피 + 발송 조건 명시적).
+ *  대상: logiTokens/{token} — courseId(필수), threadKey(1:1 답장일 때만).
+ *  무효 토큰(해지·만료)은 발송 결과를 보고 즉시 삭제한다.
+ * ================================================================ */
+exports.sendLogiPush = onCall(
+  { region: "asia-northeast3", memory: "256MiB", timeoutSeconds: 30, maxInstances: 3 },
+  async (req) => {
+    await requireAdmin(req);
+    const courseId = str(req.data?.courseId, 100, "과정 ID", true);
+    const title = str(req.data?.title, 100, "제목", true);
+    const body = str(req.data?.body, 300, "내용", false);
+    const threadKey = str(req.data?.threadKey, 60, "스레드 키", false);
+    const link = str(req.data?.link, 500, "링크", false);
+    if (link && !/^https:\/\//.test(link)) bad("링크 형식이 올바르지 않습니다.");
+
+    let q = db.collection("logiTokens").where("courseId", "==", courseId);
+    if (threadKey) q = q.where("threadKey", "==", threadKey);
+    const snap = await q.limit(500).get();
+    const docs = snap.docs.filter((d) => typeof d.data().token === "string" && d.data().token);
+    const tokens = [...new Set(docs.map((d) => d.data().token))];
+    if (!tokens.length) return { sent: 0, targets: 0 };
+
+    const res = await admin.messaging().sendEachForMulticast({
+      tokens,
+      notification: { title, body: body.slice(0, 200) },
+      webpush: {
+        notification: { icon: "icons/logi-192.png", badge: "icons/logi-192.png" },
+        ...(link ? { fcmOptions: { link } } : {}),
+      },
+    });
+    // 무효 토큰 정리(기기에서 알림 해제·앱 삭제 등).
+    const dead = new Set();
+    res.responses.forEach((r, i) => {
+      const code = r.error?.code || "";
+      if (!r.success && /not-registered|invalid-registration-token|invalid-argument/.test(code)) dead.add(tokens[i]);
+    });
+    if (dead.size) {
+      const batch = db.batch();
+      docs.filter((d) => dead.has(d.data().token)).forEach((d) => batch.delete(d.ref));
+      await batch.commit().catch(() => {});
+    }
+    return { sent: res.successCount, targets: tokens.length, removed: dead.size };
+  }
+);

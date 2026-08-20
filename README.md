@@ -235,6 +235,15 @@ Daily Schedule(강사명 미표시 스냅샷)·Bulletins·Polls·Ask Staff(1:1 Q
     RTDB 규칙이 staff 쓰기를 비-trainee 이메일 계정으로 제한한다.
 - 규칙: `logiBoards`/`logiBulletins`(공개 읽기/logi 탭 쓰기), `logiPolls`(투표
   update만 익명 허용), RTDB `logi/*`(본인 uid 메시지만 수정·삭제) — 자동 배포 포함.
+- **FCM 푸시(앱 종료 상태에서도 수신)**: 새 공지·투표 생성/마감·Q&A staff 답장을
+  구독 기기로 푸시. 발송은 관리자 조작 직후 `sendLogiPush` callable(관리자 전용)이
+  수행 — 토큰은 `logiTokens/{token}`(courseId·threadKey), 무효 토큰은 발송 시 자동 정리.
+  - **설정(1회)**: Firebase 콘솔 → 프로젝트 설정 → 클라우드 메시징 → 웹 푸시 인증서
+    '키 쌍' 생성 → LMS **수업 지원 → ICAO 로지보드** 탭의 "푸시 키 저장"에 입력.
+    미설정 시 푸시만 비활성(열림 상태 알림은 계속 동작).
+  - 서비스워커 `firebase-messaging-sw.js`는 Firebase 설정을 커밋하지 않으므로
+    등록 URL 쿼리(`?config=…`)로 전달받는다(기관별 프로젝트 대응).
+  - iPhone(iOS 16.4+)은 홈 화면에 추가한 뒤에만 웹 푸시 수신 가능.
 
 ## 기관(테넌트) 분리 운영
 

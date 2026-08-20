@@ -5,7 +5,7 @@
 //  - RTDB도 보조 앱 인스턴스를 사용해 trainee 인증이 요청에 실리게 한다(본인 메시지 수정·삭제 규칙).
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  collection, doc, onSnapshot, updateDoc, query, where,
+  collection, doc, onSnapshot, updateDoc, query, where, getDoc, setDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getDatabase, ref, onValue, push, set, update, remove,
@@ -238,6 +238,8 @@ onAuthStateChanged(tAuth, (u) => {
   threadKey = me ? me.uid : deviceKey;
   updateAccountUi();
   if (wired) { subscribeQna(); renderChat(); }
+  // 로그인·로그아웃으로 threadKey가 바뀌면 푸시 토큰의 대상 스레드도 갱신.
+  if ("Notification" in window && Notification.permission === "granted") enablePush();
 });
 
 /* ── Q&A (1:1) + Group Chat — RTDB ── */
@@ -393,7 +395,37 @@ if ("Notification" in window && Notification.permission === "default") $("lg-not
 $("lg-notify").addEventListener("click", async () => {
   const p = await Notification.requestPermission();
   if (p !== "default") $("lg-notify").hidden = true;
+  if (p === "granted") enablePush();
 });
+
+/* ── FCM 푸시(앱·페이지가 닫혀 있어도 수신) ──
+ * VAPID 공개키는 settings/logiPush(공개 읽기)에서 가져온다(관리자 탭에서 1회 설정).
+ * 토큰은 logiTokens/{token}에 저장 — 발송은 관리자 조작 시 sendLogiPush 함수가 수행.
+ * 로그인 상태가 바뀌면 threadKey를 갱신해 1:1 답장 푸시가 올바른 기기로 가게 한다.
+ * iOS(Safari)는 홈 화면에 설치한 뒤에만 웹 푸시 수신 가능(iOS 16.4+). */
+let pushBusy = false;
+async function enablePush() {
+  if (pushBusy || !courseId || !("serviceWorker" in navigator) || !("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  pushBusy = true;
+  try {
+    const ps = await getDoc(doc(db, "settings", "logiPush")).catch(() => null);
+    const vapidKey = ps?.exists() ? String(ps.data().vapidKey || "") : "";
+    if (!vapidKey) return; // 푸시 미설정 — 열림 상태 알림만 동작
+    const reg = await navigator.serviceWorker.register(
+      `firebase-messaging-sw.js?config=${encodeURIComponent(JSON.stringify(activeConfig))}`);
+    const { getMessaging, getToken, isSupported } =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js");
+    if (!(await isSupported().catch(() => false))) return;
+    const token = await getToken(getMessaging(traineeApp), { vapidKey, serviceWorkerRegistration: reg });
+    if (!token) return;
+    await setDoc(doc(db, "logiTokens", token), {
+      token, courseId, threadKey, createdAtMs: Date.now(), updatedAtMs: Date.now(),
+    });
+  } catch (e) { console.warn("Push setup skipped:", e?.message || e); }
+  finally { pushBusy = false; }
+}
+if ("Notification" in window && Notification.permission === "granted") enablePush();
 
 const loadedAt = Date.now();
 const badges = { bulletins: 0, polls: 0, qna: 0, chat: 0 };
