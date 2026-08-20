@@ -210,6 +210,26 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ── ICAO 로지보드(국제과정 참가자 포털: 공지·투표·메신저·일정) ──
+    // 보드 설정 + 시간표 스냅샷(강사명 제외): 참여 페이지가 읽으므로 공개 읽기.
+    match /logiBoards/{courseId} {
+      allow read: if true;
+      allow write: if canTab('logi');
+    }
+    // 공지(bulletins): 관리자 작성, 참가자 열람.
+    match /logiBulletins/{id} {
+      allow read: if true;
+      allow write: if canTab('logi');
+    }
+    // 투표(polls): 관리자 작성·마감, 참가자는 votes 카운트만 갱신(기기당 1회는 클라이언트).
+    match /logiPolls/{id} {
+      allow read: if true;
+      allow create, delete: if canTab('logi');
+      allow update: if canTab('logi')
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes'])
+            && resource.data.get('open', true) == true);
+    }
+
     // ── 수업 보드(협업 게시판, 패들렛 벤치마킹) ──
     // 보드 설정: 참여 페이지가 읽어야 하므로 공개 읽기, 쓰기는 '수업 보드' 탭 권한.
     match /collabBoards/{boardId} {

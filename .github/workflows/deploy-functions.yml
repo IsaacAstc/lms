@@ -52,6 +52,6 @@ jobs:
       - name: Deploy functions & firestore rules
         if: steps.check.outputs.ok == 'true'
         run: npx --yes firebase-tools@latest deploy
-          --only functions,firestore:rules
+          --only functions,firestore:rules,database
           --project "${{ secrets.FIREBASE_PROJECT_ID }}"
           --non-interactive --force

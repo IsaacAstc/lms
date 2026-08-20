@@ -744,6 +744,75 @@
           </div>
         </section>
 
+        <!-- 수업 지원: ICAO 로지보드 (국제과정 참가자 포털) -->
+        <section class="tab-panel" data-tab="logi" hidden>
+          <h2>수업 지원 — ICAO 로지보드</h2>
+          <p class="hint">국제과정 해외 교육생이 QR·링크로 접속하는 <b>영어 전용 포털</b>입니다(로그인 없음): Daily Schedule(시간표 자동 연동 — <b>강사명 미표시</b>) · Bulletins(공지) · Polls(투표) · Q&amp;A(1:1 운영지원 문의) · Chat(과정 그룹 채팅).
+            메시지·게시물은 자동 파기 없이 보드 삭제 시 함께 삭제됩니다.</p>
+
+          <h3>로지보드 활성화</h3>
+          <div class="load-row">
+            <label>차수 <select id="logi-course"><option value="">차수 선택</option></select></label>
+            <label>영문 과정명 <input id="logi-title-en" style="min-width:260px" placeholder="e.g. ICAO AVSEC Basic Course" /></label>
+            <label>환영 문구(영문, 선택) <input id="logi-welcome" style="min-width:260px" placeholder="e.g. Welcome to Seoul ASTC!" /></label>
+          </div>
+          <div class="load-row" style="margin-top:0.4rem">
+            <label class="chk"><input id="logi-opt-schedule" type="checkbox" checked /> Daily Schedule</label>
+            <label class="chk"><input id="logi-opt-qna" type="checkbox" checked /> Q&amp;A(1:1 문의)</label>
+            <label class="chk"><input id="logi-opt-chat" type="checkbox" checked /> Group Chat</label>
+            <button id="logi-activate" type="button">로지보드 만들기</button>
+          </div>
+
+          <h3>활성 로지보드</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>과정(영문)</th><th>기간</th><th>기능</th><th>공유</th><th>관리</th></tr></thead>
+            <tbody id="logi-tbody"><tr><td colspan="5" class="empty">불러오는 중…</td></tr></tbody>
+          </table></div>
+
+          <div id="logi-manage" hidden>
+            <h3 id="logi-manage-title">보드 관리</h3>
+
+            <h3>Bulletins (공지 — 영문 작성)</h3>
+            <div class="load-row">
+              <label>제목 <input id="logi-bul-title" style="min-width:240px" maxlength="120" /></label>
+              <label>링크(선택) <input id="logi-bul-link" style="min-width:200px" placeholder="https://…" /></label>
+              <label class="chk"><input id="logi-bul-pin" type="checkbox" /> 상단 고정</label>
+            </div>
+            <textarea id="logi-bul-text" rows="3" maxlength="2000" placeholder="내용(영문)"></textarea>
+            <div class="form-actions"><button id="logi-bul-add" type="button">공지 등록</button></div>
+            <div class="table-wrap"><table>
+              <thead><tr><th></th><th>제목</th><th>등록</th><th>관리</th></tr></thead>
+              <tbody id="logi-bul-body"></tbody>
+            </table></div>
+
+            <h3>Polls (투표)</h3>
+            <div class="load-row">
+              <label>질문(영문) <input id="logi-poll-q" style="min-width:280px" maxlength="200" /></label>
+              <label class="chk"><input id="logi-poll-multi" type="checkbox" /> 복수 선택</label>
+              <label>결과 공개 <select id="logi-poll-results">
+                <option value="always">실시간 공개</option>
+                <option value="closed">마감 후 공개</option>
+              </select></label>
+            </div>
+            <textarea id="logi-poll-opts" rows="3" placeholder="보기 입력 — 한 줄에 하나씩 (최대 8개)"></textarea>
+            <div class="form-actions"><button id="logi-poll-add" type="button">투표 등록</button></div>
+            <div id="logi-poll-list"></div>
+
+            <h3>Q&amp;A 수신함 (1:1 운영지원 문의)</h3>
+            <p class="hint">🔴 표시는 교육생 메시지가 마지막(답장 필요)인 스레드입니다. '답장'을 누르고 아래에 입력하세요.</p>
+            <div id="logi-qna-threads"></div>
+            <div class="load-row">
+              <input type="hidden" id="logi-qna-target" />
+              <span id="logi-qna-target-label" class="hint"></span>
+              <input id="logi-qna-text" style="flex:1;min-width:240px" maxlength="500" placeholder="답장 내용(영문)" />
+              <button id="logi-qna-send" type="button">답장 발송</button>
+            </div>
+
+            <h3>Group Chat 모니터</h3>
+            <div id="logi-chat-list" class="logi-chatbox"></div>
+          </div>
+        </section>
+
         <!-- 기관 관리 (마스터 전용, 허브에서만 편집) -->
         <section class="tab-panel" data-tab="orgs" hidden>
           <h2>기관 관리</h2>

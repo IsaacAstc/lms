@@ -22,6 +22,7 @@ import { initSeed } from "./seed.js";
 import { initOrgSelectors, initOrgAdmin, tabFeature } from "./orgs.js";
 import { initRentals } from "./rentals.js";
 import { initPadAdmin } from "./pad-admin.js";
+import { initLogiAdmin } from "./logi-admin.js";
 import { currentOrg } from "./firebase.js";
 
 // 공용 유틸: HTML 이스케이프 (XSS 방지).
@@ -46,7 +47,7 @@ const TAB_GROUPS = [
   { id: "stats", label: "통계", tabs: [["stats", ""]] },
   { id: "reportdoc", label: "운영 보고서", tabs: [["reportdoc", ""]] },
   { id: "site", label: "현장 안내", tabs: [["rentals", ""]] },
-  { id: "class", label: "수업 지원", tabs: [["pad", "수업 보드"]] },
+  { id: "class", label: "수업 지원", tabs: [["pad", "수업 보드"], ["logi", "ICAO 로지보드"]] },
   { id: "admin", label: "설정", tabs: [["settings", "기준값 설정"], ["admins", "관리자 계정"], ["data", "데이터 관리"], ["board", "공개 현황 보드"], ["orgs", "기관 관리"]] },
 ];
 // 마스터 전용 탭(일반 관리자에게는 숨김 — 실제 차단은 firestore.rules).
@@ -187,6 +188,7 @@ function initApp() {
   initBoardAdmin();
   initRentals();
   initPadAdmin();
+  initLogiAdmin();
   initExportButtons();
   initCsvImport();
   initSeed();
