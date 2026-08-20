@@ -173,6 +173,8 @@
       var ce = c.endDate || cs;
       // 찾아가는 교육(출장 교육)은 센터 내 안내 대상이 아니므로 표시하지 않는다.
       if ((c.venue || "").replace(/\s+/g, "").indexOf("찾아가") !== -1) continue;
+      // 예정(계획) 차수는 확정 전이므로 현장 안내에서 제외한다.
+      if (c.planned) continue;
       if (cs <= today && today <= ce) edu.push(c);
     }
     edu.sort(function (a, b) {

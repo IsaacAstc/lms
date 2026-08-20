@@ -245,7 +245,8 @@ function main() {
 
   // 과정 현황 구독(실시간).
   onSnapshot(collection(db, "publicBoard"), (snap) => {
-    items = snap.docs.filter((d) => !d.id.startsWith("__")).map((d) => ({ id: d.id, ...d.data() }));
+    // didOnly(특별·재교육 — 현장 안내 DID 전용)는 공개 보드에서 표시하지 않는다.
+    items = snap.docs.filter((d) => !d.id.startsWith("__") && !d.data().didOnly).map((d) => ({ id: d.id, ...d.data() }));
     const latest = items.reduce((m, c) => Math.max(m, c.updatedAtMs || 0), 0);
     document.getElementById("board-updated").textContent = latest
       ? `업데이트: ${new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" }).format(new Date(latest))}`
