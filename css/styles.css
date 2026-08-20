@@ -449,3 +449,27 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .pad-colors { display: flex; gap: 0.4rem; }
 .pad-color { width: 1.8rem; height: 1.8rem; border-radius: 50%; border: 2px solid #ccc; cursor: pointer; }
 .pad-color.sel { border-color: var(--primary); outline: 2px solid var(--primary); }
+
+/* ── ICAO 로지보드 ── */
+.logi-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.logi-tab { border: 1px solid var(--border); background: #fff; color: var(--muted); border-radius: 999px; padding: 0.45rem 0.9rem; font-size: 0.9rem; cursor: pointer; }
+.logi-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 600; }
+.logi-panel { display: flex; flex-direction: column; gap: 0.6rem; }
+.logi-sch { width: 100%; border-collapse: collapse; margin-top: 0.4rem; font-size: 0.88rem; }
+.logi-sch td { border: none; border-bottom: 1px solid #eef1f6; padding: 0.35rem 0.4rem; white-space: normal; }
+.logi-time { white-space: nowrap; color: var(--muted); width: 7.5rem; }
+.logi-room { white-space: nowrap; color: var(--primary); font-weight: 600; text-align: right; }
+.logi-today { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+.logi-pinned { border-color: #e5b93c; background: #fffaf0; }
+.logi-pin { font-size: 0.75rem; color: #a67b00; display: block; margin-bottom: 0.2rem; }
+.logi-poll-opts { display: flex; flex-direction: column; gap: 0.45rem; margin: 0.5rem 0; }
+.logi-poll-opt label.chk { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
+.logi-poll-bar { height: 8px; background: #e8edf4; border-radius: 4px; overflow: hidden; margin-top: 0.2rem; }
+.logi-poll-bar span { display: block; height: 100%; background: var(--primary); }
+.logi-poll-row { display: flex; justify-content: space-between; font-size: 0.85rem; padding: 0.15rem 0; }
+.logi-chatbox { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; }
+.logi-msgs { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.4rem 0; max-height: 30vh; overflow-y: auto; }
+.logi-msg { font-size: 0.88rem; word-break: break-word; background: #f2f5f9; border-radius: 8px; padding: 0.35rem 0.6rem; align-self: flex-start; max-width: 90%; }
+.logi-msg b { color: var(--primary); margin-right: 0.3rem; }
+.logi-msg.staff { background: #e7f0fc; }
+.logi-msg.trainee b { color: #666; }
