@@ -22,10 +22,30 @@
         <p id="lg-welcome" class="pad-desc" style="font-weight:600;"></p>
         <p class="pad-privacy">⚠️ Please do not post personal information (full name, phone number, passport number, etc.).</p>
         <div class="logi-actions">
+          <button type="button" id="lg-account" hidden>👤 Sign in</button>
+          <span id="lg-me" class="logi-me" hidden></span>
+          <button type="button" id="lg-signout" hidden>Sign out</button>
           <button type="button" id="lg-a2hs" hidden>📲 Add to Home Screen</button>
           <button type="button" id="lg-notify" hidden>🔔 Enable notifications</button>
         </div>
       </header>
+
+      <!-- 가상 ID 계정: 아이디+비밀번호만(이메일 미수집 — 내부적으로 id@trainee.local 가상 계정) -->
+      <dialog id="lg-account-dialog" class="apply-dialog">
+        <div style="padding:1.2rem 1.3rem;display:flex;flex-direction:column;gap:0.6rem;min-width:min(320px,80vw);">
+          <h2 id="lg-acc-title" style="margin:0;font-size:1.05rem;">Sign in</h2>
+          <p class="hint" style="margin:0;">An account keeps your private Q&amp;A thread and lets you edit or delete your own messages — even if you switch devices.</p>
+          <label>ID <input id="lg-acc-id" maxlength="20" autocomplete="username" placeholder="letters / numbers (3–20)" /></label>
+          <label>Password <input id="lg-acc-pw" type="password" maxlength="50" autocomplete="current-password" placeholder="6+ characters" /></label>
+          <p class="hint" id="lg-acc-note" style="margin:0;">⚠️ No email is collected, so a lost password <b>cannot be recovered</b>. Please remember it. Do not use your ID or password from any other service.</p>
+          <p id="lg-acc-err" class="hint" style="margin:0;color:#c62828;" hidden></p>
+          <div class="form-actions">
+            <button type="button" id="lg-acc-submit">Sign in</button>
+            <button type="button" id="lg-acc-switch" class="btn-link">Create an account</button>
+            <button type="button" id="lg-acc-close">Close</button>
+          </div>
+        </div>
+      </dialog>
 
       <!-- iOS 홈 화면 추가 안내 (Safari는 설치 프롬프트 미지원) -->
       <dialog id="lg-ios-guide" class="apply-dialog">
