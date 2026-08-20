@@ -119,7 +119,7 @@ onSnapshotSafe(() => courseId && onSnapshot(
       const div = document.createElement("div");
       div.className = "load-box" + (bl.pinned ? " logi-pinned" : "");
       div.innerHTML = `${bl.pinned ? `<span class="logi-pin">📌 Pinned</span>` : ""}
-        <b>${esc(bl.title)}</b> <small>${esc(when)}</small>
+        <b>${esc(bl.title)}</b> <small>${esc(when)}</small>${bl.editedAtMs ? ` <small class="logi-edited">(edited)</small>` : ""}
         ${bl.body ? `<p style="white-space:pre-wrap;margin:0.4rem 0 0;">${esc(bl.body)}</p>` : ""}
         ${bl.linkUrl ? `<a class="pad-link" href="${esc(bl.linkUrl)}" target="_blank" rel="noopener nofollow">🔗 Link</a>` : ""}`;
       box.appendChild(div);
@@ -154,7 +154,7 @@ function pollCard(p) {
   const div = document.createElement("div");
   div.className = "load-box";
   div.innerHTML = `<b>${esc(p.question)}</b>
-    <small>${p.open ? (p.multi ? "Select all that apply" : "Select one") : "Closed"}${voted ? " · You voted ✓" : ""}${showResults ? ` · ${total} vote${total === 1 ? "" : "s"}` : ""}</small>
+    <small>${p.open ? (p.multi ? "Select all that apply" : "Select one") : "Closed"}${voted ? " · You voted ✓" : ""}${showResults ? ` · ${total} vote${total === 1 ? "" : "s"}` : ""}${p.editedAtMs ? " · edited" : ""}</small>
     <div class="logi-poll-opts">${(p.options || []).map((o, i) => {
       const n = (p.votes || [])[i] || 0;
       const pct = total ? Math.round(100 * n / total) : 0;

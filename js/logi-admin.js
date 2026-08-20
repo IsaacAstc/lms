@@ -7,7 +7,7 @@ import {
   onSnapshot, query, where, orderBy,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  getDatabase, ref, onValue, push, remove, set,
+  getDatabase, ref, onValue, push, remove, set, update,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 import { db, app } from "./firebase.js";
@@ -26,6 +26,8 @@ function pushNotify(courseId, title, body, threadKey) {
 
 let boards = [];
 let currentBoard = null; // 상세 관리 중인 보드
+let editingBulletinId = null; // 공지 수정 모드(폼 재사용)
+let editingPoll = null;       // 투표 수정 모드 {id, options, votes}
 const unsubs = { boards: null, bulletins: null, polls: null, qna: null, chat: null };
 
 const logiUrl = (id) => {
@@ -38,7 +40,9 @@ const fmtWhen = (ms) => ms ? new Intl.DateTimeFormat("ko-KR", { dateStyle: "shor
 export function initLogiAdmin() {
   document.getElementById("logi-activate").addEventListener("click", activateBoard);
   document.getElementById("logi-bul-add").addEventListener("click", addBulletin);
+  document.getElementById("logi-bul-cancel").addEventListener("click", () => resetBulletinForm());
   document.getElementById("logi-poll-add").addEventListener("click", addPoll);
+  document.getElementById("logi-poll-cancel").addEventListener("click", () => resetPollForm());
   document.getElementById("logi-qna-send").addEventListener("click", sendQnaReply);
   document.getElementById("logi-period-save").addEventListener("click", savePeriod);
   document.getElementById("logi-vapid-save").addEventListener("click", saveVapidKey);
@@ -185,12 +189,15 @@ async function showQr(b) {
 }
 
 function closeManage() {
+  resetBulletinForm();
+  resetPollForm();
   currentBoard = null;
   document.getElementById("logi-manage").hidden = true;
   ["bulletins", "polls", "qna", "chat"].forEach((k) => { if (unsubs[k]) { unsubs[k](); unsubs[k] = null; } });
 }
 
 function openManage(b) {
+  if (currentBoard?.id !== b.id) { resetBulletinForm(); resetPollForm(); }
   currentBoard = b;
   document.getElementById("logi-manage").hidden = false;
   document.getElementById("logi-manage-title").textContent = `'${b.titleEn}' 관리`;
@@ -207,9 +214,11 @@ function openManage(b) {
     tbody.innerHTML = list.length ? "" : `<tr><td colspan="4" class="empty">공지가 없습니다.</td></tr>`;
     for (const bl of list) {
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${bl.pinned ? "📌" : ""}</td><td>${esc(bl.title)}</td><td>${fmtWhen(bl.createdAtMs)}</td>
-        <td class="actions"><button type="button" class="b-pin">${bl.pinned ? "고정해제" : "고정"}</button>
+      tr.innerHTML = `<td>${bl.pinned ? "📌" : ""}</td><td>${esc(bl.title)}${bl.editedAtMs ? ` <small>(수정됨)</small>` : ""}</td><td>${fmtWhen(bl.createdAtMs)}</td>
+        <td class="actions"><button type="button" class="b-edit">수정</button>
+        <button type="button" class="b-pin">${bl.pinned ? "고정해제" : "고정"}</button>
         <button type="button" class="del b-del">삭제</button></td>`;
+      tr.querySelector(".b-edit").addEventListener("click", () => startEditBulletin(bl));
       tr.querySelector(".b-pin").addEventListener("click", () =>
         updateDoc(doc(db, "logiBulletins", bl.id), { pinned: !bl.pinned }).catch((e) => alert(e.message)));
       tr.querySelector(".b-del").addEventListener("click", () => {
@@ -238,9 +247,11 @@ function openManage(b) {
       div.innerHTML = `<b>${esc(p.question)}</b> <small>${p.open ? "진행 중" : "마감"} · ${total}표 · 결과 ${p.showResults === "closed" ? "마감 후 공개" : "실시간 공개"}</small>
         ${rows}
         <div class="form-actions">
+          <button type="button" class="q-edit">수정</button>
           <button type="button" class="q-toggle">${p.open ? "마감" : "다시 열기"}</button>
           <button type="button" class="del q-del">삭제</button>
         </div>`;
+      div.querySelector(".q-edit").addEventListener("click", () => startEditPoll(p));
       div.querySelector(".q-toggle").addEventListener("click", async () => {
         try {
           await updateDoc(doc(db, "logiPolls", p.id), { open: !p.open });
@@ -276,8 +287,22 @@ function openManage(b) {
       const needReply = t.last?.from === "trainee";
       div.innerHTML = `<b>${needReply ? "🔴 " : ""}스레드 ${esc(t.tid.slice(0, 6))}…</b> <small>${fmtWhen(t.last?.atMs)}</small>
         <div class="logi-msgs">${t.msgs.slice(-20).map((m) =>
-          `<div class="logi-msg ${m.from}"><b>${m.from === "staff" ? "Staff" : "Trainee"}</b> ${esc(m.text)}${m.edited ? ` <small class="logi-edited">(수정됨)</small>` : ""}</div>`).join("")}</div>
+          `<div class="logi-msg ${m.from}"><b>${m.from === "staff" ? "Staff" : "Trainee"}</b> ${esc(m.text)}${m.edited ? ` <small class="logi-edited">(수정됨)</small>` : ""}${m.from === "staff"
+            ? ` <span class="logi-msg-tools"><button type="button" class="pad-mini s-edit" data-mid="${esc(m.mid)}" title="수정">✎</button><button type="button" class="pad-mini s-del" data-mid="${esc(m.mid)}" title="삭제">🗑</button></span>` : ""}</div>`).join("")}</div>
         <button type="button" class="t-reply">답장</button>`;
+      // staff 답장 수정·삭제(교육생 메시지는 본인만 수정 가능 — 관리자는 열람만).
+      div.querySelectorAll(".s-edit").forEach((btn) => btn.addEventListener("click", () => {
+        const m = t.msgs.find((x) => x.mid === btn.dataset.mid);
+        const v = prompt("답장 수정(영문):", m?.text || "");
+        if (v == null) return;
+        const text = v.trim().slice(0, 500);
+        if (!text) return alert("내용이 비어 있습니다. 삭제는 🗑 버튼을 사용하세요.");
+        update(ref(rtdb, `logi/${b.id}/qna/${t.tid}/${btn.dataset.mid}`), { text, edited: true }).catch((e) => alert(e.message));
+      }));
+      div.querySelectorAll(".s-del").forEach((btn) => btn.addEventListener("click", () => {
+        if (confirm("이 답장을 삭제할까요?"))
+          remove(ref(rtdb, `logi/${b.id}/qna/${t.tid}/${btn.dataset.mid}`)).catch((e) => alert(e.message));
+      }));
       div.querySelector(".t-reply").addEventListener("click", () => {
         document.getElementById("logi-qna-target").value = t.tid;
         document.getElementById("logi-qna-target-label").textContent = `→ 스레드 ${t.tid.slice(0, 6)}…`;
@@ -308,22 +333,67 @@ function openManage(b) {
   unsubs.chat = () => onChat();
 }
 
+function resetBulletinForm() {
+  editingBulletinId = null;
+  ["logi-bul-title", "logi-bul-text", "logi-bul-link"].forEach((id) => { document.getElementById(id).value = ""; });
+  document.getElementById("logi-bul-pin").checked = false;
+  document.getElementById("logi-bul-add").textContent = "공지 등록";
+  document.getElementById("logi-bul-cancel").hidden = true;
+}
+
+// '수정' 버튼: 기존 공지 내용을 폼에 채우고 저장 시 update(푸시 재발송 없음).
+function startEditBulletin(bl) {
+  editingBulletinId = bl.id;
+  document.getElementById("logi-bul-title").value = bl.title || "";
+  document.getElementById("logi-bul-text").value = bl.body || "";
+  document.getElementById("logi-bul-link").value = bl.linkUrl || "";
+  document.getElementById("logi-bul-pin").checked = !!bl.pinned;
+  document.getElementById("logi-bul-add").textContent = "공지 수정 저장";
+  document.getElementById("logi-bul-cancel").hidden = false;
+  document.getElementById("logi-bul-title").focus();
+}
+
 async function addBulletin() {
   if (!currentBoard) return;
   const title = document.getElementById("logi-bul-title").value.trim();
   const body = document.getElementById("logi-bul-text").value.trim();
   if (!title) return alert("공지 제목(영문)을 입력하세요.");
+  const fields = {
+    title, body,
+    linkUrl: document.getElementById("logi-bul-link").value.trim(),
+    pinned: document.getElementById("logi-bul-pin").checked,
+  };
   try {
-    await addDoc(collection(db, "logiBulletins"), {
-      courseId: currentBoard.id, title, body,
-      linkUrl: document.getElementById("logi-bul-link").value.trim(),
-      pinned: document.getElementById("logi-bul-pin").checked,
-      createdAtMs: Date.now(),
-    });
-    ["logi-bul-title", "logi-bul-text", "logi-bul-link"].forEach((id) => { document.getElementById(id).value = ""; });
-    document.getElementById("logi-bul-pin").checked = false;
-    pushNotify(currentBoard.id, "New announcement", title);
-  } catch (e) { alert("공지 등록 실패: " + e.message); }
+    if (editingBulletinId) {
+      await updateDoc(doc(db, "logiBulletins", editingBulletinId), { ...fields, editedAtMs: Date.now() });
+    } else {
+      await addDoc(collection(db, "logiBulletins"), { ...fields, courseId: currentBoard.id, createdAtMs: Date.now() });
+      pushNotify(currentBoard.id, "New announcement", title);
+    }
+    resetBulletinForm();
+  } catch (e) { alert("공지 저장 실패: " + e.message); }
+}
+
+function resetPollForm() {
+  editingPoll = null;
+  document.getElementById("logi-poll-q").value = "";
+  document.getElementById("logi-poll-opts").value = "";
+  document.getElementById("logi-poll-multi").checked = false;
+  document.getElementById("logi-poll-results").value = "always";
+  document.getElementById("logi-poll-add").textContent = "투표 등록";
+  document.getElementById("logi-poll-cancel").hidden = true;
+}
+
+// '수정' 버튼: 기존 투표를 폼에 채운다. 보기(옵션)를 바꾸면 기존 표는 초기화(확인 후).
+function startEditPoll(p) {
+  editingPoll = { id: p.id, options: p.options || [], votes: p.votes || [] };
+  document.getElementById("logi-poll-q").value = p.question || "";
+  document.getElementById("logi-poll-opts").value = (p.options || []).join("\n");
+  document.getElementById("logi-poll-multi").checked = !!p.multi;
+  document.getElementById("logi-poll-results").value = p.showResults === "closed" ? "closed" : "always";
+  document.getElementById("logi-poll-add").textContent = "투표 수정 저장";
+  document.getElementById("logi-poll-cancel").hidden = false;
+  document.getElementById("logi-poll-q").focus();
 }
 
 async function addPoll() {
@@ -332,18 +402,28 @@ async function addPoll() {
   const options = document.getElementById("logi-poll-opts").value.split("\n").map((s) => s.trim()).filter(Boolean).slice(0, 8);
   if (!question) return alert("질문(영문)을 입력하세요.");
   if (options.length < 2) return alert("보기를 2개 이상 입력하세요(줄바꿈 구분).");
+  const multi = document.getElementById("logi-poll-multi").checked;
+  const showResults = document.getElementById("logi-poll-results").value; // always | closed
   try {
-    await addDoc(collection(db, "logiPolls"), {
-      courseId: currentBoard.id, question, options,
-      votes: options.map(() => 0),
-      multi: document.getElementById("logi-poll-multi").checked,
-      showResults: document.getElementById("logi-poll-results").value, // always | closed
-      open: true, createdAtMs: Date.now(),
-    });
-    document.getElementById("logi-poll-q").value = "";
-    document.getElementById("logi-poll-opts").value = "";
-    pushNotify(currentBoard.id, "New poll", question);
-  } catch (e) { alert("투표 등록 실패: " + e.message); }
+    if (editingPoll) {
+      const sameOptions = JSON.stringify(options) === JSON.stringify(editingPoll.options);
+      const total = editingPoll.votes.reduce((s, n) => s + n, 0);
+      if (!sameOptions && total > 0
+        && !confirm(`보기가 변경되어 기존 ${total}표가 초기화됩니다. 계속할까요?`)) return;
+      await updateDoc(doc(db, "logiPolls", editingPoll.id), {
+        question, options, multi, showResults, editedAtMs: Date.now(),
+        ...(sameOptions ? {} : { votes: options.map(() => 0) }),
+      });
+    } else {
+      await addDoc(collection(db, "logiPolls"), {
+        courseId: currentBoard.id, question, options,
+        votes: options.map(() => 0), multi, showResults,
+        open: true, createdAtMs: Date.now(),
+      });
+      pushNotify(currentBoard.id, "New poll", question);
+    }
+    resetPollForm();
+  } catch (e) { alert("투표 저장 실패: " + e.message); }
 }
 
 // 푸시 VAPID 공개키(settings/logiPush — 공개 읽기, 원래 공개값).
