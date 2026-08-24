@@ -95,6 +95,15 @@
             </div>
           </form>
           <div class="load-row" id="course-filter">
+            <label>검색 <input id="cf-q" type="search" placeholder="과정명·코드" style="width:11rem" /></label>
+            <label>유형 <select id="cf-type"></select></label>
+            <label>상태 <select id="cf-status">
+              <option value="">전체 상태</option>
+              <option value="upcoming">예정</option>
+              <option value="ongoing">진행 중</option>
+              <option value="done">종료</option>
+            </select></label>
+            <label>교육장 <select id="cf-venue"></select></label>
             <label>연도 <select id="cf-year"></select></label>
             <label>기간 <input type="date" id="cf-from" /></label>
             <span class="board-range-sep">-</span>
