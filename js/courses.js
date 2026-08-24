@@ -23,7 +23,7 @@ import { selectCourse } from "./sessions.js";
 import { BOARD_EXCLUDED_TYPES } from "./constants.js";
 import { getSurveySets, onSettingsChange } from "./settings.js";
 import { regenerateSurvey } from "./survey-gen.js";
-import { fmtDot } from "./time.js";
+import { fmtDot, kstToday } from "./time.js";
 
 const coursesCol = collection(db, "courses");
 let unsub = null;
@@ -362,11 +362,13 @@ function resetForm(form, submitBtn, cancelBtn) {
 let filterInit = false;
 function initCourseFilter(rerender) {
   const yearSel = document.getElementById("cf-year");
-  ["cf-year", "cf-from", "cf-to"].forEach((id) =>
+  ["cf-year", "cf-from", "cf-to", "cf-type", "cf-status", "cf-venue"].forEach((id) =>
     document.getElementById(id).addEventListener("change", rerender));
+  document.getElementById("cf-q").addEventListener("input", rerender);
   document.getElementById("cf-reset").addEventListener("click", () => {
     document.getElementById("cf-from").value = "";
     document.getElementById("cf-to").value = "";
+    ["cf-q", "cf-type", "cf-status", "cf-venue"].forEach((id) => { document.getElementById(id).value = ""; });
     yearSel.value = String(new Date().getFullYear());
     rerender();
   });
@@ -392,24 +394,52 @@ function refreshYearOptions() {
   sel.innerHTML = `<option value="">전체 연도</option>` + years.map((y) => `<option>${y}</option>`).join("");
   sel.value = [...sel.options].some((o) => o.value === prev) ? prev : "";
   filterInit = true;
+  refreshFilterOptions();
+}
+
+// 유형·교육장 셀렉트 갱신: 기준값(과정유형)·강의실 마스터 + 데이터에만 있는 값도 포함(선택값 유지).
+function refreshFilterOptions() {
+  const fill = (id, values, allLabel) => {
+    const sel = document.getElementById(id);
+    const prev = sel.value;
+    sel.innerHTML = `<option value="">${allLabel}</option>`
+      + values.map((v) => `<option>${escapeHtml(v)}</option>`).join("");
+    sel.value = [...sel.options].some((o) => o.value === prev) ? prev : "";
+  };
+  const inData = (get) => coursesCache.map(get).filter(Boolean);
+  fill("cf-type", [...new Set([...courseTypes, ...inData((c) => c.courseType)])], "전체 유형");
+  fill("cf-venue", [...new Set([...getRooms().map((r) => r.name), ...inData((c) => c.venue)])], "전체 교육장");
 }
 
 // 기간을 지정하면 범위 우선, 아니면 연도 기준. 교육기간이 겹치면 표시.
+// 검색·유형·상태·교육장은 날짜 조건과 AND 결합.
 function applyFilter(list) {
   const year = document.getElementById("cf-year").value;
   const from = document.getElementById("cf-from").value;
   const to = document.getElementById("cf-to").value;
-  if (from || to) {
-    return list.filter((c) => {
-      const s = c.startDate || "";
-      const e = c.endDate || s;
+  const q = document.getElementById("cf-q").value.trim().toLowerCase();
+  const type = document.getElementById("cf-type").value;
+  const status = document.getElementById("cf-status").value;
+  const venue = document.getElementById("cf-venue").value;
+  const today = kstToday();
+
+  return list.filter((c) => {
+    const s = c.startDate || "";
+    const e = c.endDate || s;
+    if (from || to) {
       if (from && e && e < from) return false;
       if (to && s && s > to) return false;
-      return true;
-    });
-  }
-  if (year) return list.filter((c) => (c.startDate || "").slice(0, 4) === year);
-  return list;
+    } else if (year && s.slice(0, 4) !== year) return false;
+    if (q && !`${c.name || ""} ${c.code || ""}`.toLowerCase().includes(q)) return false;
+    if (type && (c.courseType || "") !== type) return false;
+    if (venue && (c.venue || "") !== venue) return false;
+    if (status) {
+      // 오늘 기준: 예정(시작 전) / 진행 중(기간 내) / 종료(종료 후). 날짜 미입력 차수는 상태 필터에서 제외.
+      const st = !s ? "" : s > today ? "upcoming" : (e || s) < today ? "done" : "ongoing";
+      if (st !== status) return false;
+    }
+    return true;
+  });
 }
 
 // ── 목록 내 인라인 수정 ──
