@@ -1,4 +1,4 @@
-// 소요경비 집계 (8-2): 월별. 자동(사내/사외 강사료·출강여비) + 수동(교재연구비·물품·다과·추가항목) + 1인당 단가(이수인원 분모).
+// 소요경비 집계 (8-2): 월별. 자동(사내/사외 강사료·출강여비) + 수동(교재연구비·물품·다과·추가항목) + 1인당 단가(입교인원(신청인원) 분모).
 import {
   collection, getDocs, getDoc, doc, setDoc, query, where,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -18,7 +18,24 @@ export function initExpenses() {
   document.getElementById("exp-month").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   document.getElementById("exp-run").addEventListener("click", run);
   document.getElementById("exp-save").addEventListener("click", save);
+  // 차수·시간표 탭에서 신청인원을 고치고 돌아오면 입교인원(자동값)을 최신으로 갱신.
+  // 사용자가 직접 수정한 상태(enrolledManual)면 덮어쓰지 않는다.
+  document.addEventListener("tabshown", (e) => {
+    if (e.detail !== "expenses" || enrolledManual) return;
+    const el = document.getElementById("e-enrolled");
+    if (!el) return;
+    el.value = enrolledDefault(document.getElementById("exp-month").value);
+    recompute();
+  });
 }
+
+// 그 월 시작 차수의 신청인원(입교인원) 합 — coursesCache는 실시간 구독이라 항상 최신.
+function enrolledDefault(month) {
+  return coursesCache
+    .filter((c) => (c.startDate || "").slice(0, 7) === month && !c.hidden)
+    .reduce((s, c) => s + (c.appliedCount || 0), 0);
+}
+let enrolledManual = false;
 
 // 그 월 시간표에서 강사유형별 강사료·여비 자동 산출 + 강사별 세부.
 async function computeAuto(month) {
@@ -74,16 +91,13 @@ async function run() {
   customItems = Array.isArray(saved.custom)
     ? saved.custom.map((c) => ({ label: c.label || "", amount: Number(c.amount) || 0 }))
     : [];
-  // 그 월 시작 차수의 이수인원 합(기본값).
-  const completedDefault = coursesCache
-    .filter((c) => (c.startDate || "").slice(0, 7) === month && !c.hidden)
-    .reduce((s, c) => s + (c.completedCount || 0), 0);
-
+  // 입교인원(신청인원) 분모는 항상 현재 차수 데이터에서 자동 산출(저장값으로 덮지 않음 — 자동 반영).
+  enrolledManual = false;
   render(box, {
     materialResearch: saved.materialResearch ?? 0,
     supplies: saved.supplies ?? 0,
     refreshments: saved.refreshments ?? 0,
-    completed: saved.completed ?? completedDefault,
+    enrolled: enrolledDefault(month),
   });
   renderDetail();
 }
@@ -114,12 +128,14 @@ function render(box, v) {
         ${customRows()}
         <tr><td colspan="4"><button type="button" id="e-add">+ 비용항목 추가</button></td></tr>
         <tr class="sum-row"><td colspan="2"><b>합계</b></td><td class="num" id="e-total"></td><td></td></tr>
-        <tr><td colspan="2">이수인원(명)</td><td><input type="number" min="0" id="e-completed" value="${v.completed}"></td><td>1인당 단가 분모</td></tr>
+        <tr><td colspan="2">입교인원(신청인원, 명)</td><td><input type="number" min="0" id="e-enrolled" value="${v.enrolled}"></td><td>1인당 단가 분모 — 차수 신청인원 합 자동(수정 가능)</td></tr>
         <tr class="sum-row"><td colspan="2"><b>교육생 1인당 단가</b></td><td class="num" id="e-unit"></td><td></td></tr>
       </tbody>
     </table>`;
-  ["e-material", "e-supplies", "e-refresh", "e-completed"].forEach((id) =>
+  ["e-material", "e-supplies", "e-refresh", "e-enrolled"].forEach((id) =>
     document.getElementById(id).addEventListener("input", recompute));
+  // 직접 수정하면 자동 갱신을 멈춘다(다시 '조회'하면 자동값으로 복귀).
+  document.getElementById("e-enrolled").addEventListener("input", () => { enrolledManual = true; });
   box.querySelectorAll(".c-label").forEach((el) =>
     el.addEventListener("input", (e) => { customItems[+e.target.dataset.i].label = e.target.value; }));
   box.querySelectorAll(".c-amt").forEach((el) =>
@@ -138,7 +154,7 @@ function readValues() {
   const num = (id) => (document.getElementById(id) ? Number(document.getElementById(id).value) || 0 : 0);
   return {
     materialResearch: num("e-material"), supplies: num("e-supplies"),
-    refreshments: num("e-refresh"), completed: num("e-completed"),
+    refreshments: num("e-refresh"), enrolled: num("e-enrolled"),
   };
 }
 
@@ -150,9 +166,9 @@ function recompute() {
   const num = (id) => Number(document.getElementById(id).value) || 0;
   const total = auto.사내 + auto.사외 + auto.travel
     + num("e-material") + num("e-supplies") + num("e-refresh") + customTotal();
-  const completed = num("e-completed");
+  const enrolled = num("e-enrolled");
   document.getElementById("e-total").textContent = total.toLocaleString("ko-KR");
-  document.getElementById("e-unit").textContent = completed ? Math.round(total / completed).toLocaleString("ko-KR") + " 원/명" : "-";
+  document.getElementById("e-unit").textContent = enrolled ? Math.round(total / enrolled).toLocaleString("ko-KR") + " 원/명" : "-";
 }
 
 // 강사별 세부 내역(사내/사외 강사료·여비 산출 근거).
@@ -185,7 +201,7 @@ async function save() {
     materialResearch: num("e-material"),
     supplies: num("e-supplies"),
     refreshments: num("e-refresh"),
-    completed: num("e-completed"),
+    enrolled: num("e-enrolled"),
     custom,
     autoInHouse: auto.사내, autoOutsource: auto.사외, autoTravel: auto.travel,
     total: auto.사내 + auto.사외 + auto.travel
