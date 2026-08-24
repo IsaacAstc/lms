@@ -121,11 +121,12 @@ async function expensesHTML(month) {
     ...custom.map((c) => [c.label || "(기타)", c.amount]),
   ].map(([label, v]) => `<tr><td>${escapeHtml(label)}</td><td style="text-align:right">${won(v)}</td></tr>`).join("");
   const total = e.total ?? 0;
-  const completed = e.completed ?? 0;
-  const unit = completed ? Math.round(total / completed) : null;
+  // 1인당 단가 분모: 입교인원(신청인원). 구버전 저장분은 completed(이수인원)로 폴백.
+  const enrolled = e.enrolled ?? e.completed ?? 0;
+  const unit = enrolled ? Math.round(total / enrolled) : null;
   return `<table><thead><tr><th>항목</th><th>비용(원)</th></tr></thead><tbody>${rows}
     <tr class="sum-row"><td><b>합계</b></td><td style="text-align:right"><b>${won(total)}</b></td></tr>
-    <tr><td>이수인원(명)</td><td style="text-align:right">${completed}</td></tr>
+    <tr><td>입교인원(명)</td><td style="text-align:right">${enrolled}</td></tr>
     <tr class="sum-row"><td><b>교육생 1인당 단가</b></td><td style="text-align:right"><b>${unit == null ? "-" : won(unit) + " 원/명"}</b></td></tr>
     </tbody></table>`;
 }
