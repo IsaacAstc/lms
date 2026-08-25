@@ -585,8 +585,17 @@
           <div class="load-row url-cell">
             <input id="board-url" readonly />
             <button id="board-url-copy" type="button">복사</button>
+            <button id="board-url-qr" type="button">QR</button>
             <a id="board-open" href="board.html" target="_blank" class="btn-link">새 창에서 열기</a>
           </div>
+          <dialog id="board-qr-dialog" class="apply-dialog">
+            <div style="padding:1.2rem 1.3rem;display:flex;flex-direction:column;gap:0.7rem;align-items:center;">
+              <h3 style="margin:0;">공개 현황 보드</h3>
+              <div id="board-qr-box"></div>
+              <div id="board-qr-url" style="font-size:0.75rem;color:var(--muted);word-break:break-all;text-align:center;"></div>
+              <button type="button" id="board-qr-close">닫기</button>
+            </div>
+          </dialog>
 
           <h3>동기화 현황</h3>
           <p class="hint">이 탭을 열면 변경된 차수만 <b>자동 반영</b>됩니다(차수 저장·CSV 대량등록·시드분 모두 포함). 아래 버튼은 필요 시 전체를 강제로 다시 게시합니다.</p>
