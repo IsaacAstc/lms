@@ -108,10 +108,10 @@ exports.submitApplication = onCall(
       receiptCode = str(d.receiptCode, 16, "접수번호", true).toUpperCase().replace(/\s/g, "");
     }
 
-    // 첨부: 공문 필수(1개 이상), 최대 5개, 파일당 5MB·전체 8MB.
+    // 첨부: 공문 필수(1개 이상), 최대 6개(공문+신청양식+기타 4), 파일당 5MB·전체 8MB.
     const rawAtt = Array.isArray(d.attachments) ? d.attachments : [];
     if (!rawAtt.length) bad("공문 파일을 첨부하세요(필수).");
-    if (rawAtt.length > 5) bad("첨부는 최대 5개까지 가능합니다.");
+    if (rawAtt.length > 6) bad("첨부는 최대 6개까지 가능합니다.");
     let totalBytes = 0;
     const attachments = rawAtt.map((a) => {
       const name = str(a && a.name, 200, "첨부파일명", true).replace(/[\r\n"]/g, "_");
