@@ -16,7 +16,35 @@ export function initBoardAdmin() {
     navigator.clipboard?.writeText(document.getElementById("board-url").value);
     document.getElementById("board-url-copy").textContent = "복사됨";
   });
+  document.getElementById("board-url-qr").addEventListener("click", showBoardQr);
+  document.getElementById("board-qr-close").addEventListener("click", () => document.getElementById("board-qr-dialog").close());
   document.addEventListener("tabshown", (e) => { if (e.detail === "board") load(); });
+}
+
+// ── 공개 페이지 QR (라이브러리는 최초 사용 시 지연 로드 — scfe·수업보드·로지보드와 공유) ──
+let qrLibLoading = null;
+function loadQrLib() {
+  if (typeof QRCode !== "undefined") return Promise.resolve();
+  if (!qrLibLoading) {
+    qrLibLoading = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "scfe/js/qrcode.min.js";
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("QR 라이브러리를 불러오지 못했습니다."));
+      document.head.appendChild(s);
+    });
+  }
+  return qrLibLoading;
+}
+async function showBoardQr() {
+  try { await loadQrLib(); } catch (e) { return alert(e.message); }
+  const url = document.getElementById("board-url").value;
+  if (!url) return alert("먼저 공개 현황 보드 탭이 로드된 뒤 사용하세요.");
+  document.getElementById("board-qr-url").textContent = url;
+  const box = document.getElementById("board-qr-box");
+  box.innerHTML = "";
+  new QRCode(box, { text: url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  document.getElementById("board-qr-dialog").showModal();
 }
 
 async function load() {
