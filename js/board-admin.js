@@ -17,6 +17,7 @@ export function initBoardAdmin() {
     document.getElementById("board-url-copy").textContent = "복사됨";
   });
   document.getElementById("board-url-qr").addEventListener("click", showBoardQr);
+  document.getElementById("board-form-save").addEventListener("click", saveApplyForm);
   document.getElementById("board-qr-close").addEventListener("click", () => document.getElementById("board-qr-dialog").close());
   document.addEventListener("tabshown", (e) => { if (e.detail === "board") load(); });
 }
@@ -36,6 +37,46 @@ function loadQrLib() {
   }
   return qrLibLoading;
 }
+// ── 신청양식 파일(publicBoard/__form — 공개 읽기, Firestore에 base64로 저장) ──
+// 엑셀 양식은 수십 KB 수준이라 문서 1개로 충분(700KB 상한 — base64 팽창 감안).
+const FORM_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+function showApplyFormInfo(d) {
+  const cur = document.getElementById("board-form-current");
+  const dl = document.getElementById("board-form-dl");
+  if (!d || !d.dataBase64) { cur.textContent = "등록된 양식 없음"; dl.hidden = true; return; }
+  const when = d.updatedAtMs ? new Intl.DateTimeFormat("ko-KR", { dateStyle: "short" }).format(new Date(d.updatedAtMs)) : "";
+  cur.textContent = `현재 양식: ${d.name || "form.xlsx"} (${Math.round((d.size || 0) / 1024)}KB${when ? ` · ${when}` : ""})`;
+  dl.hidden = false;
+  dl.href = `data:${d.mime || FORM_MIME};base64,${d.dataBase64}`;
+  dl.download = d.name || "신청양식.xlsx";
+}
+async function loadApplyForm() {
+  try {
+    const d = await getDoc(doc(db, "publicBoard", "__form"));
+    showApplyFormInfo(d.exists() ? d.data() : null);
+  } catch { /* */ }
+}
+async function saveApplyForm() {
+  const inp = document.getElementById("board-form-file");
+  const f = inp.files[0];
+  if (!f) return alert("업로드할 신청양식 파일을 선택하세요.");
+  if (f.size > 700 * 1024) return alert("양식 파일은 700KB 이하만 등록할 수 있습니다.");
+  const dataBase64 = await new Promise((resolve) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1] || "");
+    r.onerror = () => resolve("");
+    r.readAsDataURL(f);
+  });
+  if (!dataBase64) return alert("파일을 읽지 못했습니다.");
+  try {
+    const d = { name: f.name, size: f.size, mime: f.type || FORM_MIME, dataBase64, updatedAtMs: Date.now() };
+    await setDoc(doc(db, "publicBoard", "__form"), d);
+    inp.value = "";
+    showApplyFormInfo(d);
+    alert("신청양식을 저장했습니다. 공개 보드 신청 화면에 즉시 반영됩니다.");
+  } catch (e) { alert("저장 실패: " + e.message); }
+}
+
 async function showBoardQr() {
   try { await loadQrLib(); } catch (e) { return alert(e.message); }
   const url = document.getElementById("board-url").value;
@@ -56,6 +97,7 @@ async function load() {
     document.getElementById("board-apply-input").value = d.exists() ? (d.data().applyInfo || "") : "";
     document.getElementById("board-apply-enabled").checked = d.exists() && !!d.data().applyEnabled;
   } catch { /* */ }
+  loadApplyForm();
   try {
     const a = await getDoc(doc(db, "settings", "apply"));
     document.getElementById("board-apply-email").value = a.exists() ? (a.data().email || "") : "";

@@ -45,6 +45,12 @@
           <label>공문 첨부 <small>(필수 · 파일당 5MB 이하)</small>
             <input type="file" id="apply-file" required />
           </label>
+          <div id="apply-form-row" hidden>
+            <p class="hint" id="apply-form-dl-row" hidden>📥 <a id="apply-form-dl" href="#">신청양식 내려받기</a> — 양식을 작성한 뒤 아래에 첨부하세요.</p>
+            <label>신청양식 첨부 <small>(필수 · 5MB 이하)</small>
+              <input type="file" id="apply-form-file" />
+            </label>
+          </div>
           <div id="apply-extra-files"></div>
           <button type="button" id="apply-add-file" class="apply-add-file">+ 기타 첨부 추가</button>
           <label>제목 <small>(선택)</small>

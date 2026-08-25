@@ -128,6 +128,8 @@ function openDialog(id, kind) {
       Array.from({ length: maxN }, (_, i) => `<option value="${i + 1}">${i + 1}명</option>`).join("");
   }
   document.getElementById("apply-file").value = "";
+  document.getElementById("apply-form-file").value = "";
+  document.getElementById("apply-form-row").hidden = !apply; // 신청양식은 신청 시에만(취소는 불필요)
   document.getElementById("apply-extra-files").innerHTML = "";
   document.getElementById("apply-receipt").value = "";
   document.getElementById("apply-subject").value = "";
@@ -169,8 +171,13 @@ async function send() {
     if (!payload.receiptCode) { status.textContent = "접수번호를 입력하세요."; return; }
   }
 
-  // 첨부: 공문(필수) + 기타 첨부(선택, 추가 버튼) — 파일당 5MB, 전체 8MB 제한.
+  // 첨부: 공문(필수) + 신청양식(신청 시 필수) + 기타 첨부(선택) — 파일당 5MB, 전체 8MB 제한.
   const files = [document.getElementById("apply-file").files[0]];
+  if (current.kind === "apply") {
+    const formFile = document.getElementById("apply-form-file").files[0];
+    if (!formFile) { status.textContent = "작성한 신청양식 파일을 첨부하세요(필수)."; return; }
+    files.push(formFile);
+  }
   document.querySelectorAll("#apply-extra-files input[type=file]").forEach((inp) => {
     if (inp.files[0]) files.push(inp.files[0]);
   });
@@ -228,6 +235,18 @@ document.getElementById("apply-add-file").addEventListener("click", () => {
 
 function main() {
   applyDefaultRange(); // 최초 조회는 오늘 ~ 다음 달 말일.
+
+  // 신청양식 파일(__form 문서) 구독 — 신청 다이얼로그에 내려받기 링크 표시.
+  onSnapshot(doc(db, "publicBoard", "__form"), (snap) => {
+    const f = snap.exists() ? snap.data() : null;
+    const row = document.getElementById("apply-form-dl-row");
+    if (!f || !f.dataBase64) { row.hidden = true; return; }
+    const a = document.getElementById("apply-form-dl");
+    a.href = `data:${f.mime || "application/octet-stream"};base64,${f.dataBase64}`;
+    a.download = f.name || "신청양식.xlsx";
+    a.textContent = `신청양식 내려받기 (${f.name || "양식"})`;
+    row.hidden = false;
+  }, () => {});
 
   // 신청 안내 텍스트(__config 문서) 구독.
   onSnapshot(doc(db, "publicBoard", "__config"), (snap) => {
