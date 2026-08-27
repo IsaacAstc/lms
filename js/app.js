@@ -237,6 +237,8 @@ window.addEventListener("DOMContentLoaded", () => {
       appView.hidden = false;
       const roleLabel = masterMode ? "마스터 관리자" : observerMode ? "참관자 · 조회 전용" : "일반 관리자";
       userEmail.textContent = `${user.email || ""} (${roleLabel})`;
+      // 비디오 볼트(별도 프로젝트, 같은 Firebase 로그인 세션 공유)는 마스터에게만 노출.
+      document.getElementById("link-vault").hidden = !masterMode;
       if (observerMode) blockWrites();
       initApp();
     },
