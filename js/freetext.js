@@ -80,6 +80,10 @@ function currentEntries() {
     const cn = courseNameOf(r.courseId);
     if (r.freeDissatisfied) out.push({ id: r.id, kind: "불만족", text: r.freeDissatisfied, field: "catDissatisfied", cat: r.catDissatisfied || "", when, courseName: cn });
     if (r.freeSuggestion) out.push({ id: r.id, kind: "제안개선", text: r.freeSuggestion, field: "catSuggestion", cat: r.catSuggestion || "", when, courseName: cn });
+    // 조건부 후속 주관식(분류 미지원 — 후속 문항 문구를 함께 표시).
+    for (const t of r.fuTexts || []) {
+      if (t?.text) out.push({ id: r.id, kind: "조건부", text: `[${t.label}] ${t.text}`, field: "", cat: "", when, courseName: cn });
+    }
   }
   return out.filter((e) => (!kind || e.kind === kind) && (!kw || e.text.toLowerCase().includes(kw)));
 }
@@ -97,7 +101,7 @@ function renderEntries() {
       <td>${escapeHtml(e.courseName)}</td>
       <td>${escapeHtml(e.kind)}</td>
       <td class="raw-free">${escapeHtml(e.text)}</td>
-      <td><select class="ft-cat" data-id="${e.id}" data-field="${e.field}">${catOptions(e.cat)}</select></td>
+      <td>${e.field ? `<select class="ft-cat" data-id="${e.id}" data-field="${e.field}">${catOptions(e.cat)}</select>` : "-"}</td>
     </tr>`).join("");
   box.innerHTML = `<table><thead><tr><th>수집일시</th><th>과정명</th><th>종류</th><th>원문</th><th>분류</th></tr></thead><tbody>${rows}</tbody></table>`;
   box.querySelectorAll(".ft-cat").forEach((s) =>

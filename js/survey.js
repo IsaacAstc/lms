@@ -104,6 +104,8 @@ function render(survey, preview = false) {
       <p id="s-error" class="error"></p>
     </form>`;
 
+  wireFollowUps(survey);
+
   if (preview) {
     const btn = document.getElementById("s-submit");
     btn.disabled = true;
@@ -111,6 +113,55 @@ function render(survey, preview = false) {
   } else {
     document.getElementById("s-form").addEventListener("submit", (e) => submit(e, survey));
   }
+}
+
+/* ── 조건부 후속 문항(1단계 분기) ──
+ * 대상 문항 라벨로 입력 name을 찾아, 답변이 조건(예/아니오 선택 또는 N점 이하)에
+ * 맞을 때만 후속 문항을 노출한다. 숨겨지면 입력값을 비운다. */
+function parentNameOf(survey, label) {
+  const e = (survey.eduItems || []).indexOf(label);
+  if (e >= 0) return { name: `edu_${e}`, scale: true };
+  for (let ci = 0; ci < (survey.extraCats || []).length; ci++) {
+    const i = (survey.extraCats[ci].items || []).indexOf(label);
+    if (i >= 0) return { name: `ex_${ci}_${i}`, scale: true };
+  }
+  const o = (survey.oxItems || []).indexOf(label);
+  if (o >= 0) return { name: `ox_${o}`, scale: false };
+  return null;
+}
+function wireFollowUps(survey) {
+  const form = document.getElementById("s-form");
+  (survey.followUps || []).forEach((f, fi) => {
+    const p = parentNameOf(survey, f.q);
+    if (!p) return; // 대상 문항이 이 설문에 없음(세트 변경 등) — 무시.
+    const inputs = form.querySelectorAll(`input[name="${p.name}"]`);
+    if (!inputs.length) return;
+    const div = document.createElement("div");
+    div.className = "q-item fu-item";
+    div.id = `fu-${fi}`;
+    div.hidden = true;
+    div.innerHTML = f.type === "ox"
+      ? `<div class="q-label">↳ ${esc(f.label)}</div>
+         <div class="scale-row">
+           <label class="scale-opt"><input type="radio" name="fu_${fi}" value="1"><span>예</span></label>
+           <label class="scale-opt"><input type="radio" name="fu_${fi}" value="0"><span>아니오</span></label>
+         </div>`
+      : `<div class="q-label">↳ ${esc(f.label)}</div><textarea name="fu_${fi}" rows="2"></textarea>`;
+    // 대상 문항 바로 아래에 삽입.
+    inputs[0].closest(".q-item").after(div);
+    const update = () => {
+      const v = form[p.name]?.value;
+      const show = v !== "" && v != null && (p.scale
+        ? Number(v) <= (f.maxScore || 2) && f.cond === "score"
+        : (f.cond === "yes" ? v === "1" : v === "0"));
+      div.hidden = !show;
+      if (!show) {
+        if (f.type === "ox") div.querySelectorAll("input").forEach((r) => { r.checked = false; });
+        else div.querySelector("textarea").value = "";
+      }
+    };
+    inputs.forEach((r) => r.addEventListener("change", update));
+  });
 }
 
 async function submit(e, survey) {
@@ -153,6 +204,22 @@ async function submit(e, survey) {
     oxAnswers.push({ label: survey.oxItems[i], yes: v === "1" });
   }
 
+  // 조건부 후속 문항: 노출된 것만 수집. O/X 후속은 필수, 주관식 후속은 선택.
+  const fuTexts = [];
+  for (let fi = 0; fi < (survey.followUps || []).length; fi++) {
+    const f = survey.followUps[fi];
+    const div = document.getElementById(`fu-${fi}`);
+    if (!div || div.hidden) continue;
+    if (f.type === "ox") {
+      const v = form[`fu_${fi}`]?.value;
+      if (v !== "0" && v !== "1") { err.textContent = `'${f.label}' 문항에 응답해 주세요.`; return; }
+      oxAnswers.push({ label: f.label, yes: v === "1" });
+    } else {
+      const t = (form[`fu_${fi}`]?.value || "").trim();
+      if (t) fuTexts.push({ q: f.q, label: f.label, text: t });
+    }
+  }
+
   const payload = {
     courseId: survey.courseId,
     courseType: survey.courseType || "",
@@ -171,6 +238,7 @@ async function submit(e, survey) {
   // O/X·추가 카테고리 응답(문항 라벨 스냅샷 포함 — 원문 파기 후에도 라벨 기준 집계 가능).
   if (oxAnswers.length) payload.oxAnswers = oxAnswers;
   if (extraAnswers.length) payload.extraAnswers = extraAnswers;
+  if (fuTexts.length) payload.fuTexts = fuTexts; // 조건부 주관식 원문(180일 파기 대상 동일)
   // 제출 전 한 번 더 확인.
   confirmSubmit(() => doSubmit(payload, survey));
 }
