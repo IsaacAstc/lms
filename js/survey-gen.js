@@ -104,6 +104,15 @@ export async function regenerateSurvey(course, roomId) {
     await deleteDoc(doc(db, "publicSurveys", course.id)).catch(() => {});
     return null;
   }
+  // 노출기간을 수동 지정한 설문은 재생성해도 그 값을 유지한다('기본값 복원'으로만 해제).
+  try {
+    const prev = await getDoc(doc(db, "publicSurveys", course.id));
+    if (prev.exists() && prev.data().manualWindow) {
+      survey.openMs = prev.data().openMs;
+      survey.closeMs = prev.data().closeMs;
+      survey.manualWindow = true;
+    }
+  } catch { /* 기존 문서 조회 실패 시 자동값 사용 */ }
   await setDoc(doc(db, "publicSurveys", course.id), survey);
   return survey;
 }

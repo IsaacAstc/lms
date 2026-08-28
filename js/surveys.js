@@ -1,11 +1,11 @@
 // 관리자 설문 관리: 생성된 공개 설문 목록·노출창·응답수·강의실 URL·미리보기·재생성·삭제.
 import {
-  collection, getCountFromServer, query, where, doc, deleteDoc,
+  collection, getCountFromServer, query, where, doc, deleteDoc, setDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { watchCollection, onCollection, getCache } from "./store.js";
 import { escapeHtml } from "./app.js";
-import { fmtKst, fmtDot } from "./time.js";
+import { fmtKst, fmtDot, kstToMs, HOUR_MS } from "./time.js";
 import { coursesCache, roomIdOf } from "./courses.js";
 import { getRooms } from "./rooms.js";
 import { regenerateSurvey } from "./survey-gen.js";
@@ -52,6 +52,52 @@ export function initSurveys() {
   });
   // 설문 관리 탭이 표시될 때마다 응답 수 자동 갱신.
   document.addEventListener("tabshown", (e) => { if (e.detail === "surveys") loadCounts(); });
+  document.getElementById("sv-window-save").addEventListener("click", saveWindow);
+  document.getElementById("sv-window-auto").addEventListener("click", restoreAutoWindow);
+  document.getElementById("sv-window-close-btn").addEventListener("click", () =>
+    document.getElementById("sv-window-dialog").close());
+}
+
+/* ── 노출기간 수동 수정 ──
+ * 기본은 자동(종료 2시간 전 ~ 종료 후 1시간). 저장하면 manualWindow 표시가 붙고
+ * 시간표 재생성 시에도 수동 값이 유지된다(survey-gen.js에서 보존). */
+let windowTarget = null; // 편집 중인 설문 문서
+const msToInput = (ms) => (fmtKst(ms) || "").replace(" ", "T");
+function inputToMs(v) {
+  const [date, time] = String(v || "").split("T");
+  return kstToMs(date, time);
+}
+function openWindowDialog(s) {
+  windowTarget = s;
+  document.getElementById("sv-window-course").textContent =
+    `${s.courseName}${s.manualWindow ? " · 현재 수동 설정" : " · 현재 기본값(자동)"}`;
+  document.getElementById("sv-window-open").value = msToInput(s.openMs);
+  document.getElementById("sv-window-close").value = msToInput(s.closeMs);
+  document.getElementById("sv-window-dialog").showModal();
+}
+async function saveWindow() {
+  if (!windowTarget) return;
+  const openMs = inputToMs(document.getElementById("sv-window-open").value);
+  const closeMs = inputToMs(document.getElementById("sv-window-close").value);
+  if (!Number.isFinite(openMs) || !Number.isFinite(closeMs)) return alert("시작·종료 일시를 모두 입력하세요.");
+  if (closeMs <= openMs) return alert("종료가 시작보다 빠르거나 같습니다.");
+  try {
+    await setDoc(doc(db, "publicSurveys", windowTarget.courseId),
+      { openMs, closeMs, manualWindow: true, updatedAtMs: Date.now() }, { merge: true });
+    document.getElementById("sv-window-dialog").close();
+  } catch (e) { alert("저장 실패: " + e.message); }
+}
+async function restoreAutoWindow() {
+  if (!windowTarget) return;
+  if (!windowTarget.endMs) return alert("교육 종료 시각 정보가 없어 기본값을 계산할 수 없습니다.");
+  try {
+    await setDoc(doc(db, "publicSurveys", windowTarget.courseId), {
+      openMs: windowTarget.endMs - 2 * HOUR_MS,
+      closeMs: windowTarget.endMs + 1 * HOUR_MS,
+      manualWindow: false, updatedAtMs: Date.now(),
+    }, { merge: true });
+    document.getElementById("sv-window-dialog").close();
+  } catch (e) { alert("복원 실패: " + e.message); }
 }
 
 // 노출 창 표기: 같은 날이면 '2026.08.27 15:50 - 18:50', 다르면 두 줄로.
@@ -100,7 +146,8 @@ function render() {
     tr.innerHTML = `
       <td>${escapeHtml(s.courseName)}</td>
       <td>${escapeHtml(s.roomName || "")}</td>
-      <td>${windowText(s)}</td>
+      <td>${windowText(s)}${s.manualWindow ? ` <small title="수동 지정된 노출기간 — 재생성해도 유지">(수동)</small>` : ""}
+        <button type="button" class="pad-mini win-edit" title="노출기간 수정">✎</button></td>
       <td style="text-align:right">${(s.instructorTargets || []).length}</td>
       <td class="resp-count" data-course="${s.courseId}">–</td>
       <td class="url-cell"><button type="button" class="copy url-copy" title="${escapeHtml(url)}">복사</button><a class="btn-link url-open" href="${escapeHtml(url)}" target="_blank" title="${escapeHtml(url)}">열기</a></td>
@@ -109,6 +156,7 @@ function render() {
         <button type="button" class="regen">재생성</button>
         <button type="button" class="del">삭제</button>
       </td>`;
+    tr.querySelector(".win-edit").addEventListener("click", () => openWindowDialog(s));
     tr.querySelector(".url-copy").addEventListener("click", () => {
       navigator.clipboard?.writeText(url);
       tr.querySelector(".url-copy").textContent = "복사됨";
