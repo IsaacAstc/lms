@@ -75,3 +75,17 @@ export const DEFAULT_INSTRUCTOR_ITEMS = [
   "질의응답 성실도",
   "전반적인 교육만족도",
 ];
+// 주관식 2종(불만족 / 제안·개선) — 문구는 수정 가능하되 개수·성격은 고정
+// (주관식 원문 관리·분류·보고서가 이 2종 구분 위에 있음).
+export const DEFAULT_FREE_ITEMS = [
+  "교육 불만족 의견",
+  "교육 관련 제안·개선요구 의견",
+];
+// 설문 섹션(카테고리) 제목 — 세트별로 수정 가능. edu/inst는 집계 구조상 삭제 불가,
+// 추가 카테고리는 extraCats(5점 척도 문항 그룹)로 자유 추가·삭제.
+export const DEFAULT_SECTION_TITLES = {
+  edu: "교육 만족도",
+  inst: "강사 만족도",
+  free: "주관식",
+  ox: "예/아니오",
+};

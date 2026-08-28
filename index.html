@@ -368,6 +368,15 @@
           <h3>강사 만족도 (교관유형 × 강사·과목, 100점) <button class="csv-export" type="button" data-target="#rep-inst" data-name="설문_강사만족도">CSV 내보내기</button></h3>
           <div class="table-wrap" id="rep-inst"></div>
 
+          <div id="rep-extra-wrap" hidden>
+            <h3>추가 카테고리 (100점) <button class="csv-export" type="button" data-target="#rep-extra" data-name="설문_추가카테고리">CSV 내보내기</button></h3>
+            <div class="table-wrap" id="rep-extra"></div>
+          </div>
+          <div id="rep-ox-wrap" hidden>
+            <h3>예/아니오(O/X) 문항 <button class="csv-export" type="button" data-target="#rep-ox" data-name="설문_OX">CSV 내보내기</button></h3>
+            <div class="table-wrap" id="rep-ox"></div>
+          </div>
+
           <h3>설문 원응답 (개별 익명 응답)</h3>
           <p class="hint">개별 응답 원자료입니다. 완전 익명이라 개인 식별정보는 포함되지 않습니다. 교1-교6은 교육만족도 6문항 점수(5점)입니다. <b>원응답 보기</b>를 눌러야 표시됩니다.</p>
           <div class="form-actions">
@@ -495,13 +504,23 @@
             <button id="si-set-add" type="button">세트 추가(현재 문항 복제)</button>
             <span id="si-set-note" class="hint"></span>
           </div>
+          <p class="hint"><b>섹션(카테고리) 제목</b> — 설문 화면의 소제목입니다. 교육·강사 만족도는 집계 구조상 삭제할 수 없고 제목만 바꿀 수 있습니다.</p>
+          <div id="si-titles"></div>
           <p class="hint"><b>교육 만족도 문항</b></p>
           <div id="si-edu-list"></div>
           <p class="hint"><b>강사 만족도 문항</b></p>
           <div id="si-inst-list"></div>
+          <p class="hint"><b>주관식 문항 문구</b> — 2개 고정(불만족 / 제안·개선 성격). 문구만 수정할 수 있으며 비우면 기본 문구로 저장됩니다.</p>
+          <div id="si-free-list"></div>
+          <p class="hint"><b>예/아니오(O/X) 문항</b> — 필요할 때만 추가하세요. 집계는 예/아니오 건수와 '예' 비율(%)로 표시됩니다.</p>
+          <div id="si-ox-list"></div>
+          <p class="hint"><b>추가 카테고리</b> — 5점 척도 문항 그룹을 카테고리 단위로 자유롭게 추가·삭제할 수 있습니다(집계는 카테고리별 표).</p>
+          <div id="si-extra-list"></div>
           <div class="form-actions">
             <button id="si-edu-add" type="button">교육 문항 추가</button>
             <button id="si-inst-add" type="button">강사 문항 추가</button>
+            <button id="si-ox-add" type="button">O/X 문항 추가</button>
+            <button id="si-extra-add" type="button">카테고리 추가</button>
             <button id="si-save" type="button">설문 문항 저장</button>
             <span class="rev-group" id="si-rev-group">
               <label>개정 발효일자 <input type="date" id="si-rev-date" /></label>
