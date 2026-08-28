@@ -216,8 +216,12 @@ function loadDraftForSet() {
   } else {
     const cur = getSurveyItems();
     const d = docByName("surveyItems");
-    eduDraft = (cur.eduItems || DEFAULT_EDU_ITEMS).slice();
-    instDraft = (cur.instructorItems || DEFAULT_INST_ITEMS).slice();
+    // 개정 이력이 있으면 최신 개정본 기준으로 로딩(현재값과 어긋난 경우 대비).
+    const hist = (Array.isArray(d?.history) ? d.history : []).filter((h) => h && h.from)
+      .sort((a, b) => a.from.localeCompare(b.from));
+    const latest = hist[hist.length - 1];
+    eduDraft = (Array.isArray(latest?.eduItems) ? latest.eduItems : (cur.eduItems || DEFAULT_EDU_ITEMS)).slice();
+    instDraft = (Array.isArray(latest?.instructorItems) ? latest.instructorItems : (cur.instructorItems || DEFAULT_INST_ITEMS)).slice();
     freeDraft = (extrasOf(d).freeItems || DEFAULT_FREE_ITEMS.map((t) => ({ use: true, label: t }))).map((x) => ({ ...x }));
     freeExtraDraft = (extrasOf(d).freeExtraItems || []).slice();
     oxDraft = (extrasOf(d).oxItems || []).slice();
@@ -620,9 +624,14 @@ function readFeeRow(tr) {
     monthlyCap: cap === "" ? null : Number(cap),
   };
 }
+// 개정 이력이 있으면 편집 표 기본 로딩은 '최신 개정본' 기준(현재값과 어긋난 경우 대비).
+function latestRevisionRates(docName) {
+  const hist = getRateHistory(docName);
+  return hist.length ? hist[hist.length - 1].rates : null;
+}
 function renderFees(ratesOverride) {
   const tbody = document.getElementById("fee-tbody");
-  const rates = ratesOverride || getFeeRates();
+  const rates = ratesOverride || latestRevisionRates("feeRates") || getFeeRates();
   tbody.innerHTML = "";
   // 저장된 항목이 있으면 그대로, 없으면 기본 9종 뼈대.
   const types = Object.keys(rates).length ? Object.keys(rates) : INSTRUCTOR_TYPES;
@@ -679,7 +688,7 @@ function readTravelRow(tr) {
 }
 function renderTravel(ratesOverride) {
   const tbody = document.getElementById("travel-tbody");
-  const rates = ratesOverride || getTravelRates();
+  const rates = ratesOverride || latestRevisionRates("travelRates") || getTravelRates();
   tbody.innerHTML = "";
   const keys = Object.keys(rates);
   if (!keys.length) {
