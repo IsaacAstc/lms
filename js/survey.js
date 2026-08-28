@@ -70,9 +70,10 @@ function render(survey, preview = false) {
     .join("");
 
   // 섹션 제목·주관식 문구는 설정에서 수정 가능(스냅샷 우선, 없으면 기본 문구).
+  // 기본 주관식 2종: {use, label} (구버전 문자열 배열 호환). use=false면 미표시.
   const T = survey.titles || {};
-  const freeItems = (survey.freeItems?.length === 2)
-    ? survey.freeItems : ["교육 불만족 의견", "교육 관련 제안·개선요구 의견"];
+  const freeSlots = freeSlotsOf(survey);
+  const freeExtra = survey.freeExtraItems || [];
   // 추가 카테고리(5점 척도 그룹).
   const extraBlocks = (survey.extraCats || []).map((cat, ci) => `
     <h2>${esc(cat.title)}</h2>
@@ -95,11 +96,11 @@ function render(survey, preview = false) {
       ${instBlocks ? `<h2>${esc(T.inst || "강사 만족도")}</h2>${instBlocks}` : ""}
       ${extraBlocks}
       ${oxRows ? `<h2>${esc(T.ox || "예/아니오")}</h2>${oxRows}` : ""}
-      <h2>${esc(T.free || "주관식")}</h2>
-      <div class="q-item"><div class="q-label">${esc(freeItems[0])}</div>
-        <textarea name="free_dissatisfied" rows="3"></textarea></div>
-      <div class="q-item"><div class="q-label">${esc(freeItems[1])}</div>
-        <textarea name="free_suggestion" rows="3"></textarea></div>
+      ${(freeSlots.length || freeExtra.length) ? `<h2>${esc(T.free || "주관식")}</h2>` : ""}
+      ${freeSlots.map((s) => `<div class="q-item"><div class="q-label">${esc(s.label)}</div>
+        <textarea name="${s.slot === 0 ? "free_dissatisfied" : "free_suggestion"}" rows="3"></textarea></div>`).join("")}
+      ${freeExtra.map((t, i) => `<div class="q-item"><div class="q-label">${esc(t)}</div>
+        <textarea name="freex_${i}" rows="3"></textarea></div>`).join("")}
       <button type="submit" id="s-submit">제출</button>
       <p id="s-error" class="error"></p>
     </form>`;
@@ -113,6 +114,18 @@ function render(survey, preview = false) {
   } else {
     document.getElementById("s-form").addEventListener("submit", (e) => submit(e, survey));
   }
+}
+
+// 기본 주관식 2종 중 사용 중인 슬롯만 [{slot(0=불만족,1=제안개선), label}]로 반환.
+function freeSlotsOf(survey) {
+  const defaults = ["교육 불만족 의견", "교육 관련 제안·개선요구 의견"];
+  const raw = survey.freeItems?.length === 2 ? survey.freeItems : defaults;
+  const out = [];
+  raw.forEach((x, i) => {
+    if (typeof x === "string") out.push({ slot: i, label: x });
+    else if (x && x.use !== false) out.push({ slot: i, label: x.label || defaults[i] });
+  });
+  return out;
 }
 
 /* ── 조건부 후속 문항(1단계 분기) ──
@@ -232,9 +245,16 @@ async function submit(e, survey) {
     eduItems: survey.eduItems || [],
     instructorItems: survey.instructorItems || [],
     scale: survey.scale || 5,
-    freeDissatisfied: form.free_dissatisfied.value.trim(),
-    freeSuggestion: form.free_suggestion.value.trim(),
+    freeDissatisfied: (form.free_dissatisfied?.value || "").trim(),
+    freeSuggestion: (form.free_suggestion?.value || "").trim(),
   };
+  // 자유 주관식(항상 노출) — 라벨과 함께 저장(선택 입력).
+  const freeExtra = [];
+  (survey.freeExtraItems || []).forEach((label, i) => {
+    const t = (form[`freex_${i}`]?.value || "").trim();
+    if (t) freeExtra.push({ label, text: t });
+  });
+  if (freeExtra.length) payload.freeExtra = freeExtra;
   // O/X·추가 카테고리 응답(문항 라벨 스냅샷 포함 — 원문 파기 후에도 라벨 기준 집계 가능).
   if (oxAnswers.length) payload.oxAnswers = oxAnswers;
   if (extraAnswers.length) payload.extraAnswers = extraAnswers;

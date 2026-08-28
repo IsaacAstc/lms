@@ -443,7 +443,7 @@
           <div class="load-row">
             <label>기간 <input id="ft-month" type="month" /></label>
             <label>종류
-              <select id="ft-kind"><option value="">전체</option><option>불만족</option><option>제안개선</option><option>조건부</option></select>
+              <select id="ft-kind"><option value="">전체</option><option>불만족</option><option>제안개선</option><option>추가주관식</option><option>조건부</option></select>
             </label>
             <label>키워드 <input id="ft-kw" placeholder="본문 검색" /></label>
             <button id="ft-search" type="button">조회</button>
@@ -514,8 +514,10 @@
           <div id="si-edu-list"></div>
           <p class="hint"><b>강사 만족도 문항</b></p>
           <div id="si-inst-list"></div>
-          <p class="hint"><b>주관식 문항 문구</b> — 2개 고정(불만족 / 제안·개선 성격). 문구만 수정할 수 있으며 비우면 기본 문구로 저장됩니다.</p>
+          <p class="hint"><b>기본 주관식 2종</b> — 불만족 / 제안·개선 성격(분류·보고서 구분에 사용). 문구 수정 가능, '사용'을 끄면 설문에 표시되지 않습니다(둘 다 끄면 주관식 0개). 문구를 비우면 기본 문구로 저장됩니다.</p>
           <div id="si-free-list"></div>
+          <p class="hint"><b>자유 주관식 문항</b> — 항상 노출되는 주관식을 자유롭게 추가·삭제합니다. 원문은 '주관식 원문' 탭에 <b>추가주관식</b> 종류로 열람됩니다(분류 미지원).</p>
+          <div id="si-freex-list"></div>
           <p class="hint"><b>예/아니오(O/X) 문항</b> — 필요할 때만 추가하세요. 집계는 예/아니오 건수와 '예' 비율(%)로 표시됩니다.</p>
           <div id="si-ox-list"></div>
           <p class="hint"><b>추가 카테고리</b> — 5점 척도 문항 그룹을 카테고리 단위로 자유롭게 추가·삭제할 수 있습니다(집계는 카테고리별 표).</p>
@@ -527,6 +529,7 @@
           <div class="form-actions">
             <button id="si-edu-add" type="button">교육 문항 추가</button>
             <button id="si-inst-add" type="button">강사 문항 추가</button>
+            <button id="si-freex-add" type="button">자유 주관식 추가</button>
             <button id="si-ox-add" type="button">O/X 문항 추가</button>
             <button id="si-extra-add" type="button">카테고리 추가</button>
             <button id="si-fu-add" type="button">후속 문항 추가</button>

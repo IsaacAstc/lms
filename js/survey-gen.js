@@ -71,8 +71,11 @@ export function buildSurvey(course, sessions, roomId, instructorsById = {}, item
     // 교육 종료일 기준으로 유효한 문항(설정에 개정 이력이 있으면 그 버전).
     eduItems: items.eduItems,
     instructorItems: items.instructorItems,
-    // 주관식 문구(2종)·O/X·섹션 제목·추가 카테고리(현행값 — 이력 없음).
-    freeItems: itemsAt?.freeItems?.length === 2 ? itemsAt.freeItems : DEFAULT_FREE_ITEMS,
+    // 주관식(기본 2종 {use,label} + 자유)·O/X·섹션 제목·추가 카테고리(현행값 — 이력 없음).
+    freeItems: itemsAt?.freeItems?.length === 2
+      ? itemsAt.freeItems
+      : DEFAULT_FREE_ITEMS.map((t) => ({ use: true, label: t })),
+    freeExtraItems: Array.isArray(itemsAt?.freeExtraItems) ? itemsAt.freeExtraItems : [],
     oxItems: Array.isArray(itemsAt?.oxItems) ? itemsAt.oxItems : [],
     titles: { ...DEFAULT_SECTION_TITLES, ...(itemsAt?.titles || {}) },
     extraCats: Array.isArray(itemsAt?.extraCats) ? itemsAt.extraCats : [],
