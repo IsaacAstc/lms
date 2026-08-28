@@ -6,7 +6,7 @@ import {
 import { db } from "./firebase.js";
 import { kstToMs, HOUR_MS } from "./time.js";
 import { resolveSurveyItems } from "./settings.js";
-import { DEFAULT_EDU_ITEMS, DEFAULT_INSTRUCTOR_ITEMS } from "./constants.js";
+import { DEFAULT_EDU_ITEMS, DEFAULT_INSTRUCTOR_ITEMS, DEFAULT_FREE_ITEMS, DEFAULT_SECTION_TITLES } from "./constants.js";
 
 // 교육만족도 6문항 / 강사만족도 3문항 (CLAUDE.md 2-1, 5점 척도).
 // 기본값은 constants에 두고 재export(설정 문항이 있으면 그것이 우선).
@@ -71,6 +71,11 @@ export function buildSurvey(course, sessions, roomId, instructorsById = {}, item
     // 교육 종료일 기준으로 유효한 문항(설정에 개정 이력이 있으면 그 버전).
     eduItems: items.eduItems,
     instructorItems: items.instructorItems,
+    // 주관식 문구(2종)·O/X·섹션 제목·추가 카테고리(현행값 — 이력 없음).
+    freeItems: itemsAt?.freeItems?.length === 2 ? itemsAt.freeItems : DEFAULT_FREE_ITEMS,
+    oxItems: Array.isArray(itemsAt?.oxItems) ? itemsAt.oxItems : [],
+    titles: { ...DEFAULT_SECTION_TITLES, ...(itemsAt?.titles || {}) },
+    extraCats: Array.isArray(itemsAt?.extraCats) ? itemsAt.extraCats : [],
     instructorTargets,
     updatedAtMs: Date.now(),
   };

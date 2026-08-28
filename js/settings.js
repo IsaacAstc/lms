@@ -2,7 +2,7 @@
 // 각 행의 키(강사유형/소속지)까지 수정 가능하며, 행 복사·삭제·추가를 지원.
 import { watchCollection, onCollection, getCache, setDocById } from "./store.js";
 import { escapeHtml } from "./app.js";
-import { INSTRUCTOR_TYPES, DEFAULT_EDU_ITEMS, DEFAULT_INSTRUCTOR_ITEMS as DEFAULT_INST_ITEMS } from "./constants.js";
+import { INSTRUCTOR_TYPES, DEFAULT_EDU_ITEMS, DEFAULT_INSTRUCTOR_ITEMS as DEFAULT_INST_ITEMS, DEFAULT_FREE_ITEMS, DEFAULT_SECTION_TITLES } from "./constants.js";
 
 
 function docByName(name) {
@@ -64,6 +64,18 @@ export function getSurveySets() {
   return (Array.isArray(d?.sets) ? d.sets : []).filter((x) => x && x.id);
 }
 
+// 주관식 문구(2종 고정)·O/X 문항·섹션 제목·추가 카테고리 —
+// 발효일자 이력 없이 현재값만 유지(세트별 별도 저장).
+function extrasOf(src) {
+  return {
+    freeItems: Array.isArray(src?.freeItems) && src.freeItems.length === 2 ? src.freeItems : null,
+    oxItems: Array.isArray(src?.oxItems) ? src.oxItems.filter(Boolean) : null,
+    titles: (src?.titles && typeof src.titles === "object") ? { ...DEFAULT_SECTION_TITLES, ...src.titles } : null,
+    extraCats: Array.isArray(src?.extraCats)
+      ? src.extraCats.filter((c) => c && c.title && Array.isArray(c.items) && c.items.length) : null,
+  };
+}
+
 // 세트 우선순위로 문항 해석: 차수 지정 > 커리큘럼 지정 > 기본 세트(발효일자 이력).
 export function resolveSurveyItems({ setId, dateStr }) {
   if (setId) {
@@ -72,11 +84,12 @@ export function resolveSurveyItems({ setId, dateStr }) {
       return {
         eduItems: set.eduItems?.length ? set.eduItems : null,
         instructorItems: set.instructorItems?.length ? set.instructorItems : null,
+        ...extrasOf(set),
         setId, setName: set.name || "",
       };
     }
   }
-  return { ...getSurveyItemsAt(dateStr), setId: "", setName: "" };
+  return { ...getSurveyItemsAt(dateStr), ...extrasOf(docByName("surveyItems")), setId: "", setName: "" };
 }
 
 export function getRateHistory(docName) {
@@ -155,7 +168,9 @@ function itemListRows(boxId, items) {
     : `<p class="empty">문항이 없습니다.</p>`;
 }
 
-let eduDraft = null, instDraft = null;
+let eduDraft = null, instDraft = null, freeDraft = null, oxDraft = null;
+let titlesDraft = null;   // {edu, inst, free, ox} — 섹션(카테고리) 제목
+let extraDraft = null;    // [{title, items:[]}] — 추가 카테고리(5점 척도)
 let editingSetId = "";   // "" = 기본 세트
 let draftLoadedFor = null; // 현재 draft가 어느 세트에서 로드됐는지
 
@@ -166,10 +181,19 @@ function loadDraftForSet() {
     const set = getSurveySets().find((x) => x.id === editingSetId);
     eduDraft = (set?.eduItems || DEFAULT_EDU_ITEMS).slice();
     instDraft = (set?.instructorItems || DEFAULT_INST_ITEMS).slice();
+    freeDraft = (extrasOf(set).freeItems || DEFAULT_FREE_ITEMS).slice();
+    oxDraft = (extrasOf(set).oxItems || []).slice();
+    titlesDraft = { ...(extrasOf(set).titles || DEFAULT_SECTION_TITLES) };
+    extraDraft = (extrasOf(set).extraCats || []).map((c) => ({ title: c.title, items: c.items.slice() }));
   } else {
     const cur = getSurveyItems();
+    const d = docByName("surveyItems");
     eduDraft = (cur.eduItems || DEFAULT_EDU_ITEMS).slice();
     instDraft = (cur.instructorItems || DEFAULT_INST_ITEMS).slice();
+    freeDraft = (extrasOf(d).freeItems || DEFAULT_FREE_ITEMS).slice();
+    oxDraft = (extrasOf(d).oxItems || []).slice();
+    titlesDraft = { ...(extrasOf(d).titles || DEFAULT_SECTION_TITLES) };
+    extraDraft = (extrasOf(d).extraCats || []).map((c) => ({ title: c.title, items: c.items.slice() }));
   }
   draftLoadedFor = editingSetId;
 }
@@ -196,6 +220,61 @@ function paintSurveyItems() {
   itemListRows("si-inst-list", instDraft);
   bindItemEditors("si-edu-list", eduDraft);
   bindItemEditors("si-inst-list", instDraft);
+  // 주관식 문구: 2개 고정(삭제·추가 없음), 문구만 수정.
+  const fbox = document.getElementById("si-free-list");
+  if (fbox) {
+    fbox.innerHTML = `<div class="chip-row">${freeDraft.map((t, i) =>
+      `<span class="chip"><input class="si-free" data-i="${i}" value="${escapeHtml(t)}" size="26"></span>`).join("")}</div>`;
+    fbox.querySelectorAll(".si-free").forEach((el) =>
+      el.addEventListener("input", (e) => { freeDraft[+e.target.dataset.i] = e.target.value; }));
+  }
+  // O/X(예/아니오) 문항: 자유 추가·삭제(없으면 설문에 미표시).
+  const obox = document.getElementById("si-ox-list");
+  if (obox) {
+    itemListRows("si-ox-list", oxDraft);
+    if (!oxDraft.length) obox.innerHTML = `<p class="hint">O/X 문항이 없습니다(설문에 표시되지 않음).</p>`;
+    bindItemEditors("si-ox-list", oxDraft);
+  }
+  // 섹션(카테고리) 제목: 설문 화면의 소제목. 교육·강사는 집계 구조상 삭제 불가, 제목만 수정.
+  const tbox = document.getElementById("si-titles");
+  if (tbox) {
+    const T = [["edu", "교육 만족도 제목"], ["inst", "강사 만족도 제목"], ["free", "주관식 제목"], ["ox", "O/X 제목"]];
+    tbox.innerHTML = `<div class="chip-row">${T.map(([k, lb]) =>
+      `<span class="chip">${lb} <input class="si-title" data-k="${k}" value="${escapeHtml(titlesDraft[k] || DEFAULT_SECTION_TITLES[k])}" size="14"></span>`).join("")}</div>`;
+    tbox.querySelectorAll(".si-title").forEach((el) =>
+      el.addEventListener("input", (e) => { titlesDraft[e.target.dataset.k] = e.target.value; }));
+  }
+  // 추가 카테고리(5점 척도 문항 그룹): 카테고리 단위 추가·삭제 + 문항 편집.
+  const xbox = document.getElementById("si-extra-list");
+  if (xbox) {
+    xbox.innerHTML = extraDraft.length ? "" : `<p class="hint">추가 카테고리가 없습니다.</p>`;
+    extraDraft.forEach((cat, ci) => {
+      const div = document.createElement("div");
+      div.className = "load-box";
+      div.innerHTML = `<div class="load-row">
+          <label>카테고리명 <input class="xc-title" data-c="${ci}" value="${escapeHtml(cat.title)}" size="20"></label>
+          <button type="button" class="xc-item-add" data-c="${ci}">문항 추가</button>
+          <button type="button" class="del xc-del" data-c="${ci}">카테고리 삭제</button>
+        </div>
+        <div class="chip-row">${cat.items.map((t, i) =>
+          `<span class="chip"><input class="xc-item" data-c="${ci}" data-i="${i}" value="${escapeHtml(t)}" size="18"><button type="button" class="chip-del xc-item-del" data-c="${ci}" data-i="${i}">×</button></span>`).join("")}</div>`;
+      xbox.appendChild(div);
+    });
+    xbox.querySelectorAll(".xc-title").forEach((el) =>
+      el.addEventListener("input", (e) => { extraDraft[+e.target.dataset.c].title = e.target.value; }));
+    xbox.querySelectorAll(".xc-item").forEach((el) =>
+      el.addEventListener("input", (e) => { extraDraft[+e.target.dataset.c].items[+e.target.dataset.i] = e.target.value; }));
+    xbox.querySelectorAll(".xc-item-add").forEach((b) =>
+      b.addEventListener("click", () => { extraDraft[+b.dataset.c].items.push(""); paintSurveyItems(); }));
+    xbox.querySelectorAll(".xc-item-del").forEach((b) =>
+      b.addEventListener("click", () => { extraDraft[+b.dataset.c].items.splice(+b.dataset.i, 1); paintSurveyItems(); }));
+    xbox.querySelectorAll(".xc-del").forEach((b) =>
+      b.addEventListener("click", () => {
+        const c = extraDraft[+b.dataset.c];
+        if (!confirm(`'${c.title || "(이름 없음)"}' 카테고리를 삭제할까요?`)) return;
+        extraDraft.splice(+b.dataset.c, 1); paintSurveyItems();
+      }));
+  }
   renderItemRevisions();
 }
 
@@ -209,6 +288,7 @@ async function saveCurrentSet() {
   try {
     await setDocById("settings", "surveyItems", {
       eduItems: d.eduItems || DEFAULT_EDU_ITEMS, instructorItems: d.instructorItems || DEFAULT_INST_ITEMS,
+      ...topExtras(),
       history: Array.isArray(d.history) ? d.history : [], sets,
     });
     alert("문항 세트를 저장했습니다.");
@@ -223,10 +303,11 @@ async function addSet() {
   const id = "set-" + Date.now();
   // 현재 편집 중인 문항을 초기값으로 복제.
   const items = collectItems();
-  const next = [...sets, { id, name, eduItems: items.eduItems, instructorItems: items.instructorItems }];
+  const next = [...sets, { id, name, ...items }];
   try {
     await setDocById("settings", "surveyItems", {
       eduItems: d.eduItems || DEFAULT_EDU_ITEMS, instructorItems: d.instructorItems || DEFAULT_INST_ITEMS,
+      ...topExtras(),
       history: Array.isArray(d.history) ? d.history : [], sets: next,
     });
     document.getElementById("si-set-new").value = "";
@@ -244,6 +325,7 @@ async function deleteSet() {
   try {
     await setDocById("settings", "surveyItems", {
       eduItems: d.eduItems || DEFAULT_EDU_ITEMS, instructorItems: d.instructorItems || DEFAULT_INST_ITEMS,
+      ...topExtras(),
       history: Array.isArray(d.history) ? d.history : [], sets: next,
     });
     editingSetId = ""; draftLoadedFor = null;
@@ -261,6 +343,25 @@ function collectItems() {
   return {
     eduItems: eduDraft.map((t) => t.trim()).filter(Boolean),
     instructorItems: instDraft.map((t) => t.trim()).filter(Boolean),
+    // 주관식은 2개 고정 — 비워두면 기본 문구로 복원.
+    freeItems: freeDraft.map((t, i) => (t.trim() || DEFAULT_FREE_ITEMS[i])),
+    oxItems: oxDraft.map((t) => t.trim()).filter(Boolean),
+    titles: Object.fromEntries(Object.keys(DEFAULT_SECTION_TITLES).map((k) =>
+      [k, (titlesDraft[k] || "").trim() || DEFAULT_SECTION_TITLES[k]])),
+    extraCats: extraDraft
+      .map((c) => ({ title: (c.title || "").trim(), items: c.items.map((t) => t.trim()).filter(Boolean) }))
+      .filter((c) => c.title && c.items.length),
+  };
+}
+// 기본 세트 top-level의 주관식·O/X 현행값(세트 편집·삭제 등에서 보존용).
+function topExtras() {
+  const d = docByName("surveyItems");
+  const x = extrasOf(d);
+  return {
+    freeItems: x.freeItems || DEFAULT_FREE_ITEMS,
+    oxItems: x.oxItems || [],
+    titles: x.titles || DEFAULT_SECTION_TITLES,
+    extraCats: x.extraCats || [],
   };
 }
 function renderItemRevisions() {
@@ -281,9 +382,11 @@ function renderItemRevisions() {
     const next = hist.filter((_, idx) => idx !== i);
     const latest = next[next.length - 1];
     try {
+      const cur0 = docByName("surveyItems") || {};
+      const sets0 = Array.isArray(cur0.sets) ? cur0.sets : [];
       await setDocById("settings", "surveyItems", latest
-        ? { eduItems: latest.eduItems, instructorItems: latest.instructorItems, history: next }
-        : { ...collectItems(), history: [] });
+        ? { eduItems: latest.eduItems, instructorItems: latest.instructorItems, ...topExtras(), history: next, sets: sets0 }
+        : { ...collectItems(), history: [], sets: sets0 });
     } catch (e) { alert("삭제 실패: " + e.message); }
   }));
 }
@@ -293,7 +396,8 @@ async function saveSurveyItems() {
   const d = docByName("surveyItems");
   const hist = (Array.isArray(d?.history) ? d.history : []).filter((h) => h && h.from)
     .sort((a, b) => a.from.localeCompare(b.from));
-  if (hist.length) hist[hist.length - 1] = { ...hist[hist.length - 1], ...items };
+  // 이력에는 교육·강사 문항만 보관(주관식·O/X는 현행값만 유지).
+  if (hist.length) hist[hist.length - 1] = { ...hist[hist.length - 1], eduItems: items.eduItems, instructorItems: items.instructorItems };
   try {
     const cur = docByName("surveyItems") || {};
     await setDocById("settings", "surveyItems",
@@ -315,13 +419,15 @@ async function addItemRevision() {
     hist.push({ from: "1900-01-01",
       eduItems: cur.eduItems || DEFAULT_EDU_ITEMS, instructorItems: cur.instructorItems || DEFAULT_INST_ITEMS });
   }
-  hist.push({ from, ...items });
+  hist.push({ from, eduItems: items.eduItems, instructorItems: items.instructorItems });
   hist.sort((a, b) => a.from.localeCompare(b.from));
   const latest = hist[hist.length - 1];
   try {
     const cur0 = docByName("surveyItems") || {};
     await setDocById("settings", "surveyItems",
-      { eduItems: latest.eduItems, instructorItems: latest.instructorItems, history: hist,
+      { eduItems: latest.eduItems, instructorItems: latest.instructorItems,
+        freeItems: items.freeItems, oxItems: items.oxItems,
+        titles: items.titles, extraCats: items.extraCats, history: hist,
         sets: Array.isArray(cur0.sets) ? cur0.sets : [] });
     alert(`설문 문항 개정본을 등록했습니다. (${from}부터 생성되는 설문에 적용)`);
   } catch (e) { alert("등록 실패: " + e.message); }
@@ -345,6 +451,8 @@ export function initSettings() {
   // 설문 문항 편집.
   document.getElementById("si-edu-add").addEventListener("click", () => { eduDraft.push(""); paintSurveyItems(); });
   document.getElementById("si-inst-add").addEventListener("click", () => { instDraft.push(""); paintSurveyItems(); });
+  document.getElementById("si-ox-add").addEventListener("click", () => { oxDraft.push(""); paintSurveyItems(); });
+  document.getElementById("si-extra-add").addEventListener("click", () => { extraDraft.push({ title: "", items: [""] }); paintSurveyItems(); });
   document.getElementById("si-save").addEventListener("click", saveCurrentSet);
   document.getElementById("si-set").addEventListener("change", (e) => {
     editingSetId = e.target.value; draftLoadedFor = null; paintSurveyItems();

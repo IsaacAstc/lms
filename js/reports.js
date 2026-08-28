@@ -6,7 +6,7 @@ import {
 import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import {
-  computeAgg, deserializeAgg, renderEduHTML, renderInstHTML, EDU_ITEMS,
+  computeAgg, deserializeAgg, renderEduHTML, renderInstHTML, renderOxHTML, renderExtraHTML, EDU_ITEMS,
 } from "./agg.js";
 import { fmtDot } from "./time.js";
 import { onCoursesChange, coursesCache } from "./courses.js";
@@ -84,6 +84,7 @@ async function run() {
     total.textContent = `총 응답 ${responses.length}건 (원문)${courseLabel}`;
     document.getElementById("rep-edu").innerHTML = renderEduHTML(agg);
     document.getElementById("rep-inst").innerHTML = renderInstHTML(agg);
+    renderOptional(agg);
     resetRaw({ responses, purged: false });
     return;
   }
@@ -94,6 +95,7 @@ async function run() {
     const msg = `<p class="empty">해당 기간에 선택한 과정의 응답이 없습니다.</p>`;
     document.getElementById("rep-edu").innerHTML = msg;
     document.getElementById("rep-inst").innerHTML = msg;
+    renderOptional(null);
     resetRaw({ responses: [], purged: false });
     return;
   }
@@ -108,6 +110,7 @@ async function run() {
         const msg = `<p class="empty">이 달의 원문은 파기되어 과정별 집계를 만들 수 없습니다. ‘전체 과정’을 선택하면 월 스냅샷을 표시합니다.</p>`;
         document.getElementById("rep-edu").innerHTML = msg;
         document.getElementById("rep-inst").innerHTML = msg;
+        renderOptional(null);
         resetRaw({ responses: [], purged: true });
         return;
       }
@@ -115,6 +118,7 @@ async function run() {
       total.textContent = `집계 스냅샷 (원문 파기됨, 응답 ${agg.count}건 기준)`;
       document.getElementById("rep-edu").innerHTML = renderEduHTML(agg);
       document.getElementById("rep-inst").innerHTML = renderInstHTML(agg);
+      renderOptional(agg);
       resetRaw({ responses: [], purged: true });
       return;
     }
@@ -122,7 +126,18 @@ async function run() {
   total.textContent = `총 응답 0건${courseLabel}`;
   document.getElementById("rep-edu").innerHTML = `<p class="empty">해당 기간 응답이 없습니다.</p>`;
   document.getElementById("rep-inst").innerHTML = `<p class="empty">해당 기간 응답이 없습니다.</p>`;
+  renderOptional(null);
   resetRaw({ responses: [], purged: false });
+}
+
+// 추가 카테고리·O/X 표: 응답이 있을 때만 섹션을 노출한다.
+function renderOptional(agg) {
+  const extraHtml = agg ? renderExtraHTML(agg) : "";
+  const oxHtml = agg ? renderOxHTML(agg) : "";
+  document.getElementById("rep-extra-wrap").hidden = !extraHtml;
+  document.getElementById("rep-extra").innerHTML = extraHtml;
+  document.getElementById("rep-ox-wrap").hidden = !oxHtml;
+  document.getElementById("rep-ox").innerHTML = oxHtml;
 }
 
 // 설문 원응답(raw) — 개별 익명 응답.
