@@ -103,8 +103,9 @@ function render(survey, preview = false) {
 const FREE_DEFAULTS = ["교육 불만족 의견", "교육 관련 제안·개선요구 의견"];
 function sectionsOfSurvey(survey) {
   if (Array.isArray(survey.sections)) {
+    // 조건부 후속(fu) 항목은 대상 문항 아래에 별도 렌더(wireFollowUps)되므로 섹션 흐름에서 제외.
     return survey.sections
-      .map((s) => ({ title: s?.title || "", items: (Array.isArray(s?.items) ? s.items : []).filter((q) => q && q.label && q.type) }))
+      .map((s) => ({ title: s?.title || "", items: (Array.isArray(s?.items) ? s.items : []).filter((q) => q && q.label && q.type && q.type !== "fu") }))
       .filter((s) => s.title && s.items.length);
   }
   // ── 구버전 변환(기존 발행 설문 호환) ──

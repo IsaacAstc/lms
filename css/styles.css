@@ -232,11 +232,14 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .chip-del { background: none; color: var(--danger); border: none; padding: 0 0.1rem; font-size: 0.95rem; cursor: pointer; }
 .chip-del:hover { background: none; }
 /* 순서 이동 버튼(◀▶·▲▼): 텍스트 버튼 크기로 축소 — 편집 줄을 압박하지 않게 */
-.chip-move, .sec-move, .xc-move {
-  background: none; border: none; color: var(--muted, #667);
-  padding: 0 0.15rem; font-size: 0.7rem; line-height: 1.3; cursor: pointer; min-width: 0;
+button.chip-move, button.sec-move, button.xc-move {
+  background: none !important; border: none; color: var(--muted, #667);
+  padding: 0 0.12rem !important; font-size: 0.65rem !important;
+  line-height: 1.2; height: auto; width: auto !important; min-width: 0; border-radius: 3px;
 }
-.chip-move:hover, .sec-move:hover, .xc-move:hover { background: none; color: var(--primary); }
+button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var(--primary); }
+/* 빌더의 삭제(×) 버튼도 동일하게 컴팩트 */
+#si-sections button.chip-del { padding: 0 0.2rem !important; font-size: 0.85rem; width: auto !important; }
 .ta-label { display: block; font-size: 0.85rem; margin: 0.5rem 0; }
 .ta-label textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 5px; font-family: inherit; margin-top: 0.25rem; }
 .raw-free { max-width: 320px; white-space: pre-wrap; }
