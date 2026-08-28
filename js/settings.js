@@ -279,10 +279,15 @@ function defaultSections() {
 const cloneSections = (secs) => secs.map((s) => ({ title: s.title, items: s.items.map((q) => ({ ...q, options: q.options.slice() })) }));
 let editingSetId = "";   // "" = 기본 세트
 let draftLoadedFor = null; // 현재 draft가 어느 세트에서 로드됐는지
+let draftFromDoc = false;  // draft가 실제 저장 문서에서 로드됐는지(구독 도착 전 기본값 로드와 구분)
 
 // 편집 대상 세트의 문항을 draft로 로드.
+// 최초 렌더는 Firestore 구독이 도착하기 전에 일어날 수 있으므로,
+// 문서 없이 기본값으로 만든 draft는 문서가 도착하면 다시 로드한다(편집 유실 방지 겸 최신값 보장).
 function loadDraftForSet() {
-  if (draftLoadedFor === editingSetId) return;
+  const hasDoc = !!docByName("surveyItems");
+  if (draftLoadedFor === editingSetId && (draftFromDoc || !hasDoc)) return;
+  draftFromDoc = hasDoc;
   if (editingSetId) {
     const set = getSurveySets().find((x) => x.id === editingSetId);
     eduDraft = (set?.eduItems || DEFAULT_EDU_ITEMS).slice();
