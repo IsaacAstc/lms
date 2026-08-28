@@ -69,18 +69,36 @@ function render(survey, preview = false) {
     })
     .join("");
 
+  // 섹션 제목·주관식 문구는 설정에서 수정 가능(스냅샷 우선, 없으면 기본 문구).
+  const T = survey.titles || {};
+  const freeItems = (survey.freeItems?.length === 2)
+    ? survey.freeItems : ["교육 불만족 의견", "교육 관련 제안·개선요구 의견"];
+  // 추가 카테고리(5점 척도 그룹).
+  const extraBlocks = (survey.extraCats || []).map((cat, ci) => `
+    <h2>${esc(cat.title)}</h2>
+    ${(cat.items || []).map((t, i) => ratingRow(`ex_${ci}_${i}`, `${i + 1}. ${t}`)).join("")}`).join("");
+  // O/X(예/아니오) 문항.
+  const oxRows = (survey.oxItems || []).map((t, i) => `
+    <div class="q-item"><div class="q-label">${i + 1}. ${esc(t)}</div>
+      <div class="scale-row">
+        <label class="scale-opt"><input type="radio" name="ox_${i}" value="1"><span>예</span></label>
+        <label class="scale-opt"><input type="radio" name="ox_${i}" value="0"><span>아니오</span></label>
+      </div></div>`).join("");
+
   root.innerHTML = `
     ${preview ? `<p class="preview-banner">미리보기 — 실제 제출되지 않습니다.</p>` : ""}
     <h1>${esc(survey.courseName)} 만족도 설문</h1>
     <p class="notice">개인을 식별할 수 있는 정보(성명, 소속, 연락처 등)는 기재하지 마십시오. 응답은 완전 익명으로 처리됩니다.</p>
     <form id="s-form">
-      <h2>교육 만족도</h2>
+      <h2>${esc(T.edu || "교육 만족도")}</h2>
       ${edu}
-      ${instBlocks ? `<h2>강사 만족도</h2>${instBlocks}` : ""}
-      <h2>주관식</h2>
-      <div class="q-item"><div class="q-label">교육 불만족 의견</div>
+      ${instBlocks ? `<h2>${esc(T.inst || "강사 만족도")}</h2>${instBlocks}` : ""}
+      ${extraBlocks}
+      ${oxRows ? `<h2>${esc(T.ox || "예/아니오")}</h2>${oxRows}` : ""}
+      <h2>${esc(T.free || "주관식")}</h2>
+      <div class="q-item"><div class="q-label">${esc(freeItems[0])}</div>
         <textarea name="free_dissatisfied" rows="3"></textarea></div>
-      <div class="q-item"><div class="q-label">교육 관련 제안·개선요구 의견</div>
+      <div class="q-item"><div class="q-label">${esc(freeItems[1])}</div>
         <textarea name="free_suggestion" rows="3"></textarea></div>
       <button type="submit" id="s-submit">제출</button>
       <p id="s-error" class="error"></p>
@@ -117,6 +135,24 @@ async function submit(e, survey) {
     instructors.push(rec);
   });
 
+  // 추가 카테고리(5점 척도) — 전 문항 필수.
+  const extraAnswers = [];
+  for (let ci = 0; ci < (survey.extraCats || []).length; ci++) {
+    const cat = survey.extraCats[ci];
+    for (let i = 0; i < (cat.items || []).length; i++) {
+      const v = form[`ex_${ci}_${i}`]?.value;
+      if (!v) { err.textContent = `'${cat.title}' 문항에 모두 응답해 주세요.`; return; }
+      extraAnswers.push({ cat: cat.title, label: cat.items[i], v: Number(v) });
+    }
+  }
+  // O/X(예/아니오) — 전 문항 필수.
+  const oxAnswers = [];
+  for (let i = 0; i < (survey.oxItems || []).length; i++) {
+    const v = form[`ox_${i}`]?.value;
+    if (v !== "0" && v !== "1") { err.textContent = "예/아니오 문항에 모두 응답해 주세요."; return; }
+    oxAnswers.push({ label: survey.oxItems[i], yes: v === "1" });
+  }
+
   const payload = {
     courseId: survey.courseId,
     courseType: survey.courseType || "",
@@ -132,6 +168,9 @@ async function submit(e, survey) {
     freeDissatisfied: form.free_dissatisfied.value.trim(),
     freeSuggestion: form.free_suggestion.value.trim(),
   };
+  // O/X·추가 카테고리 응답(문항 라벨 스냅샷 포함 — 원문 파기 후에도 라벨 기준 집계 가능).
+  if (oxAnswers.length) payload.oxAnswers = oxAnswers;
+  if (extraAnswers.length) payload.extraAnswers = extraAnswers;
   // 제출 전 한 번 더 확인.
   confirmSubmit(() => doSubmit(payload, survey));
 }

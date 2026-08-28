@@ -33,6 +33,8 @@ export function emptyAgg() {
   return {
     count: 0, eduItems: null, instItems: null,
     edu: { cells: {}, all: {}, nByType: {}, totalAll: sc() }, inst: { groups: {} },
+    ox: {},     // O/X 문항: label → {yes, no}
+    extra: {},  // 추가 카테고리(5점): catTitle → {label → {sum, count}}
   };
 }
 
@@ -77,6 +79,18 @@ export function computeAgg(responses) {
       g.n++;
       a.instItems.forEach((_, i) => { const v = it[`q${i}`]; if (Number.isFinite(v)) { (g.items[i] = g.items[i] || sc()).sum += v; g.items[i].count++; } });
     }
+    // O/X·추가 카테고리: 응답에 저장된 라벨 스냅샷 기준(라벨이 같으면 합산).
+    for (const o of r.oxAnswers || []) {
+      if (!o || !o.label) continue;
+      const t = a.ox[o.label] = a.ox[o.label] || { yes: 0, no: 0 };
+      if (o.yes) t.yes++; else t.no++;
+    }
+    for (const x of r.extraAnswers || []) {
+      if (!x || !x.cat || !x.label || !Number.isFinite(x.v)) continue;
+      const cat = a.extra[x.cat] = a.extra[x.cat] || {};
+      const s = cat[x.label] = cat[x.label] || sc();
+      s.sum += x.v; s.count++;
+    }
   }
   return a;
 }
@@ -98,6 +112,14 @@ export function mergeAgg(a, b) {
       ag.n += bg.n; bg.items.forEach((s, i) => add(ag.items[i] = ag.items[i] || sc(), s));
     }
   }
+  for (const lb in b.ox || {}) {
+    const t = a.ox[lb] = a.ox[lb] || { yes: 0, no: 0 };
+    t.yes += b.ox[lb].yes || 0; t.no += b.ox[lb].no || 0;
+  }
+  for (const c in b.extra || {}) {
+    a.extra[c] = a.extra[c] || {};
+    for (const lb in b.extra[c]) add(a.extra[c][lb] = a.extra[c][lb] || sc(), b.extra[c][lb]);
+  }
   return a;
 }
 
@@ -117,6 +139,10 @@ export function serializeAgg(a) {
       kind,
       rows: Object.values(rows).map((g) => ({ name: g.name, affiliation: g.affiliation || "", courseName: g.courseName, subject: g.subject, n: g.n, items: g.items })),
     })),
+    ox: Object.entries(a.ox).map(([label, v]) => ({ label, yes: v.yes || 0, no: v.no || 0 })),
+    extra: Object.entries(a.extra).map(([cat, items]) => ({
+      cat, items: Object.entries(items).map(([label, s]) => ({ label, sum: s.sum, count: s.count })),
+    })),
   };
 }
 export function deserializeAgg(d) {
@@ -128,6 +154,8 @@ export function deserializeAgg(d) {
   for (const it of d.eduAll || []) a.edu.all[it.i] = { sum: it.sum, count: it.count };
   a.edu.totalAll = d.eduTotalAll || sc();
   for (const grp of d.inst || []) { a.inst.groups[grp.kind] = {}; (grp.rows || []).forEach((g, idx) => { a.inst.groups[grp.kind][`${idx}`] = { name: g.name, affiliation: g.affiliation || "", courseName: g.courseName, subject: g.subject, n: g.n, items: g.items }; }); }
+  for (const o of d.ox || []) a.ox[o.label] = { yes: o.yes || 0, no: o.no || 0 };
+  for (const c of d.extra || []) { a.extra[c.cat] = {}; for (const it of c.items || []) a.extra[c.cat][it.label] = { sum: it.sum, count: it.count }; }
   return a;
 }
 
@@ -150,6 +178,41 @@ export function renderEduHTML(a) {
   }).join("");
   const totalRow = `<tr class="sum-row"><td>응답자 수 가중평균(종합)</td>${sumTds}<td><b>${fmt(mean100(a.edu.totalAll))}</b></td></tr>`;
   return `<table><thead>${head}</thead><tbody>${rows}${totalRow}</tbody></table>`;
+}
+
+// O/X(예/아니오) 문항: 건수 + '예' 비율(%) 표. 문항이 없으면 빈 문자열(호출부에서 섹션 숨김).
+export function renderOxHTML(a) {
+  const labels = Object.keys(a?.ox || {});
+  if (!labels.length) return "";
+  const rows = labels.map((lb) => {
+    const t = a.ox[lb];
+    const n = (t.yes || 0) + (t.no || 0);
+    const pct = n ? ((t.yes / n) * 100).toFixed(2) + "%" : "-";
+    return `<tr><td>${escapeHtml(lb)}</td>
+      <td style="text-align:right">${n}</td>
+      <td style="text-align:right">${t.yes || 0}</td>
+      <td style="text-align:right">${t.no || 0}</td>
+      <td style="text-align:right"><b>${pct}</b></td></tr>`;
+  }).join("");
+  return `<table><thead><tr><th>문항</th><th>응답수</th><th>예</th><th>아니오</th><th>예 비율</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// 추가 카테고리(5점 척도 그룹): 카테고리별 표(100점 환산 평균). 없으면 빈 문자열.
+export function renderExtraHTML(a) {
+  const cats = Object.keys(a?.extra || {}).sort();
+  if (!cats.length) return "";
+  return cats.map((cat) => {
+    const items = a.extra[cat];
+    const rows = Object.keys(items).map((lb) =>
+      `<tr><td>${escapeHtml(lb)}</td>
+        <td style="text-align:right">${items[lb].count}</td>
+        <td style="text-align:right"><b>${fmt(mean100(items[lb]))}</b></td></tr>`).join("");
+    const tot = sc();
+    for (const lb in items) add(tot, items[lb]);
+    return `<p class="hint" style="margin-bottom:0.2rem"><b>${escapeHtml(cat)}</b></p>
+      <table><thead><tr><th>문항</th><th>응답수</th><th>평균(100)</th></tr></thead>
+      <tbody>${rows}<tr class="sum-row"><td><b>카테고리 평균</b></td><td style="text-align:right"><b>${tot.count}</b></td><td style="text-align:right"><b>${fmt(mean100(tot))}</b></td></tr></tbody></table>`;
+  }).join("");
 }
 
 // 운영 보고서용: 같은 강사(교관유형 내)를 한 행으로 합쳐 표시.
