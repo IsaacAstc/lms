@@ -155,8 +155,15 @@ function renderRevisions(docName, boxId) {
     box.innerHTML = `<p class="hint">등록된 개정 이력이 없습니다. 현재 기준값이 <b>모든 기간</b>에 적용됩니다.</p>`;
     return;
   }
-  box.innerHTML = `<div class="chip-row">${hist.map((h, i) =>
-    `<span class="chip">${escapeHtml(h.from)}부터<button type="button" class="chip-del" data-i="${i}">×</button></span>`).join("")}</div>`;
+  box.innerHTML = `<p class="hint">개정 일자를 클릭하면 그 버전을 아래 편집 표로 불러옵니다(저장 전까지 반영되지 않음).</p>
+    <div class="chip-row">${hist.map((h, i) =>
+    `<span class="chip"><button type="button" class="chip-load" data-i="${i}" title="이 개정본을 편집 표로 불러오기">${escapeHtml(h.from)}부터</button><button type="button" class="chip-del" data-i="${i}">×</button></span>`).join("")}</div>`;
+  box.querySelectorAll(".chip-load").forEach((b) => b.addEventListener("click", () => {
+    const h = hist[Number(b.dataset.i)];
+    if (docName === "feeRates") renderFees(h.rates || {});
+    else renderTravel(h.rates || {});
+    alert(`${h.from}부터 적용되는 개정본을 편집 표로 불러왔습니다.\n'저장'하면 현재 기준값(및 최신 개정본)이 이 내용으로 바뀌니 주의하세요.`);
+  }));
   box.querySelectorAll(".chip-del").forEach((b) => b.addEventListener("click", async () => {
     const i = Number(b.dataset.i);
     if (!confirm(`${hist[i].from}부터 적용되는 개정본을 삭제할까요?\n해당 기간은 직전(또는 최초) 개정본으로 계산됩니다.`)) return;
@@ -481,8 +488,16 @@ function renderItemRevisions() {
     box.innerHTML = `<p class="hint">등록된 문항 개정 이력이 없습니다. 현재 문항이 <b>이후 생성되는 설문</b>에 적용됩니다.</p>`;
     return;
   }
-  box.innerHTML = `<div class="chip-row">${hist.map((h, i) =>
-    `<span class="chip">${escapeHtml(h.from)}부터 (교육 ${h.eduItems?.length ?? 0}·강사 ${h.instructorItems?.length ?? 0})<button type="button" class="chip-del" data-i="${i}">×</button></span>`).join("")}</div>`;
+  box.innerHTML = `<p class="hint">개정 일자를 클릭하면 그 버전의 교육·강사 문항을 편집기로 불러옵니다(저장 전까지 반영되지 않음).</p>
+    <div class="chip-row">${hist.map((h, i) =>
+    `<span class="chip"><button type="button" class="chip-load" data-i="${i}" title="이 개정본의 문항을 편집기로 불러오기">${escapeHtml(h.from)}부터 (교육 ${h.eduItems?.length ?? 0}·강사 ${h.instructorItems?.length ?? 0})</button><button type="button" class="chip-del" data-i="${i}">×</button></span>`).join("")}</div>`;
+  box.querySelectorAll(".chip-load").forEach((b) => b.addEventListener("click", () => {
+    const h = hist[Number(b.dataset.i)];
+    eduDraft = Array.isArray(h.eduItems) ? h.eduItems.slice() : [];
+    instDraft = Array.isArray(h.instructorItems) ? h.instructorItems.slice() : [];
+    paintSurveyItems();
+    alert(`${h.from}부터 적용되는 개정본의 교육·강사 문항을 편집기로 불러왔습니다.\n(주관식·O/X 등 나머지 항목은 이력이 없어 그대로입니다)\n'설문 문항 저장'을 누르면 현재 문항(및 최신 개정본)이 이 내용으로 바뀌니 주의하세요.`);
+  }));
   box.querySelectorAll(".chip-del").forEach((b) => b.addEventListener("click", async () => {
     const i = Number(b.dataset.i);
     if (!confirm(`${hist[i].from}부터 적용되는 문항 개정본을 삭제할까요?`)) return;
@@ -605,9 +620,9 @@ function readFeeRow(tr) {
     monthlyCap: cap === "" ? null : Number(cap),
   };
 }
-function renderFees() {
+function renderFees(ratesOverride) {
   const tbody = document.getElementById("fee-tbody");
-  const rates = getFeeRates();
+  const rates = ratesOverride || getFeeRates();
   tbody.innerHTML = "";
   // 저장된 항목이 있으면 그대로, 없으면 기본 9종 뼈대.
   const types = Object.keys(rates).length ? Object.keys(rates) : INSTRUCTOR_TYPES;
@@ -662,9 +677,9 @@ function readTravelRow(tr) {
     note: tr.querySelector(".t-note").value.trim(),
   };
 }
-function renderTravel() {
+function renderTravel(ratesOverride) {
   const tbody = document.getElementById("travel-tbody");
-  const rates = getTravelRates();
+  const rates = ratesOverride || getTravelRates();
   tbody.innerHTML = "";
   const keys = Object.keys(rates);
   if (!keys.length) {
