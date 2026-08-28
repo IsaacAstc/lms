@@ -231,6 +231,12 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .chip { display: inline-flex; align-items: center; gap: 0.3rem; background: #eef2f7; border: 1px solid var(--border); border-radius: 14px; padding: 0.25rem 0.6rem; font-size: 0.82rem; }
 .chip-del { background: none; color: var(--danger); border: none; padding: 0 0.1rem; font-size: 0.95rem; cursor: pointer; }
 .chip-del:hover { background: none; }
+/* 순서 이동 버튼(◀▶·▲▼): 텍스트 버튼 크기로 축소 — 편집 줄을 압박하지 않게 */
+.chip-move, .sec-move, .xc-move {
+  background: none; border: none; color: var(--muted, #667);
+  padding: 0 0.15rem; font-size: 0.7rem; line-height: 1.3; cursor: pointer; min-width: 0;
+}
+.chip-move:hover, .sec-move:hover, .xc-move:hover { background: none; color: var(--primary); }
 .ta-label { display: block; font-size: 0.85rem; margin: 0.5rem 0; }
 .ta-label textarea { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 5px; font-family: inherit; margin-top: 0.25rem; }
 .raw-free { max-width: 320px; white-space: pre-wrap; }
