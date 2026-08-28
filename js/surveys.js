@@ -136,13 +136,16 @@ function windowText(s) {
   return ad === bd ? `${ad} ${at} - ${bt}` : `${a}<br>- ${b}`;
 }
 
-// 설문의 교육 종료일(endMs)이 지정 범위 안이면 표시. 범위 미지정이면 전체.
+// 설문의 노출 창(openMs~closeMs)이 지정 범위와 겹치면 표시. 범위 미지정이면 전체.
+// (수동 노출기간을 조정한 설문도 그 기간 기준으로 조회된다)
 function inRange(s, from, to) {
   if (!from && !to) return true;
-  if (!s.endMs) return true; // 기준 시각이 없으면 숨기지 않음.
-  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date(s.endMs));
-  if (from && day < from) return false;
-  if (to && day > to) return false;
+  const day = (ms) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date(ms));
+  const openDay = s.openMs ? day(s.openMs) : (s.endMs ? day(s.endMs) : "");
+  const closeDay = s.closeMs ? day(s.closeMs) : openDay;
+  if (!openDay) return true; // 기준 시각이 없으면 숨기지 않음.
+  if (from && closeDay < from) return false;
+  if (to && openDay > to) return false;
   return true;
 }
 
