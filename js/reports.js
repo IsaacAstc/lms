@@ -6,7 +6,7 @@ import {
 import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import {
-  computeAgg, deserializeAgg, renderEduHTML, renderInstHTML, renderOxHTML, renderExtraHTML, EDU_ITEMS,
+  computeAgg, deserializeAgg, renderEduHTML, renderInstHTML, renderOxHTML, renderExtraHTML, renderChoiceHTML, EDU_ITEMS,
 } from "./agg.js";
 import { fmtDot } from "./time.js";
 import { onCoursesChange, coursesCache } from "./courses.js";
@@ -130,14 +130,17 @@ async function run() {
   resetRaw({ responses: [], purged: false });
 }
 
-// 추가 카테고리·O/X 표: 응답이 있을 때만 섹션을 노출한다.
+// 추가 카테고리·O/X·선택형 표: 응답이 있을 때만 섹션을 노출한다.
 function renderOptional(agg) {
   const extraHtml = agg ? renderExtraHTML(agg) : "";
   const oxHtml = agg ? renderOxHTML(agg) : "";
+  const choiceHtml = agg ? renderChoiceHTML(agg) : "";
   document.getElementById("rep-extra-wrap").hidden = !extraHtml;
   document.getElementById("rep-extra").innerHTML = extraHtml;
   document.getElementById("rep-ox-wrap").hidden = !oxHtml;
   document.getElementById("rep-ox").innerHTML = oxHtml;
+  document.getElementById("rep-choice-wrap").hidden = !choiceHtml;
+  document.getElementById("rep-choice").innerHTML = choiceHtml;
 }
 
 // 설문 원응답(raw) — 개별 익명 응답.
