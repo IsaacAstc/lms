@@ -384,6 +384,10 @@
             <h3>예/아니오(O/X) 문항 <button class="csv-export" type="button" data-target="#rep-ox" data-name="설문_OX">CSV 내보내기</button></h3>
             <div class="table-wrap" id="rep-ox"></div>
           </div>
+          <div id="rep-choice-wrap" hidden>
+            <h3>선다형·복수 응답 문항 <button class="csv-export" type="button" data-target="#rep-choice" data-name="설문_선택형">CSV 내보내기</button></h3>
+            <div class="table-wrap" id="rep-choice"></div>
+          </div>
 
           <h3>설문 원응답 (개별 익명 응답)</h3>
           <p class="hint">개별 응답 원자료입니다. 완전 익명이라 개인 식별정보는 포함되지 않습니다. 교1-교6은 교육만족도 6문항 점수(5점)입니다. <b>원응답 보기</b>를 눌러야 표시됩니다.</p>
@@ -516,20 +520,19 @@
             <button id="si-set-add" type="button">세트 추가(현재 문항 복제)</button>
             <span id="si-set-note" class="hint"></span>
           </div>
-          <p class="hint"><b>섹션(카테고리) 제목</b> — 설문 화면의 소제목입니다. 교육·강사 만족도는 집계 구조상 삭제할 수 없고 제목만 바꿀 수 있습니다.</p>
+          <h3>고정 카테고리 (교육·강사 만족도)</h3>
+          <p class="hint">100점 환산 요약·과정유형별 비교·강사별 집계 등 보고서 표준의 뼈대라 카테고리 자체는 고정입니다(제목 수정·문항 편집·0개 비우기 가능).</p>
           <div id="si-titles"></div>
-          <p class="hint"><b>교육 만족도 문항</b></p>
+          <p class="hint"><b>교육 만족도 문항</b> (5점 척도)</p>
           <div id="si-edu-list"></div>
-          <p class="hint"><b>강사 만족도 문항</b></p>
+          <p class="hint"><b>강사 만족도 문항</b> (5점 척도 · 강사별 반복)</p>
           <div id="si-inst-list"></div>
-          <p class="hint"><b>기본 주관식 2종</b> — 불만족 / 제안·개선 성격(분류·보고서 구분에 사용). 문구 수정 가능, '사용'을 끄면 설문에 표시되지 않습니다(둘 다 끄면 주관식 0개). 문구를 비우면 기본 문구로 저장됩니다.</p>
-          <div id="si-free-list"></div>
-          <p class="hint"><b>자유 주관식 문항</b> — 항상 노출되는 주관식을 자유롭게 추가·삭제합니다. 원문은 '주관식 원문' 탭에 <b>추가주관식</b> 종류로 열람됩니다(분류 미지원).</p>
-          <div id="si-freex-list"></div>
-          <p class="hint"><b>예/아니오(O/X) 문항</b> — 필요할 때만 추가하세요. 집계는 예/아니오 건수와 '예' 비율(%)로 표시됩니다.</p>
-          <div id="si-ox-list"></div>
-          <p class="hint"><b>추가 카테고리</b> — 5점 척도 문항 그룹을 카테고리 단위로 자유롭게 추가·삭제할 수 있습니다(집계는 카테고리별 표).</p>
-          <div id="si-extra-list"></div>
+
+          <h3>문항 카테고리</h3>
+          <p class="hint">카테고리 안에 <b>5점 척도 / 예·아니오 / 주관식 / 선다형(택1) / 복수 응답</b>을 자유롭게 섞어 추가하고, ◀▶(문항)·▲▼(카테고리)로 순서를 조정합니다.
+            <b>[기본·불만족]</b>·<b>[기본·제안개선]</b> 표식이 붙은 주관식은 원문 분류·보고서 2종 구분에 쓰이는 기본 주관식으로, 아무 카테고리로나 옮기거나 삭제할 수 있습니다.
+            선다형/복수 응답의 보기는 " / "로 구분해 입력합니다. 집계: 5점=100점 환산 표, 예·아니오=예 비율, 선택형=보기 분포.</p>
+          <div id="si-sections"></div>
           <p class="hint"><b>조건부 후속 문항</b> — 앞선 문항의 답변에 따라 추가로 노출되는 문항입니다(1단계 분기).
             대상: 교육 만족도·추가 카테고리(5점 — N점 이하 조건) 또는 O/X 문항(예/아니오 조건).
             후속이 주관식이면 원문은 '주관식 원문' 탭에 <b>조건부</b> 종류로 표시되고, 후속이 O/X면 예/아니오 집계표에 포함됩니다.</p>
@@ -537,9 +540,9 @@
           <div class="form-actions">
             <button id="si-edu-add" type="button">교육 문항 추가</button>
             <button id="si-inst-add" type="button">강사 문항 추가</button>
-            <button id="si-freex-add" type="button">자유 주관식 추가</button>
-            <button id="si-ox-add" type="button">O/X 문항 추가</button>
-            <button id="si-extra-add" type="button">카테고리 추가</button>
+            <button id="si-sec-add" type="button">카테고리 추가</button>
+            <button id="si-slot-dis" type="button" title="기본 주관식(불만족)이 없을 때 마지막 카테고리에 추가">기본 주관식(불만족) 복원</button>
+            <button id="si-slot-sug" type="button" title="기본 주관식(제안개선)이 없을 때 마지막 카테고리에 추가">기본 주관식(제안개선) 복원</button>
             <button id="si-fu-add" type="button">후속 문항 추가</button>
             <button id="si-save" type="button">설문 문항 저장</button>
             <span class="rev-group" id="si-rev-group">

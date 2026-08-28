@@ -8,7 +8,7 @@ import { escapeHtml } from "./app.js";
 import { coursesCache } from "./courses.js";
 import { getProgramById } from "./programs.js";
 import {
-  computeAgg, deserializeAgg, renderEduHTML, renderInstMergedHTML, renderOxHTML, renderExtraHTML,
+  computeAgg, deserializeAgg, renderEduHTML, renderInstMergedHTML, renderOxHTML, renderExtraHTML, renderChoiceHTML,
 } from "./agg.js";
 import { fmtDot } from "./time.js";
 
@@ -219,8 +219,8 @@ async function run() {
     </div>
     <section><h3>1. 만족도 요약 (과정유형 × 교육/강사, 100점 환산)</h3>${summaryHtml}</section>
     <section><h3>2. 교육 만족도 세부항목</h3>${detailEdu}</section>
-    ${agg && (renderExtraHTML(agg) || renderOxHTML(agg))
-      ? `<section><h3>2-1. 추가 문항 (추가 카테고리 · 예/아니오)</h3>${renderExtraHTML(agg)}${renderOxHTML(agg)}</section>` : ""}
+    ${agg && (renderExtraHTML(agg) || renderOxHTML(agg) || renderChoiceHTML(agg))
+      ? `<section><h3>2-1. 추가 문항 (카테고리 5점 · 예/아니오 · 선택형)</h3>${renderExtraHTML(agg)}${renderOxHTML(agg)}${renderChoiceHTML(agg)}</section>` : ""}
     <section><h3>3. 강사 만족도 세부항목</h3>${detailInst}</section>
     <section><h3>4. 주관식 원문</h3>${freetext}</section>
     <section><h3>5. 시사점</h3><div class="report-narr">${narrative.summary ? escapeHtml(narrative.summary).replace(/\n/g, "<br>") : `<span class="empty">주관식 원문 탭에서 시사점을 입력하면 표시됩니다.</span>`}</div></section>

@@ -73,14 +73,13 @@ export function buildSurvey(course, sessions, roomId, instructorsById = {}, item
     // 교육 종료일 기준으로 유효한 문항(설정에 개정 이력이 있으면 그 버전).
     eduItems: items.eduItems,
     instructorItems: items.instructorItems,
-    // 주관식(기본 2종 {use,label} + 자유)·O/X·섹션 제목·추가 카테고리(현행값 — 이력 없음).
-    freeItems: itemsAt?.freeItems?.length === 2
-      ? itemsAt.freeItems
-      : DEFAULT_FREE_ITEMS.map((t) => ({ use: true, label: t })),
-    freeExtraItems: Array.isArray(itemsAt?.freeExtraItems) ? itemsAt.freeExtraItems : [],
-    oxItems: Array.isArray(itemsAt?.oxItems) ? itemsAt.oxItems : [],
+    // 문항 카테고리(섹션): 5점/O·X/주관식/선다형/복수 응답 혼합(현행값 — 이력 없음).
+    // 기본값(미설정): 주관식 카테고리에 기본 2종(불만족/제안개선).
     titles: { ...DEFAULT_SECTION_TITLES, ...(itemsAt?.titles || {}) },
-    extraCats: Array.isArray(itemsAt?.extraCats) ? itemsAt.extraCats : [],
+    sections: Array.isArray(itemsAt?.sections) ? itemsAt.sections : [{
+      title: (itemsAt?.titles?.free) || DEFAULT_SECTION_TITLES.free,
+      items: DEFAULT_FREE_ITEMS.map((t, i) => ({ type: "text", label: t, options: [], slot: i === 0 ? "dis" : "sug" })),
+    }],
     followUps: Array.isArray(itemsAt?.followUps) ? itemsAt.followUps : [],
     instructorTargets,
     updatedAtMs: Date.now(),
