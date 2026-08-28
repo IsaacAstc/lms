@@ -56,6 +56,33 @@ export function initSurveys() {
   document.getElementById("sv-window-auto").addEventListener("click", restoreAutoWindow);
   document.getElementById("sv-window-close-btn").addEventListener("click", () =>
     document.getElementById("sv-window-dialog").close());
+  document.getElementById("sv-qr-close").addEventListener("click", () =>
+    document.getElementById("sv-qr-dialog").close());
+}
+
+// ── 설문 URL QR (라이브러리는 최초 사용 시 지연 로드 — 다른 모듈과 공유) ──
+let qrLibLoading = null;
+function loadQrLib() {
+  if (typeof QRCode !== "undefined") return Promise.resolve();
+  if (!qrLibLoading) {
+    qrLibLoading = new Promise((resolve, reject) => {
+      const el = document.createElement("script");
+      el.src = "scfe/js/qrcode.min.js";
+      el.onload = resolve;
+      el.onerror = () => reject(new Error("QR 라이브러리를 불러오지 못했습니다."));
+      document.head.appendChild(el);
+    });
+  }
+  return qrLibLoading;
+}
+async function showSurveyQr(s, url) {
+  try { await loadQrLib(); } catch (e) { return alert(e.message); }
+  document.getElementById("sv-qr-title").textContent = s.courseName || "설문";
+  document.getElementById("sv-qr-url").textContent = url;
+  const box = document.getElementById("sv-qr-box");
+  box.innerHTML = "";
+  new QRCode(box, { text: url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  document.getElementById("sv-qr-dialog").showModal();
 }
 
 /* ── 노출기간 수동 수정 ──
@@ -150,13 +177,14 @@ function render() {
         <button type="button" class="pad-mini win-edit" title="노출기간 수정">✎</button></td>
       <td style="text-align:right">${(s.instructorTargets || []).length}</td>
       <td class="resp-count" data-course="${s.courseId}">–</td>
-      <td class="url-cell"><button type="button" class="copy url-copy" title="${escapeHtml(url)}">복사</button><a class="btn-link url-open" href="${escapeHtml(url)}" target="_blank" title="${escapeHtml(url)}">열기</a></td>
+      <td class="url-cell"><button type="button" class="copy url-copy" title="${escapeHtml(url)}">복사</button><button type="button" class="url-qr">QR</button><a class="btn-link url-open" href="${escapeHtml(url)}" target="_blank" title="${escapeHtml(url)}">열기</a></td>
       <td class="actions">
         <a href="${escapeHtml(previewUrl(s.courseId))}" target="_blank" class="btn-link">미리보기</a>
         <button type="button" class="regen">재생성</button>
         <button type="button" class="del">삭제</button>
       </td>`;
     tr.querySelector(".win-edit").addEventListener("click", () => openWindowDialog(s));
+    tr.querySelector(".url-qr").addEventListener("click", () => showSurveyQr(s, url));
     tr.querySelector(".url-copy").addEventListener("click", () => {
       navigator.clipboard?.writeText(url);
       tr.querySelector(".url-copy").textContent = "복사됨";
