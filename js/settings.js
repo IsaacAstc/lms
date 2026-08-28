@@ -64,22 +64,61 @@ export function getSurveySets() {
   return (Array.isArray(d?.sets) ? d.sets : []).filter((x) => x && x.id);
 }
 
-// 주관식 문구(2종 고정)·O/X 문항·섹션 제목·추가 카테고리 —
-// 발효일자 이력 없이 현재값만 유지(세트별 별도 저장).
+// ── 문항 카테고리(섹션) 빌더 모델 ──
+// 교육·강사 만족도(집계 표준의 뼈대)를 제외한 모든 문항은 sections에 담는다:
+//   sections: [{title, items: [{type, label, options?, slot?}]}]
+//   type: scale(5점) | ox(예/아니오) | text(주관식) | choice(선다형 택1) | multi(복수 응답)
+//   slot: 'dis'|'sug' — 기본 주관식 2종의 역할 표식(원문 분류·보고서 2종 구분 유지). 각 1개까지.
+// 발효일자 이력 없이 현재값만 유지(세트별 별도 저장). 구버전 필드(freeItems 등)는 읽을 때 변환.
+export const Q_TYPES = [
+  ["scale", "5점 척도"], ["ox", "예/아니오"], ["text", "주관식"],
+  ["choice", "선다형(택1)"], ["multi", "복수 응답"],
+];
+const Q_TYPE_IDS = Q_TYPES.map(([t]) => t);
+
+function normQuestion(q) {
+  if (!q || typeof q.label !== "string" || !q.label || !Q_TYPE_IDS.includes(q.type)) return null;
+  return {
+    type: q.type, label: q.label,
+    options: Array.isArray(q.options) ? q.options.filter(Boolean) : [],
+    slot: q.slot === "dis" || q.slot === "sug" ? q.slot : null,
+  };
+}
+// sections 정규화: 신형 필드가 있으면 그대로, 없으면 구버전 필드(주관식·O/X·추가 카테고리)를 변환.
+function sectionsOf(src) {
+  if (Array.isArray(src?.sections)) {
+    const out = src.sections
+      .map((s) => ({ title: (s?.title || "").trim(), items: (Array.isArray(s?.items) ? s.items : []).map(normQuestion).filter(Boolean) }))
+      .filter((s) => s.title && s.items.length);
+    return out; // 빈 배열도 '의도적 0개'로 유지.
+  }
+  if (!src) return null;
+  // ── 구버전 변환 ──
+  const t = (src.titles && typeof src.titles === "object") ? { ...DEFAULT_SECTION_TITLES, ...src.titles } : DEFAULT_SECTION_TITLES;
+  const out = [];
+  const cats = Array.isArray(src.extraCats) ? src.extraCats.filter((c) => c && c.title && Array.isArray(c.items) && c.items.length) : [];
+  for (const c of cats) out.push({ title: c.title, items: c.items.filter(Boolean).map((lb) => ({ type: "scale", label: lb, options: [], slot: null })) });
+  const ox = Array.isArray(src.oxItems) ? src.oxItems.filter(Boolean) : [];
+  if (ox.length) out.push({ title: t.ox, items: ox.map((lb) => ({ type: "ox", label: lb, options: [], slot: null })) });
+  const freeItems = [];
+  if (Array.isArray(src.freeItems) && src.freeItems.length === 2) {
+    src.freeItems.forEach((x, i) => {
+      const slot = i === 0 ? "dis" : "sug";
+      if (typeof x === "string") freeItems.push({ type: "text", label: x, options: [], slot });
+      else if (x && x.use !== false) freeItems.push({ type: "text", label: x.label || DEFAULT_FREE_ITEMS[i], options: [], slot });
+    });
+  } else {
+    DEFAULT_FREE_ITEMS.forEach((lb, i) => freeItems.push({ type: "text", label: lb, options: [], slot: i === 0 ? "dis" : "sug" }));
+  }
+  for (const lb of (Array.isArray(src.freeExtraItems) ? src.freeExtraItems.filter(Boolean) : []))
+    freeItems.push({ type: "text", label: lb, options: [], slot: null });
+  if (freeItems.length) out.push({ title: t.free, items: freeItems });
+  return out;
+}
 function extrasOf(src) {
   return {
-    // 기본 주관식 2종: 구버전(문자열 2개) → {use, label} 정규화. use=false면 설문에 미표시.
-    freeItems: Array.isArray(src?.freeItems) && src.freeItems.length === 2
-      ? src.freeItems.map((x, i) => (typeof x === "string"
-        ? { use: true, label: x }
-        : { use: x?.use !== false, label: x?.label || DEFAULT_FREE_ITEMS[i] }))
-      : null,
-    // 자유 주관식(항상 노출, 라벨 기반 저장).
-    freeExtraItems: Array.isArray(src?.freeExtraItems) ? src.freeExtraItems.filter(Boolean) : null,
-    oxItems: Array.isArray(src?.oxItems) ? src.oxItems.filter(Boolean) : null,
     titles: (src?.titles && typeof src.titles === "object") ? { ...DEFAULT_SECTION_TITLES, ...src.titles } : null,
-    extraCats: Array.isArray(src?.extraCats)
-      ? src.extraCats.filter((c) => c && c.title && Array.isArray(c.items) && c.items.length) : null,
+    sections: sectionsOf(src),
     // 조건부 후속 문항(1단계 분기): {q(대상 문항 라벨), cond('yes'|'no'|'score'), maxScore, type('text'|'ox'), label}
     followUps: Array.isArray(src?.followUps)
       ? src.followUps.filter((f) => f && f.q && f.label && ["yes", "no", "score"].includes(f.cond) && ["text", "ox"].includes(f.type)) : null,
@@ -192,11 +231,19 @@ function moveItem(arr, i, d) {
   [arr[i], arr[j]] = [arr[j], arr[i]];
 }
 
-let eduDraft = null, instDraft = null, freeDraft = null, oxDraft = null;
-let titlesDraft = null;   // {edu, inst, free, ox} — 섹션(카테고리) 제목
-let extraDraft = null;    // [{title, items:[]}] — 추가 카테고리(5점 척도)
-let fuDraft = null;       // [{q, cond, maxScore, type, label}] — 조건부 후속 문항
-let freeExtraDraft = null; // [label] — 자유 주관식(항상 노출)
+let eduDraft = null, instDraft = null;
+let titlesDraft = null;    // {edu, inst} — 교육·강사 섹션 제목
+let sectionsDraft = null;  // [{title, items:[{type,label,options,slot}]}] — 문항 카테고리 빌더
+let fuDraft = null;        // [{q, cond, maxScore, type, label}] — 조건부 후속 문항
+
+// 기본값: 주관식 카테고리에 기본 2종(불만족/제안개선) 배치.
+function defaultSections() {
+  return [{
+    title: DEFAULT_SECTION_TITLES.free,
+    items: DEFAULT_FREE_ITEMS.map((lb, i) => ({ type: "text", label: lb, options: [], slot: i === 0 ? "dis" : "sug" })),
+  }];
+}
+const cloneSections = (secs) => secs.map((s) => ({ title: s.title, items: s.items.map((q) => ({ ...q, options: q.options.slice() })) }));
 let editingSetId = "";   // "" = 기본 세트
 let draftLoadedFor = null; // 현재 draft가 어느 세트에서 로드됐는지
 
@@ -207,11 +254,8 @@ function loadDraftForSet() {
     const set = getSurveySets().find((x) => x.id === editingSetId);
     eduDraft = (set?.eduItems || DEFAULT_EDU_ITEMS).slice();
     instDraft = (set?.instructorItems || DEFAULT_INST_ITEMS).slice();
-    freeDraft = (extrasOf(set).freeItems || DEFAULT_FREE_ITEMS.map((t) => ({ use: true, label: t }))).map((x) => ({ ...x }));
-    freeExtraDraft = (extrasOf(set).freeExtraItems || []).slice();
-    oxDraft = (extrasOf(set).oxItems || []).slice();
     titlesDraft = { ...(extrasOf(set).titles || DEFAULT_SECTION_TITLES) };
-    extraDraft = (extrasOf(set).extraCats || []).map((c) => ({ title: c.title, items: c.items.slice() }));
+    sectionsDraft = cloneSections(extrasOf(set).sections ?? defaultSections());
     fuDraft = (extrasOf(set).followUps || []).map((f) => ({ ...f }));
   } else {
     const cur = getSurveyItems();
@@ -222,11 +266,8 @@ function loadDraftForSet() {
     const latest = hist[hist.length - 1];
     eduDraft = (Array.isArray(latest?.eduItems) ? latest.eduItems : (cur.eduItems || DEFAULT_EDU_ITEMS)).slice();
     instDraft = (Array.isArray(latest?.instructorItems) ? latest.instructorItems : (cur.instructorItems || DEFAULT_INST_ITEMS)).slice();
-    freeDraft = (extrasOf(d).freeItems || DEFAULT_FREE_ITEMS.map((t) => ({ use: true, label: t }))).map((x) => ({ ...x }));
-    freeExtraDraft = (extrasOf(d).freeExtraItems || []).slice();
-    oxDraft = (extrasOf(d).oxItems || []).slice();
     titlesDraft = { ...(extrasOf(d).titles || DEFAULT_SECTION_TITLES) };
-    extraDraft = (extrasOf(d).extraCats || []).map((c) => ({ title: c.title, items: c.items.slice() }));
+    sectionsDraft = cloneSections(extrasOf(d).sections ?? defaultSections());
     fuDraft = (extrasOf(d).followUps || []).map((f) => ({ ...f }));
   }
   draftLoadedFor = editingSetId;
@@ -269,88 +310,27 @@ function paintSurveyItems() {
   itemListRows("si-inst-list", instDraft);
   bindItemEditors("si-edu-list", eduDraft);
   bindItemEditors("si-inst-list", instDraft);
-  // 기본 주관식 2종: 문구 수정 + 개별 사용/미사용(둘 다 끄면 주관식 0개 가능).
-  const fbox = document.getElementById("si-free-list");
-  if (fbox) {
-    const slotName = ["불만족 성격", "제안·개선 성격"];
-    fbox.innerHTML = `<div class="chip-row">${freeDraft.map((f, i) =>
-      `<span class="chip"><label class="chk" title="끄면 설문에 표시되지 않습니다"><input type="checkbox" class="si-free-use" data-i="${i}"${f.use ? " checked" : ""}> 사용</label>
-        <small>${slotName[i]}</small> <input class="si-free" data-i="${i}" value="${escapeHtml(f.label)}" size="24"${f.use ? "" : " disabled"}></span>`).join("")}</div>`;
-    fbox.querySelectorAll(".si-free").forEach((el) =>
-      el.addEventListener("input", (e) => { freeDraft[+e.target.dataset.i].label = e.target.value; }));
-    fbox.querySelectorAll(".si-free-use").forEach((el) =>
-      el.addEventListener("change", (e) => { freeDraft[+e.target.dataset.i].use = e.target.checked; paintSurveyItems(); }));
-  }
-  // 자유 주관식(항상 노출): 자유 추가·삭제·순서 이동.
-  const fxbox = document.getElementById("si-freex-list");
-  if (fxbox) {
-    itemListRows("si-freex-list", freeExtraDraft);
-    if (!freeExtraDraft.length) fxbox.innerHTML = `<p class="hint">자유 주관식 문항이 없습니다.</p>`;
-    bindItemEditors("si-freex-list", freeExtraDraft);
-  }
-  // O/X(예/아니오) 문항: 자유 추가·삭제(없으면 설문에 미표시).
-  const obox = document.getElementById("si-ox-list");
-  if (obox) {
-    itemListRows("si-ox-list", oxDraft);
-    if (!oxDraft.length) obox.innerHTML = `<p class="hint">O/X 문항이 없습니다(설문에 표시되지 않음).</p>`;
-    bindItemEditors("si-ox-list", oxDraft);
-  }
-  // 섹션(카테고리) 제목: 설문 화면의 소제목. 교육·강사는 집계 구조상 삭제 불가, 제목만 수정.
+  // 섹션 제목: 교육·강사(고정 카테고리)만 — 나머지 카테고리 제목은 빌더에서 직접 편집.
   const tbox = document.getElementById("si-titles");
   if (tbox) {
-    const T = [["edu", "교육 만족도 제목"], ["inst", "강사 만족도 제목"], ["free", "주관식 제목"], ["ox", "O/X 제목"]];
+    const T = [["edu", "교육 만족도 제목"], ["inst", "강사 만족도 제목"]];
     tbox.innerHTML = `<div class="chip-row">${T.map(([k, lb]) =>
       `<span class="chip">${lb} <input class="si-title" data-k="${k}" value="${escapeHtml(titlesDraft[k] || DEFAULT_SECTION_TITLES[k])}" size="14"></span>`).join("")}</div>`;
     tbox.querySelectorAll(".si-title").forEach((el) =>
       el.addEventListener("input", (e) => { titlesDraft[e.target.dataset.k] = e.target.value; }));
   }
-  // 추가 카테고리(5점 척도 문항 그룹): 카테고리 단위 추가·삭제 + 문항 편집.
-  const xbox = document.getElementById("si-extra-list");
-  if (xbox) {
-    xbox.innerHTML = extraDraft.length ? "" : `<p class="hint">추가 카테고리가 없습니다.</p>`;
-    extraDraft.forEach((cat, ci) => {
-      const div = document.createElement("div");
-      div.className = "load-box";
-      div.innerHTML = `<div class="load-row">
-          <label>카테고리명 <input class="xc-title" data-c="${ci}" value="${escapeHtml(cat.title)}" size="20"></label>
-          <button type="button" class="xc-item-add" data-c="${ci}">문항 추가</button>
-          <button type="button" class="xc-move" data-c="${ci}" data-d="-1" title="카테고리를 위로">▲</button>
-          <button type="button" class="xc-move" data-c="${ci}" data-d="1" title="카테고리를 아래로">▼</button>
-          <button type="button" class="del xc-del" data-c="${ci}">카테고리 삭제</button>
-        </div>
-        <div class="chip-row">${cat.items.map((t, i) =>
-          `<span class="chip">${i + 1}.<input class="xc-item" data-c="${ci}" data-i="${i}" value="${escapeHtml(t)}" size="18"><button type="button" class="chip-move xc-item-move" data-c="${ci}" data-i="${i}" data-d="-1" title="앞으로">◀</button><button type="button" class="chip-move xc-item-move" data-c="${ci}" data-i="${i}" data-d="1" title="뒤로">▶</button><button type="button" class="chip-del xc-item-del" data-c="${ci}" data-i="${i}">×</button></span>`).join("")}</div>`;
-      xbox.appendChild(div);
-    });
-    xbox.querySelectorAll(".xc-title").forEach((el) =>
-      el.addEventListener("input", (e) => { extraDraft[+e.target.dataset.c].title = e.target.value; }));
-    xbox.querySelectorAll(".xc-item").forEach((el) =>
-      el.addEventListener("input", (e) => { extraDraft[+e.target.dataset.c].items[+e.target.dataset.i] = e.target.value; }));
-    xbox.querySelectorAll(".xc-item-add").forEach((b) =>
-      b.addEventListener("click", () => { extraDraft[+b.dataset.c].items.push(""); paintSurveyItems(); }));
-    xbox.querySelectorAll(".xc-item-del").forEach((b) =>
-      b.addEventListener("click", () => { extraDraft[+b.dataset.c].items.splice(+b.dataset.i, 1); paintSurveyItems(); }));
-    xbox.querySelectorAll(".xc-item-move").forEach((b) =>
-      b.addEventListener("click", () => { moveItem(extraDraft[+b.dataset.c].items, +b.dataset.i, +b.dataset.d); paintSurveyItems(); }));
-    xbox.querySelectorAll(".xc-move").forEach((b) =>
-      b.addEventListener("click", () => { moveItem(extraDraft, +b.dataset.c, +b.dataset.d); paintSurveyItems(); }));
-    xbox.querySelectorAll(".xc-del").forEach((b) =>
-      b.addEventListener("click", () => {
-        const c = extraDraft[+b.dataset.c];
-        if (!confirm(`'${c.title || "(이름 없음)"}' 카테고리를 삭제할까요?`)) return;
-        extraDraft.splice(+b.dataset.c, 1); paintSurveyItems();
-      }));
-  }
+  renderSectionsBuilder();
   // 조건부 후속 문항 편집기.
   const fbox2 = document.getElementById("si-fu-list");
   if (fbox2) {
-    // 대상 후보: 교육 문항·추가 카테고리 문항(5점 → N점 이하 조건), O/X 문항(예/아니오 조건).
+    // 대상 후보: 교육 문항·카테고리의 5점 문항(N점 이하 조건), 카테고리의 O/X 문항(예/아니오 조건).
     // 강사 문항은 강사별로 반복 표시되어 분기 대상에서 제외.
+    const secItems = (type) => sectionsDraft.flatMap((s) => s.items.filter((q) => q.type === type).map((q) => q.label.trim()).filter(Boolean));
     const scaleTargets = [
       ...eduDraft.map((t) => t.trim()).filter(Boolean),
-      ...extraDraft.flatMap((c) => c.items.map((t) => t.trim()).filter(Boolean)),
+      ...secItems("scale"),
     ];
-    const oxTargets = oxDraft.map((t) => t.trim()).filter(Boolean);
+    const oxTargets = secItems("ox");
     const qOptions = (sel) =>
       `<option value="">대상 문항 선택</option>`
       + (scaleTargets.length ? `<optgroup label="5점 문항">${scaleTargets.map((t) => `<option${t === sel ? " selected" : ""}>${escapeHtml(t)}</option>`).join("")}</optgroup>` : "")
@@ -403,10 +383,92 @@ function paintSurveyItems() {
   renderItemRevisions();
 }
 
+// ── 문항 카테고리(섹션) 빌더 렌더 ──
+// 카테고리마다 제목·순서(▲▼)·삭제, 문항마다 유형·문구·보기(선다형/복수)·순서(◀▶)·삭제.
+function renderSectionsBuilder() {
+  const box = document.getElementById("si-sections");
+  if (!box) return;
+  box.innerHTML = sectionsDraft.length ? "" : `<p class="hint">카테고리가 없습니다. '카테고리 추가'로 시작하세요.</p>`;
+  const slotBadge = (q) => q.slot === "dis" ? `<small class="hint" title="주관식 원문 '불만족' 분류·보고서 구분에 사용">[기본·불만족]</small>`
+    : q.slot === "sug" ? `<small class="hint" title="주관식 원문 '제안개선' 분류·보고서 구분에 사용">[기본·제안개선]</small>` : "";
+  sectionsDraft.forEach((sec, si) => {
+    const div = document.createElement("div");
+    div.className = "load-box";
+    div.innerHTML = `<div class="load-row">
+        <label>카테고리명 <input class="sec-title" data-s="${si}" value="${escapeHtml(sec.title)}" size="20"></label>
+        <select class="sec-add-type" data-s="${si}">${Q_TYPES.map(([t, lb]) => `<option value="${t}">${lb}</option>`).join("")}</select>
+        <button type="button" class="sec-item-add" data-s="${si}">문항 추가</button>
+        <button type="button" class="sec-move" data-s="${si}" data-d="-1" title="카테고리를 위로">▲</button>
+        <button type="button" class="sec-move" data-s="${si}" data-d="1" title="카테고리를 아래로">▼</button>
+        <button type="button" class="del sec-del" data-s="${si}">카테고리 삭제</button>
+      </div>
+      ${sec.items.map((q, i) => `<div class="load-row">
+        <span>${i + 1}.</span>
+        <span class="hint">${escapeHtml(Q_TYPES.find(([t]) => t === q.type)?.[1] || q.type)}</span>
+        ${slotBadge(q)}
+        <input class="sec-q-label" data-s="${si}" data-i="${i}" value="${escapeHtml(q.label)}" placeholder="문항 문구" style="min-width:220px">
+        ${(q.type === "choice" || q.type === "multi")
+          ? `<input class="sec-q-opts" data-s="${si}" data-i="${i}" value="${escapeHtml(q.options.join(" / "))}" placeholder="보기 — ' / '로 구분 (예: A / B / C)" style="min-width:220px">`
+          : ""}
+        <button type="button" class="chip-move sec-q-move" data-s="${si}" data-i="${i}" data-d="-1" title="위로">◀</button>
+        <button type="button" class="chip-move sec-q-move" data-s="${si}" data-i="${i}" data-d="1" title="아래로">▶</button>
+        <button type="button" class="chip-del sec-q-del" data-s="${si}" data-i="${i}"${q.slot ? ` title="기본 주관식은 삭제하면 해당 분류가 설문에서 빠집니다"` : ""}>×</button>
+      </div>`).join("")}`;
+    box.appendChild(div);
+  });
+  box.querySelectorAll(".sec-title").forEach((el) =>
+    el.addEventListener("input", (e) => { sectionsDraft[+e.target.dataset.s].title = e.target.value; }));
+  box.querySelectorAll(".sec-item-add").forEach((b) =>
+    b.addEventListener("click", () => {
+      const si = +b.dataset.s;
+      const type = b.parentElement.querySelector(".sec-add-type").value;
+      sectionsDraft[si].items.push({ type, label: "", options: [], slot: null });
+      paintSurveyItems();
+    }));
+  box.querySelectorAll(".sec-move").forEach((b) =>
+    b.addEventListener("click", () => { moveItem(sectionsDraft, +b.dataset.s, +b.dataset.d); paintSurveyItems(); }));
+  box.querySelectorAll(".sec-del").forEach((b) =>
+    b.addEventListener("click", () => {
+      const s = sectionsDraft[+b.dataset.s];
+      if (!confirm(`'${s.title || "(이름 없음)"}' 카테고리와 문항 ${s.items.length}개를 삭제할까요?`)) return;
+      sectionsDraft.splice(+b.dataset.s, 1); paintSurveyItems();
+    }));
+  box.querySelectorAll(".sec-q-label").forEach((el) =>
+    el.addEventListener("input", (e) => { sectionsDraft[+e.target.dataset.s].items[+e.target.dataset.i].label = e.target.value; }));
+  box.querySelectorAll(".sec-q-opts").forEach((el) =>
+    el.addEventListener("input", (e) => {
+      sectionsDraft[+e.target.dataset.s].items[+e.target.dataset.i].options =
+        e.target.value.split("/").map((t) => t.trim()).filter(Boolean);
+    }));
+  box.querySelectorAll(".sec-q-move").forEach((b) =>
+    b.addEventListener("click", () => { moveItem(sectionsDraft[+b.dataset.s].items, +b.dataset.i, +b.dataset.d); paintSurveyItems(); }));
+  box.querySelectorAll(".sec-q-del").forEach((b) =>
+    b.addEventListener("click", () => { sectionsDraft[+b.dataset.s].items.splice(+b.dataset.i, 1); paintSurveyItems(); }));
+}
+
+// 기본 주관식(불만족/제안개선) 슬롯이 없으면 되살리는 버튼용.
+function restoreSlot(slot) {
+  const label = slot === "dis" ? DEFAULT_FREE_ITEMS[0] : DEFAULT_FREE_ITEMS[1];
+  const has = sectionsDraft.some((s) => s.items.some((q) => q.slot === slot));
+  if (has) return alert("이미 편집기에 있습니다.");
+  let target = sectionsDraft[sectionsDraft.length - 1];
+  if (!target) { target = { title: DEFAULT_SECTION_TITLES.free, items: [] }; sectionsDraft.push(target); }
+  target.items.push({ type: "text", label, options: [], slot });
+  paintSurveyItems();
+}
+
 // 세트 저장/추가/삭제.
+// 선다형·복수 응답 문항은 보기 2개 이상 필요.
+function invalidChoice(items) {
+  return items.sections.flatMap((s) => s.items)
+    .find((q) => (q.type === "choice" || q.type === "multi") && q.options.length < 2);
+}
+
 async function saveCurrentSet() {
   const items = collectItems();
   // 교육·강사 문항 0개 허용 — 비우면 설문에서 해당 섹션이 표시되지 않는다.
+  const bad = invalidChoice(items);
+  if (bad) return alert(`'${bad.label}' 문항의 보기를 2개 이상 입력하세요(" / "로 구분).`);
   if (!editingSetId) return saveSurveyItems(); // 기본 세트는 기존 로직(이력 연동).
   const d = docByName("surveyItems") || {};
   const sets = getSurveySets().map((x) => (x.id === editingSetId ? { ...x, ...items } : x));
@@ -470,15 +532,16 @@ function collectItems() {
   return {
     eduItems: eduDraft.map((t) => t.trim()).filter(Boolean),
     instructorItems: instDraft.map((t) => t.trim()).filter(Boolean),
-    // 기본 주관식 2종: 문구 비우면 기본 문구, use=false면 설문에 미표시.
-    freeItems: freeDraft.map((f, i) => ({ use: !!f.use, label: (f.label || "").trim() || DEFAULT_FREE_ITEMS[i] })),
-    freeExtraItems: freeExtraDraft.map((t) => t.trim()).filter(Boolean),
-    oxItems: oxDraft.map((t) => t.trim()).filter(Boolean),
     titles: Object.fromEntries(Object.keys(DEFAULT_SECTION_TITLES).map((k) =>
       [k, (titlesDraft[k] || "").trim() || DEFAULT_SECTION_TITLES[k]])),
-    extraCats: extraDraft
-      .map((c) => ({ title: (c.title || "").trim(), items: c.items.map((t) => t.trim()).filter(Boolean) }))
-      .filter((c) => c.title && c.items.length),
+    sections: sectionsDraft
+      .map((s) => ({
+        title: (s.title || "").trim(),
+        items: s.items
+          .map((q) => ({ type: q.type, label: (q.label || "").trim(), options: q.options.map((o) => o.trim()).filter(Boolean), slot: q.slot || null }))
+          .filter((q) => q.label),
+      }))
+      .filter((s) => s.title && s.items.length),
     followUps: fuDraft
       .map((f) => ({ q: (f.q || "").trim(), cond: f.cond, maxScore: f.cond === "score" ? (f.maxScore || 2) : null, type: f.type, label: (f.label || "").trim() }))
       .filter((f) => f.q && f.label && ["yes", "no", "score"].includes(f.cond) && ["text", "ox"].includes(f.type)),
@@ -489,11 +552,8 @@ function topExtras() {
   const d = docByName("surveyItems");
   const x = extrasOf(d);
   return {
-    freeItems: x.freeItems || DEFAULT_FREE_ITEMS.map((t) => ({ use: true, label: t })),
-    freeExtraItems: x.freeExtraItems || [],
-    oxItems: x.oxItems || [],
     titles: x.titles || DEFAULT_SECTION_TITLES,
-    extraCats: x.extraCats || [],
+    sections: x.sections ?? defaultSections(),
     followUps: x.followUps || [],
   };
 }
@@ -534,6 +594,8 @@ function renderItemRevisions() {
 async function saveSurveyItems() {
   const items = collectItems();
   // 교육·강사 문항 0개 허용 — 비우면 설문에서 해당 섹션이 표시되지 않는다.
+  const bad = invalidChoice(items);
+  if (bad) return alert(`'${bad.label}' 문항의 보기를 2개 이상 입력하세요(" / "로 구분).`);
   const d = docByName("surveyItems");
   const hist = (Array.isArray(d?.history) ? d.history : []).filter((h) => h && h.from)
     .sort((a, b) => a.from.localeCompare(b.from));
@@ -567,8 +629,7 @@ async function addItemRevision() {
     const cur0 = docByName("surveyItems") || {};
     await setDocById("settings", "surveyItems",
       { eduItems: latest.eduItems, instructorItems: latest.instructorItems,
-        freeItems: items.freeItems, freeExtraItems: items.freeExtraItems, oxItems: items.oxItems,
-        titles: items.titles, extraCats: items.extraCats, followUps: items.followUps, history: hist,
+        titles: items.titles, sections: items.sections, followUps: items.followUps, history: hist,
         sets: Array.isArray(cur0.sets) ? cur0.sets : [] });
     alert(`설문 문항 개정본을 등록했습니다. (${from}부터 생성되는 설문에 적용)`);
   } catch (e) { alert("등록 실패: " + e.message); }
@@ -592,9 +653,12 @@ export function initSettings() {
   // 설문 문항 편집.
   document.getElementById("si-edu-add").addEventListener("click", () => { eduDraft.push(""); paintSurveyItems(); });
   document.getElementById("si-inst-add").addEventListener("click", () => { instDraft.push(""); paintSurveyItems(); });
-  document.getElementById("si-ox-add").addEventListener("click", () => { oxDraft.push(""); paintSurveyItems(); });
-  document.getElementById("si-freex-add").addEventListener("click", () => { freeExtraDraft.push(""); paintSurveyItems(); });
-  document.getElementById("si-extra-add").addEventListener("click", () => { extraDraft.push({ title: "", items: [""] }); paintSurveyItems(); });
+  document.getElementById("si-sec-add").addEventListener("click", () => {
+    sectionsDraft.push({ title: "", items: [{ type: "scale", label: "", options: [], slot: null }] });
+    paintSurveyItems();
+  });
+  document.getElementById("si-slot-dis").addEventListener("click", () => restoreSlot("dis"));
+  document.getElementById("si-slot-sug").addEventListener("click", () => restoreSlot("sug"));
   document.getElementById("si-fu-add").addEventListener("click", () => { fuDraft.push({ q: "", cond: "score", maxScore: 2, type: "text", label: "" }); paintSurveyItems(); });
   document.getElementById("si-save").addEventListener("click", saveCurrentSet);
   document.getElementById("si-set").addEventListener("change", (e) => {
