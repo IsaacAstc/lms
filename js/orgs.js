@@ -31,7 +31,7 @@ const TAB_FEATURE = {
   courses: "courses",
   programs: "master", rooms: "master", instructors: "master",
   payroll: "finance", expenses: "finance",
-  surveys: "surveys",
+  surveys: "surveys", surveyitems: "surveys",
   reports: "survey-result", freetext: "survey-result",
   stats: "stats",
   reportdoc: "reportdoc",

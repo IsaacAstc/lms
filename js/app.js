@@ -41,7 +41,7 @@ let initialized = false;
 const TAB_GROUPS = [
   { id: "operate", label: "교육 운영", tabs: [["courses", "차수·시간표"], ["programs", "과정 커리큘럼"], ["rooms", "강의실"], ["instructors", "강사"]] },
   { id: "finance", label: "강사료·경비", tabs: [["payroll", "강사료·집계"], ["expenses", "소요경비"]] },
-  { id: "surveys", label: "설문", tabs: [["surveys", "설문 관리"], ["reports", "설문 집계"], ["freetext", "주관식 원문"]] },
+  { id: "surveys", label: "설문", tabs: [["surveys", "설문 관리"], ["surveyitems", "문항 설정"], ["reports", "설문 집계"], ["freetext", "주관식 원문"]] },
   { id: "stats", label: "통계·보고서", tabs: [["stats", "통계 대시보드"], ["reportdoc", "운영 보고서"]] },
   { id: "site", label: "현장·공개", tabs: [["board", "공개 현황 보드"], ["rentals", "현장 안내(DID)"]] },
   { id: "class", label: "수업 지원", tabs: [["pad", "수업 보드"], ["logi", "ICAO 로지보드"]] },
