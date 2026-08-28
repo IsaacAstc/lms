@@ -72,17 +72,27 @@ export function getSurveySets() {
 // 발효일자 이력 없이 현재값만 유지(세트별 별도 저장). 구버전 필드(freeItems 등)는 읽을 때 변환.
 export const Q_TYPES = [
   ["scale", "5점 척도"], ["ox", "예/아니오"], ["text", "주관식"],
-  ["choice", "선다형(택1)"], ["multi", "복수 응답"],
+  ["choice", "선다형(택1)"], ["multi", "복수 응답"], ["fu", "조건부 후속"],
 ];
 const Q_TYPE_IDS = Q_TYPES.map(([t]) => t);
 
 function normQuestion(q) {
   if (!q || typeof q.label !== "string" || !q.label || !Q_TYPE_IDS.includes(q.type)) return null;
+  if (q.type === "fu") {
+    // 조건부 후속: 대상 문항(q)·조건·후속 유형을 함께 보관. 설문에서는 대상 문항 아래에 렌더.
+    if (!q.q || !["yes", "no", "score"].includes(q.cond) || !["text", "ox"].includes(q.futype)) return null;
+    return { type: "fu", label: q.label, q: q.q, cond: q.cond, maxScore: q.maxScore || 2, futype: q.futype, options: [], slot: null };
+  }
   return {
     type: q.type, label: q.label,
     options: Array.isArray(q.options) ? q.options.filter(Boolean) : [],
     slot: q.slot === "dis" || q.slot === "sug" ? q.slot : null,
   };
+}
+// 섹션 내 fu 항목들 → buildSurvey용 followUps 형식으로 변환.
+function followUpsFromSections(sections) {
+  return (sections || []).flatMap((s) => s.items.filter((q) => q.type === "fu")
+    .map((q) => ({ q: q.q, cond: q.cond, maxScore: q.cond === "score" ? (q.maxScore || 2) : null, type: q.futype, label: q.label })));
 }
 // sections 정규화: 신형 필드가 있으면 그대로, 없으면 구버전 필드(주관식·O/X·추가 카테고리)를 변환.
 function sectionsOf(src) {
@@ -90,6 +100,17 @@ function sectionsOf(src) {
     const out = src.sections
       .map((s) => ({ title: (s?.title || "").trim(), items: (Array.isArray(s?.items) ? s.items : []).map(normQuestion).filter(Boolean) }))
       .filter((s) => s.title && s.items.length);
+    // 과도기 문서: 별도 저장된 followUps 중 섹션에 fu 항목으로 없는 것은 대상 문항 뒤(없으면 마지막 섹션)에 주입.
+    const have = new Set(out.flatMap((s) => s.items.filter((q) => q.type === "fu").map((q) => `${q.q}|${q.label}`)));
+    for (const f of (Array.isArray(src.followUps) ? src.followUps : [])) {
+      if (!f || !f.q || !f.label || have.has(`${f.q}|${f.label}`)) continue;
+      const item = { type: "fu", label: f.label, q: f.q, cond: f.cond, maxScore: f.maxScore || 2, futype: f.type, options: [], slot: null };
+      if (!normQuestion(item)) continue;
+      const sec = out.find((s) => s.items.some((x) => x.label === f.q)) || out[out.length - 1];
+      if (!sec) continue;
+      const pi = sec.items.findIndex((x) => x.label === f.q);
+      sec.items.splice(pi >= 0 ? pi + 1 : sec.items.length, 0, item);
+    }
     return out; // 빈 배열도 '의도적 0개'로 유지.
   }
   if (!src) return null;
@@ -113,15 +134,28 @@ function sectionsOf(src) {
   for (const lb of (Array.isArray(src.freeExtraItems) ? src.freeExtraItems.filter(Boolean) : []))
     freeItems.push({ type: "text", label: lb, options: [], slot: null });
   if (freeItems.length) out.push({ title: t.free, items: freeItems });
+  // 구버전의 별도 followUps → 대상 문항 뒤에 fu 항목으로 주입.
+  for (const f of (Array.isArray(src.followUps) ? src.followUps : [])) {
+    if (!f || !f.q || !f.label) continue;
+    const item = { type: "fu", label: f.label, q: f.q, cond: f.cond, maxScore: f.maxScore || 2, futype: f.type, options: [], slot: null };
+    if (!normQuestion(item)) continue;
+    const sec = out.find((s) => s.items.some((x) => x.label === f.q)) || out[out.length - 1];
+    if (!sec) continue;
+    const pi = sec.items.findIndex((x) => x.label === f.q);
+    sec.items.splice(pi >= 0 ? pi + 1 : sec.items.length, 0, item);
+  }
   return out;
 }
 function extrasOf(src) {
+  const sections = sectionsOf(src);
   return {
     titles: (src?.titles && typeof src.titles === "object") ? { ...DEFAULT_SECTION_TITLES, ...src.titles } : null,
-    sections: sectionsOf(src),
-    // 조건부 후속 문항(1단계 분기): {q(대상 문항 라벨), cond('yes'|'no'|'score'), maxScore, type('text'|'ox'), label}
-    followUps: Array.isArray(src?.followUps)
-      ? src.followUps.filter((f) => f && f.q && f.label && ["yes", "no", "score"].includes(f.cond) && ["text", "ox"].includes(f.type)) : null,
+    sections,
+    // 조건부 후속: 섹션의 fu 항목에서 도출(빌더 통합). 섹션이 없으면 구버전 별도 필드 사용.
+    followUps: sections
+      ? followUpsFromSections(sections)
+      : (Array.isArray(src?.followUps)
+        ? src.followUps.filter((f) => f && f.q && f.label && ["yes", "no", "score"].includes(f.cond) && ["text", "ox"].includes(f.type)) : null),
   };
 }
 
@@ -234,7 +268,6 @@ function moveItem(arr, i, d) {
 let eduDraft = null, instDraft = null;
 let titlesDraft = null;    // {edu, inst} — 교육·강사 섹션 제목
 let sectionsDraft = null;  // [{title, items:[{type,label,options,slot}]}] — 문항 카테고리 빌더
-let fuDraft = null;        // [{q, cond, maxScore, type, label}] — 조건부 후속 문항
 
 // 기본값: 주관식 카테고리에 기본 2종(불만족/제안개선) 배치.
 function defaultSections() {
@@ -256,7 +289,6 @@ function loadDraftForSet() {
     instDraft = (set?.instructorItems || DEFAULT_INST_ITEMS).slice();
     titlesDraft = { ...(extrasOf(set).titles || DEFAULT_SECTION_TITLES) };
     sectionsDraft = cloneSections(extrasOf(set).sections ?? defaultSections());
-    fuDraft = (extrasOf(set).followUps || []).map((f) => ({ ...f }));
   } else {
     const cur = getSurveyItems();
     const d = docByName("surveyItems");
@@ -268,7 +300,6 @@ function loadDraftForSet() {
     instDraft = (Array.isArray(latest?.instructorItems) ? latest.instructorItems : (cur.instructorItems || DEFAULT_INST_ITEMS)).slice();
     titlesDraft = { ...(extrasOf(d).titles || DEFAULT_SECTION_TITLES) };
     sectionsDraft = cloneSections(extrasOf(d).sections ?? defaultSections());
-    fuDraft = (extrasOf(d).followUps || []).map((f) => ({ ...f }));
   }
   draftLoadedFor = editingSetId;
 }
@@ -320,66 +351,6 @@ function paintSurveyItems() {
       el.addEventListener("input", (e) => { titlesDraft[e.target.dataset.k] = e.target.value; }));
   }
   renderSectionsBuilder();
-  // 조건부 후속 문항 편집기.
-  const fbox2 = document.getElementById("si-fu-list");
-  if (fbox2) {
-    // 대상 후보: 교육 문항·카테고리의 5점 문항(N점 이하 조건), 카테고리의 O/X 문항(예/아니오 조건).
-    // 강사 문항은 강사별로 반복 표시되어 분기 대상에서 제외.
-    const secItems = (type) => sectionsDraft.flatMap((s) => s.items.filter((q) => q.type === type).map((q) => q.label.trim()).filter(Boolean));
-    const scaleTargets = [
-      ...eduDraft.map((t) => t.trim()).filter(Boolean),
-      ...secItems("scale"),
-    ];
-    const oxTargets = secItems("ox");
-    const qOptions = (sel) =>
-      `<option value="">대상 문항 선택</option>`
-      + (scaleTargets.length ? `<optgroup label="5점 문항">${scaleTargets.map((t) => `<option${t === sel ? " selected" : ""}>${escapeHtml(t)}</option>`).join("")}</optgroup>` : "")
-      + (oxTargets.length ? `<optgroup label="O/X 문항">${oxTargets.map((t) => `<option${t === sel ? " selected" : ""}>${escapeHtml(t)}</option>`).join("")}</optgroup>` : "");
-    fbox2.innerHTML = fuDraft.length ? "" : `<p class="hint">조건부 후속 문항이 없습니다.</p>`;
-    fuDraft.forEach((f, i) => {
-      const isOxTarget = oxTargets.includes(f.q);
-      const div = document.createElement("div");
-      div.className = "load-row";
-      div.innerHTML = `
-        <select class="fu-q" data-i="${i}">${qOptions(f.q)}</select>
-        <select class="fu-cond" data-i="${i}">
-          ${isOxTarget
-            ? `<option value="yes"${f.cond === "yes" ? " selected" : ""}>'예' 선택 시</option>
-               <option value="no"${f.cond === "no" ? " selected" : ""}>'아니오' 선택 시</option>`
-            : `<option value="score"${f.cond === "score" ? " selected" : ""}>N점 이하 선택 시</option>`}
-        </select>
-        <label class="fu-score-wrap"${f.cond === "score" ? "" : " hidden"}>N= <input type="number" class="fu-score" data-i="${i}" min="1" max="4" value="${f.maxScore || 2}" style="width:3.5rem"></label>
-        <select class="fu-type" data-i="${i}">
-          <option value="text"${f.type === "text" ? " selected" : ""}>후속: 주관식</option>
-          <option value="ox"${f.type === "ox" ? " selected" : ""}>후속: 예/아니오</option>
-        </select>
-        <input class="fu-label" data-i="${i}" value="${escapeHtml(f.label || "")}" placeholder="후속 문항 문구" style="min-width:220px">
-        <button type="button" class="del fu-del" data-i="${i}">삭제</button>`;
-      fbox2.appendChild(div);
-    });
-    fbox2.querySelectorAll(".fu-q").forEach((el) => el.addEventListener("change", (e) => {
-      const f = fuDraft[+e.target.dataset.i];
-      f.q = e.target.value;
-      f.cond = oxTargets.includes(f.q) ? (f.cond === "no" ? "no" : "yes") : "score";
-      paintSurveyItems();
-    }));
-    fbox2.querySelectorAll(".fu-cond").forEach((el) => el.addEventListener("change", (e) => {
-      fuDraft[+e.target.dataset.i].cond = e.target.value;
-      paintSurveyItems();
-    }));
-    fbox2.querySelectorAll(".fu-score").forEach((el) => el.addEventListener("input", (e) => {
-      fuDraft[+e.target.dataset.i].maxScore = Math.min(4, Math.max(1, Number(e.target.value) || 2));
-    }));
-    fbox2.querySelectorAll(".fu-type").forEach((el) => el.addEventListener("change", (e) => {
-      fuDraft[+e.target.dataset.i].type = e.target.value;
-    }));
-    fbox2.querySelectorAll(".fu-label").forEach((el) => el.addEventListener("input", (e) => {
-      fuDraft[+e.target.dataset.i].label = e.target.value;
-    }));
-    fbox2.querySelectorAll(".fu-del").forEach((b) => b.addEventListener("click", () => {
-      fuDraft.splice(+b.dataset.i, 1); paintSurveyItems();
-    }));
-  }
   renderItemRevisions();
 }
 
@@ -391,6 +362,28 @@ function renderSectionsBuilder() {
   box.innerHTML = sectionsDraft.length ? "" : `<p class="hint">카테고리가 없습니다. '카테고리 추가'로 시작하세요.</p>`;
   const slotBadge = (q) => q.slot === "dis" ? `<small class="hint" title="주관식 원문 '불만족' 분류·보고서 구분에 사용">[기본·불만족]</small>`
     : q.slot === "sug" ? `<small class="hint" title="주관식 원문 '제안개선' 분류·보고서 구분에 사용">[기본·제안개선]</small>` : "";
+  // 조건부 후속 대상 후보: 교육 문항·카테고리 5점 문항(N점 이하), 카테고리 O/X 문항(예/아니오).
+  const secItems = (type) => sectionsDraft.flatMap((s) => s.items.filter((q) => q.type === type).map((q) => q.label.trim()).filter(Boolean));
+  const scaleTargets = [...eduDraft.map((t) => t.trim()).filter(Boolean), ...secItems("scale")];
+  const oxTargets = secItems("ox");
+  const fuTargetOptions = (sel) =>
+    `<option value="">대상 문항 선택</option>`
+    + (scaleTargets.length ? `<optgroup label="5점 문항">${scaleTargets.map((t) => `<option${t === sel ? " selected" : ""}>${escapeHtml(t)}</option>`).join("")}</optgroup>` : "")
+    + (oxTargets.length ? `<optgroup label="O/X 문항">${oxTargets.map((t) => `<option${t === sel ? " selected" : ""}>${escapeHtml(t)}</option>`).join("")}</optgroup>` : "");
+  const fuRow = (q, si, i) => `
+    <select class="fu-q" data-s="${si}" data-i="${i}">${fuTargetOptions(q.q)}</select>
+    <select class="fu-cond" data-s="${si}" data-i="${i}">
+      ${oxTargets.includes(q.q)
+        ? `<option value="yes"${q.cond === "yes" ? " selected" : ""}>'예' 선택 시</option>
+           <option value="no"${q.cond === "no" ? " selected" : ""}>'아니오' 선택 시</option>`
+        : `<option value="score"${q.cond === "score" ? " selected" : ""}>N점 이하 선택 시</option>`}
+    </select>
+    ${q.cond === "score" ? `<label>N= <input type="number" class="fu-score" data-s="${si}" data-i="${i}" min="1" max="4" value="${q.maxScore || 2}" style="width:3.5rem"></label>` : ""}
+    <select class="fu-futype" data-s="${si}" data-i="${i}">
+      <option value="text"${q.futype === "text" ? " selected" : ""}>후속: 주관식</option>
+      <option value="ox"${q.futype === "ox" ? " selected" : ""}>후속: 예/아니오</option>
+    </select>
+    <input class="sec-q-label" data-s="${si}" data-i="${i}" value="${escapeHtml(q.label)}" placeholder="후속 문항 문구" style="min-width:200px">`;
   sectionsDraft.forEach((sec, si) => {
     const div = document.createElement("div");
     div.className = "load-box";
@@ -404,12 +397,13 @@ function renderSectionsBuilder() {
       </div>
       ${sec.items.map((q, i) => `<div class="load-row">
         <span>${i + 1}.</span>
-        <span class="hint">${escapeHtml(Q_TYPES.find(([t]) => t === q.type)?.[1] || q.type)}</span>
+        <span class="hint">${q.type === "fu" ? "↳ 조건부 후속" : escapeHtml(Q_TYPES.find(([t]) => t === q.type)?.[1] || q.type)}</span>
         ${slotBadge(q)}
+        ${q.type === "fu" ? fuRow(q, si, i) : `
         <input class="sec-q-label" data-s="${si}" data-i="${i}" value="${escapeHtml(q.label)}" placeholder="문항 문구" style="min-width:220px">
         ${(q.type === "choice" || q.type === "multi")
           ? `<input class="sec-q-opts" data-s="${si}" data-i="${i}" value="${escapeHtml(q.options.join(" / "))}" placeholder="보기 — ' / '로 구분 (예: A / B / C)" style="min-width:220px">`
-          : ""}
+          : ""}`}
         <button type="button" class="chip-move sec-q-move" data-s="${si}" data-i="${i}" data-d="-1" title="위로">◀</button>
         <button type="button" class="chip-move sec-q-move" data-s="${si}" data-i="${i}" data-d="1" title="아래로">▶</button>
         <button type="button" class="chip-del sec-q-del" data-s="${si}" data-i="${i}"${q.slot ? ` title="기본 주관식은 삭제하면 해당 분류가 설문에서 빠집니다"` : ""}>×</button>
@@ -422,9 +416,28 @@ function renderSectionsBuilder() {
     b.addEventListener("click", () => {
       const si = +b.dataset.s;
       const type = b.parentElement.querySelector(".sec-add-type").value;
-      sectionsDraft[si].items.push({ type, label: "", options: [], slot: null });
+      sectionsDraft[si].items.push(type === "fu"
+        ? { type: "fu", label: "", q: "", cond: "score", maxScore: 2, futype: "text", options: [], slot: null }
+        : { type, label: "", options: [], slot: null });
       paintSurveyItems();
     }));
+  // 조건부 후속 항목 컨트롤.
+  box.querySelectorAll(".fu-q").forEach((el) => el.addEventListener("change", (e) => {
+    const q = sectionsDraft[+e.target.dataset.s].items[+e.target.dataset.i];
+    q.q = e.target.value;
+    q.cond = oxTargets.includes(q.q) ? (q.cond === "no" ? "no" : "yes") : "score";
+    paintSurveyItems();
+  }));
+  box.querySelectorAll(".fu-cond").forEach((el) => el.addEventListener("change", (e) => {
+    sectionsDraft[+e.target.dataset.s].items[+e.target.dataset.i].cond = e.target.value;
+    paintSurveyItems();
+  }));
+  box.querySelectorAll(".fu-score").forEach((el) => el.addEventListener("input", (e) => {
+    sectionsDraft[+e.target.dataset.s].items[+e.target.dataset.i].maxScore = Math.min(4, Math.max(1, Number(e.target.value) || 2));
+  }));
+  box.querySelectorAll(".fu-futype").forEach((el) => el.addEventListener("change", (e) => {
+    sectionsDraft[+e.target.dataset.s].items[+e.target.dataset.i].futype = e.target.value;
+  }));
   box.querySelectorAll(".sec-move").forEach((b) =>
     b.addEventListener("click", () => { moveItem(sectionsDraft, +b.dataset.s, +b.dataset.d); paintSurveyItems(); }));
   box.querySelectorAll(".sec-del").forEach((b) =>
@@ -529,22 +542,23 @@ function bindItemEditors(boxId, draft) {
     b.addEventListener("click", () => { moveItem(draft, +b.dataset.i, +b.dataset.d); paintSurveyItems(); }));
 }
 function collectItems() {
+  const sections = sectionsDraft
+    .map((s) => ({
+      title: (s.title || "").trim(),
+      items: s.items
+        .map((q) => (q.type === "fu"
+          ? { type: "fu", label: (q.label || "").trim(), q: (q.q || "").trim(), cond: q.cond, maxScore: q.maxScore || 2, futype: q.futype, options: [], slot: null }
+          : { type: q.type, label: (q.label || "").trim(), options: q.options.map((o) => o.trim()).filter(Boolean), slot: q.slot || null }))
+        .filter((q) => q.label && (q.type !== "fu" || (q.q && ["yes", "no", "score"].includes(q.cond) && ["text", "ox"].includes(q.futype)))),
+    }))
+    .filter((s) => s.title && s.items.length);
   return {
     eduItems: eduDraft.map((t) => t.trim()).filter(Boolean),
     instructorItems: instDraft.map((t) => t.trim()).filter(Boolean),
     titles: Object.fromEntries(Object.keys(DEFAULT_SECTION_TITLES).map((k) =>
       [k, (titlesDraft[k] || "").trim() || DEFAULT_SECTION_TITLES[k]])),
-    sections: sectionsDraft
-      .map((s) => ({
-        title: (s.title || "").trim(),
-        items: s.items
-          .map((q) => ({ type: q.type, label: (q.label || "").trim(), options: q.options.map((o) => o.trim()).filter(Boolean), slot: q.slot || null }))
-          .filter((q) => q.label),
-      }))
-      .filter((s) => s.title && s.items.length),
-    followUps: fuDraft
-      .map((f) => ({ q: (f.q || "").trim(), cond: f.cond, maxScore: f.cond === "score" ? (f.maxScore || 2) : null, type: f.type, label: (f.label || "").trim() }))
-      .filter((f) => f.q && f.label && ["yes", "no", "score"].includes(f.cond) && ["text", "ox"].includes(f.type)),
+    sections,
+    followUps: followUpsFromSections(sections), // buildSurvey 호환용(빌더 fu 항목에서 도출)
   };
 }
 // 기본 세트 top-level의 주관식·O/X 현행값(세트 편집·삭제 등에서 보존용).
@@ -659,7 +673,6 @@ export function initSettings() {
   });
   document.getElementById("si-slot-dis").addEventListener("click", () => restoreSlot("dis"));
   document.getElementById("si-slot-sug").addEventListener("click", () => restoreSlot("sug"));
-  document.getElementById("si-fu-add").addEventListener("click", () => { fuDraft.push({ q: "", cond: "score", maxScore: 2, type: "text", label: "" }); paintSurveyItems(); });
   document.getElementById("si-save").addEventListener("click", saveCurrentSet);
   document.getElementById("si-set").addEventListener("change", (e) => {
     editingSetId = e.target.value; draftLoadedFor = null; paintSurveyItems();
