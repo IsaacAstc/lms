@@ -37,15 +37,17 @@ export function buildSurvey(course, sessions, roomId, instructorsById = {}, item
   const endMs = kstToMs(last.date, last.endTime);
   if (!endMs) return null;
   // 문항: 설정의 발효일자 이력 우선, 없으면 현행 상수.
+  // 빈 배열은 '의도적 0개'(섹션 미표시) — 미설정(null)일 때만 기본 문항으로 폴백.
   const items = {
-    eduItems: itemsAt?.eduItems?.length ? itemsAt.eduItems : EDU_ITEMS,
-    instructorItems: itemsAt?.instructorItems?.length ? itemsAt.instructorItems : INSTRUCTOR_ITEMS,
+    eduItems: Array.isArray(itemsAt?.eduItems) ? itemsAt.eduItems : EDU_ITEMS,
+    instructorItems: Array.isArray(itemsAt?.instructorItems) ? itemsAt.instructorItems : INSTRUCTOR_ITEMS,
   };
 
   // 강사만족도 대상: 첫/마지막 세션 및 제외 패턴 제외 + 강사 지정된 세션. (강사×과목) 단위.
+  // 강사 문항이 0개면 강사 섹션 자체가 없으므로 대상도 만들지 않는다.
   const seen = new Set();
   const instructorTargets = [];
-  sorted.forEach((s, idx) => {
+  if (items.instructorItems.length) sorted.forEach((s, idx) => {
     if (idx === 0 || idx === sorted.length - 1) return;
     if (!s.instructorId || !s.instructor) return;
     if (EXCLUDE_PATTERNS.some((p) => p.test(s.subject || ""))) return;
