@@ -53,8 +53,8 @@ export function getSurveyItemsAt(dateStr) {
   let picked = hist[0]; // 첫 개정 이전은 최초 개정본 적용.
   for (const h of hist) { if (h.from <= dateStr) picked = h; else break; }
   return {
-    eduItems: Array.isArray(picked.eduItems) && picked.eduItems.length ? picked.eduItems : cur.eduItems,
-    instructorItems: Array.isArray(picked.instructorItems) && picked.instructorItems.length ? picked.instructorItems : cur.instructorItems,
+    eduItems: Array.isArray(picked.eduItems) ? picked.eduItems : cur.eduItems,
+    instructorItems: Array.isArray(picked.instructorItems) ? picked.instructorItems : cur.instructorItems,
   };
 }
 
@@ -92,8 +92,9 @@ export function resolveSurveyItems({ setId, dateStr }) {
     const set = getSurveySets().find((x) => x.id === setId);
     if (set) {
       return {
-        eduItems: set.eduItems?.length ? set.eduItems : null,
-        instructorItems: set.instructorItems?.length ? set.instructorItems : null,
+        // 빈 배열은 '의도적 0개'(해당 섹션 미표시) — null(미설정 → 기본 문항)과 구분.
+        eduItems: Array.isArray(set.eduItems) ? set.eduItems : null,
+        instructorItems: Array.isArray(set.instructorItems) ? set.instructorItems : null,
         ...extrasOf(set),
         setId, setName: set.name || "",
       };
@@ -379,7 +380,7 @@ function paintSurveyItems() {
 // 세트 저장/추가/삭제.
 async function saveCurrentSet() {
   const items = collectItems();
-  if (!items.eduItems.length || !items.instructorItems.length) return alert("교육·강사 문항을 각각 1개 이상 입력하세요.");
+  // 교육·강사 문항 0개 허용 — 비우면 설문에서 해당 섹션이 표시되지 않는다.
   if (!editingSetId) return saveSurveyItems(); // 기본 세트는 기존 로직(이력 연동).
   const d = docByName("surveyItems") || {};
   const sets = getSurveySets().map((x) => (x.id === editingSetId ? { ...x, ...items } : x));
@@ -498,7 +499,7 @@ function renderItemRevisions() {
 }
 async function saveSurveyItems() {
   const items = collectItems();
-  if (!items.eduItems.length || !items.instructorItems.length) return alert("교육·강사 문항을 각각 1개 이상 입력하세요.");
+  // 교육·강사 문항 0개 허용 — 비우면 설문에서 해당 섹션이 표시되지 않는다.
   const d = docByName("surveyItems");
   const hist = (Array.isArray(d?.history) ? d.history : []).filter((h) => h && h.from)
     .sort((a, b) => a.from.localeCompare(b.from));
@@ -515,7 +516,7 @@ async function addItemRevision() {
   const from = document.getElementById("si-rev-date").value;
   if (!from) return alert("개정 발효일자를 선택하세요.");
   const items = collectItems();
-  if (!items.eduItems.length || !items.instructorItems.length) return alert("교육·강사 문항을 각각 1개 이상 입력하세요.");
+  // 교육·강사 문항 0개 허용 — 비우면 설문에서 해당 섹션이 표시되지 않는다.
   const d = docByName("surveyItems");
   const hist = (Array.isArray(d?.history) ? d.history : []).filter((h) => h && h.from)
     .sort((a, b) => a.from.localeCompare(b.from));

@@ -61,8 +61,8 @@ function ratingRow(name, label) {
 }
 
 function render(survey, preview = false) {
-  const edu = survey.eduItems.map((t, i) => ratingRow(`edu_${i}`, `${i + 1}. ${t}`)).join("");
-  const instBlocks = (survey.instructorTargets || [])
+  const edu = (survey.eduItems || []).map((t, i) => ratingRow(`edu_${i}`, `${i + 1}. ${t}`)).join("");
+  const instBlocks = ((survey.instructorItems || []).length ? (survey.instructorTargets || []) : [])
     .map((t, ti) => {
       const rows = survey.instructorItems.map((it, i) => ratingRow(`inst_${ti}_${i}`, it)).join("");
       return `<fieldset class="inst-block"><legend>${esc(t.subject)} — ${esc(t.instructorName)}</legend>${rows}</fieldset>`;
@@ -91,8 +91,7 @@ function render(survey, preview = false) {
     <h1>${esc(survey.courseName)} 만족도 설문</h1>
     <p class="notice">개인을 식별할 수 있는 정보(성명, 소속, 연락처 등)는 기재하지 마십시오. 응답은 완전 익명으로 처리됩니다.</p>
     <form id="s-form">
-      <h2>${esc(T.edu || "교육 만족도")}</h2>
-      ${edu}
+      ${edu ? `<h2>${esc(T.edu || "교육 만족도")}</h2>${edu}` : ""}
       ${instBlocks ? `<h2>${esc(T.inst || "강사 만족도")}</h2>${instBlocks}` : ""}
       ${extraBlocks}
       ${oxRows ? `<h2>${esc(T.ox || "예/아니오")}</h2>${oxRows}` : ""}
