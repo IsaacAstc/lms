@@ -1,13 +1,16 @@
-name: Deploy Functions & Rules
+name: Deploy Functions & RTDB Rules
 
-# functions/ 또는 보안규칙이 바뀐 채로 main에 머지되면 자동 배포한다.
-# (PC에서 firebase deploy 를 돌리지 않아도 되도록 — 수동 실행도 가능)
+# functions/ 또는 RTDB 규칙이 바뀐 채로 main에 머지되면 자동 배포한다.
+# ⚠️ Firestore 규칙은 여기서 배포하지 않는다 — astc-lms 프로젝트의 Firestore 규칙은
+#   Video Vault와 공유되어, 이 저장소의 firestore.rules 단독 배포 시 vault 규칙이
+#   삭제된다. Firestore 규칙 배포는 astc-video-vault 저장소의 병합본으로만 수행한다.
+#   (이 저장소의 firestore.rules 변경은 vault의 sync-lms-rules 워크플로가 PR로 반영)
 on:
   push:
     branches: [main]
     paths:
       - "functions/**"
-      - "firestore.rules"
+      - "rtdb.rules.json"
       - "firebase.json"
       - ".github/workflows/deploy-functions.yml"
   workflow_dispatch:
@@ -49,9 +52,9 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
-      - name: Deploy functions & firestore rules
+      - name: Deploy functions & RTDB rules
         if: steps.check.outputs.ok == 'true'
         run: npx --yes firebase-tools@latest deploy
-          --only functions,firestore:rules,database
+          --only functions,database
           --project "${{ secrets.FIREBASE_PROJECT_ID }}"
           --non-interactive --force
