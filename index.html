@@ -327,6 +327,20 @@
               <tbody id="survey-tbody"></tbody>
             </table>
           </div>
+          <dialog id="sv-window-dialog" class="apply-dialog">
+            <div style="padding:1.2rem 1.3rem;display:flex;flex-direction:column;gap:0.7rem;min-width:min(340px,85vw);">
+              <h3 style="margin:0;">설문 노출기간 수정</h3>
+              <p class="hint" id="sv-window-course" style="margin:0;"></p>
+              <p class="hint" style="margin:0;">기본값: 마지막 과목 종료 2시간 전 ~ 종료 후 1시간 (KST)</p>
+              <label>시작 <input type="datetime-local" id="sv-window-open" /></label>
+              <label>종료 <input type="datetime-local" id="sv-window-close" /></label>
+              <div class="form-actions">
+                <button type="button" id="sv-window-save">저장</button>
+                <button type="button" id="sv-window-auto">기본값 복원</button>
+                <button type="button" id="sv-window-close-btn">닫기</button>
+              </div>
+            </div>
+          </dialog>
         </section>
 
         <!-- 설문 집계 -->
