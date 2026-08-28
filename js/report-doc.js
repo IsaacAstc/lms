@@ -105,6 +105,38 @@ function operationsHTML(month) {
   return `<table><thead><tr><th>과정명</th><th>유형</th><th>차수</th><th>정원</th><th>신청</th><th>이수</th><th>교육장</th><th>교육기간</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+// 평가포함 과정 합격률: 해당 월 시작 차수 중 hasEvaluation 차수를 과정명으로 합산.
+// 산식: 합격률(%) = 이수 인원 ÷ 신청(출석) 인원 × 100, 소수점 둘째 자리.
+function passRateHTML(month) {
+  const list = coursesCache.filter((c) =>
+    (c.startDate || "").slice(0, 7) === month && c.hasEvaluation && !c.hidden);
+  if (!list.length) return `<p class="empty">해당 월에 평가가 포함된 과정이 없습니다.</p>`;
+  const byName = {};
+  for (const c of list) {
+    const g = byName[c.name || "(과정명 없음)"] = byName[c.name || "(과정명 없음)"] || { rounds: 0, applied: 0, completed: 0 };
+    g.rounds++;
+    g.applied += c.appliedCount || 0;
+    g.completed += c.completedCount || 0;
+  }
+  const rate = (g) => (g.applied ? ((g.completed / g.applied) * 100).toFixed(2) + "%" : "-");
+  const names = Object.keys(byName).sort();
+  const rows = names.map((n) => {
+    const g = byName[n];
+    return `<tr>
+      <td>${escapeHtml(n)}${g.rounds > 1 ? ` <small>(${g.rounds}개 차수 합산)</small>` : ""}</td>
+      <td style="text-align:right">${g.applied}</td>
+      <td style="text-align:right">${g.completed}</td>
+      <td style="text-align:right"><b>${rate(g)}</b></td></tr>`;
+  }).join("");
+  const t = names.reduce((s, n) => ({ applied: s.applied + byName[n].applied, completed: s.completed + byName[n].completed }), { applied: 0, completed: 0 });
+  return `<table><thead><tr><th>과정명</th><th>신청(출석) 인원</th><th>이수 인원</th><th>합격률</th></tr></thead><tbody>${rows}
+    <tr class="sum-row"><td><b>전체</b></td>
+      <td style="text-align:right"><b>${t.applied}</b></td>
+      <td style="text-align:right"><b>${t.completed}</b></td>
+      <td style="text-align:right"><b>${rate(t)}</b></td></tr></tbody></table>
+    <p class="hint">산식: 합격률(%) = 이수 인원 ÷ 신청(출석) 인원 × 100 (소수점 둘째 자리, 평가 포함 과정만 집계)</p>`;
+}
+
 // 소요경비(1인당 단가).
 async function expensesHTML(month) {
   let e = null;
@@ -190,7 +222,8 @@ async function run() {
     <section><h3>5. 시사점</h3><div class="report-narr">${narrative.summary ? escapeHtml(narrative.summary).replace(/\n/g, "<br>") : `<span class="empty">주관식 원문 탭에서 시사점을 입력하면 표시됩니다.</span>`}</div></section>
     <section><h3>6. 피드백 반영계획</h3><div class="report-narr">${narrative.actionTaken ? escapeHtml(narrative.actionTaken).replace(/\n/g, "<br>") : `<span class="empty">주관식 원문 탭에서 피드백 반영계획을 입력하면 표시됩니다.</span>`}</div></section>
     <section><h3>7. 운영 결과</h3>${ops}</section>
-    <section><h3>8. 소요경비</h3>${exp}</section>`;
+    <section><h3>8. 평가 결과 (합격률)</h3>${passRateHTML(month)}</section>
+    <section><h3>9. 소요경비</h3>${exp}</section>`;
 }
 
 // 인쇄: 보고서 영역만 새 창으로 열어 print(전역 CSS 충돌 회피).
