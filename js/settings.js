@@ -73,6 +73,9 @@ function extrasOf(src) {
     titles: (src?.titles && typeof src.titles === "object") ? { ...DEFAULT_SECTION_TITLES, ...src.titles } : null,
     extraCats: Array.isArray(src?.extraCats)
       ? src.extraCats.filter((c) => c && c.title && Array.isArray(c.items) && c.items.length) : null,
+    // 조건부 후속 문항(1단계 분기): {q(대상 문항 라벨), cond('yes'|'no'|'score'), maxScore, type('text'|'ox'), label}
+    followUps: Array.isArray(src?.followUps)
+      ? src.followUps.filter((f) => f && f.q && f.label && ["yes", "no", "score"].includes(f.cond) && ["text", "ox"].includes(f.type)) : null,
   };
 }
 
@@ -164,13 +167,20 @@ function itemListRows(boxId, items) {
   const box = document.getElementById(boxId);
   box.innerHTML = items.length
     ? `<div class="chip-row">${items.map((t, i) =>
-        `<span class="chip"><input class="si-name" data-i="${i}" value="${escapeHtml(t)}" size="18"><button type="button" class="chip-del" data-i="${i}">×</button></span>`).join("")}</div>`
+        `<span class="chip">${i + 1}.<input class="si-name" data-i="${i}" value="${escapeHtml(t)}" size="18"><button type="button" class="chip-move" data-i="${i}" data-d="-1" title="앞으로">◀</button><button type="button" class="chip-move" data-i="${i}" data-d="1" title="뒤로">▶</button><button type="button" class="chip-del" data-i="${i}">×</button></span>`).join("")}</div>`
     : `<p class="empty">문항이 없습니다.</p>`;
+}
+// 배열 내 이동(경계 밖이면 무시).
+function moveItem(arr, i, d) {
+  const j = i + d;
+  if (j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
 }
 
 let eduDraft = null, instDraft = null, freeDraft = null, oxDraft = null;
 let titlesDraft = null;   // {edu, inst, free, ox} — 섹션(카테고리) 제목
 let extraDraft = null;    // [{title, items:[]}] — 추가 카테고리(5점 척도)
+let fuDraft = null;       // [{q, cond, maxScore, type, label}] — 조건부 후속 문항
 let editingSetId = "";   // "" = 기본 세트
 let draftLoadedFor = null; // 현재 draft가 어느 세트에서 로드됐는지
 
@@ -185,6 +195,7 @@ function loadDraftForSet() {
     oxDraft = (extrasOf(set).oxItems || []).slice();
     titlesDraft = { ...(extrasOf(set).titles || DEFAULT_SECTION_TITLES) };
     extraDraft = (extrasOf(set).extraCats || []).map((c) => ({ title: c.title, items: c.items.slice() }));
+    fuDraft = (extrasOf(set).followUps || []).map((f) => ({ ...f }));
   } else {
     const cur = getSurveyItems();
     const d = docByName("surveyItems");
@@ -194,6 +205,7 @@ function loadDraftForSet() {
     oxDraft = (extrasOf(d).oxItems || []).slice();
     titlesDraft = { ...(extrasOf(d).titles || DEFAULT_SECTION_TITLES) };
     extraDraft = (extrasOf(d).extraCats || []).map((c) => ({ title: c.title, items: c.items.slice() }));
+    fuDraft = (extrasOf(d).followUps || []).map((f) => ({ ...f }));
   }
   draftLoadedFor = editingSetId;
 }
@@ -254,10 +266,12 @@ function paintSurveyItems() {
       div.innerHTML = `<div class="load-row">
           <label>카테고리명 <input class="xc-title" data-c="${ci}" value="${escapeHtml(cat.title)}" size="20"></label>
           <button type="button" class="xc-item-add" data-c="${ci}">문항 추가</button>
+          <button type="button" class="xc-move" data-c="${ci}" data-d="-1" title="카테고리를 위로">▲</button>
+          <button type="button" class="xc-move" data-c="${ci}" data-d="1" title="카테고리를 아래로">▼</button>
           <button type="button" class="del xc-del" data-c="${ci}">카테고리 삭제</button>
         </div>
         <div class="chip-row">${cat.items.map((t, i) =>
-          `<span class="chip"><input class="xc-item" data-c="${ci}" data-i="${i}" value="${escapeHtml(t)}" size="18"><button type="button" class="chip-del xc-item-del" data-c="${ci}" data-i="${i}">×</button></span>`).join("")}</div>`;
+          `<span class="chip">${i + 1}.<input class="xc-item" data-c="${ci}" data-i="${i}" value="${escapeHtml(t)}" size="18"><button type="button" class="chip-move xc-item-move" data-c="${ci}" data-i="${i}" data-d="-1" title="앞으로">◀</button><button type="button" class="chip-move xc-item-move" data-c="${ci}" data-i="${i}" data-d="1" title="뒤로">▶</button><button type="button" class="chip-del xc-item-del" data-c="${ci}" data-i="${i}">×</button></span>`).join("")}</div>`;
       xbox.appendChild(div);
     });
     xbox.querySelectorAll(".xc-title").forEach((el) =>
@@ -268,12 +282,75 @@ function paintSurveyItems() {
       b.addEventListener("click", () => { extraDraft[+b.dataset.c].items.push(""); paintSurveyItems(); }));
     xbox.querySelectorAll(".xc-item-del").forEach((b) =>
       b.addEventListener("click", () => { extraDraft[+b.dataset.c].items.splice(+b.dataset.i, 1); paintSurveyItems(); }));
+    xbox.querySelectorAll(".xc-item-move").forEach((b) =>
+      b.addEventListener("click", () => { moveItem(extraDraft[+b.dataset.c].items, +b.dataset.i, +b.dataset.d); paintSurveyItems(); }));
+    xbox.querySelectorAll(".xc-move").forEach((b) =>
+      b.addEventListener("click", () => { moveItem(extraDraft, +b.dataset.c, +b.dataset.d); paintSurveyItems(); }));
     xbox.querySelectorAll(".xc-del").forEach((b) =>
       b.addEventListener("click", () => {
         const c = extraDraft[+b.dataset.c];
         if (!confirm(`'${c.title || "(이름 없음)"}' 카테고리를 삭제할까요?`)) return;
         extraDraft.splice(+b.dataset.c, 1); paintSurveyItems();
       }));
+  }
+  // 조건부 후속 문항 편집기.
+  const fbox2 = document.getElementById("si-fu-list");
+  if (fbox2) {
+    // 대상 후보: 교육 문항·추가 카테고리 문항(5점 → N점 이하 조건), O/X 문항(예/아니오 조건).
+    // 강사 문항은 강사별로 반복 표시되어 분기 대상에서 제외.
+    const scaleTargets = [
+      ...eduDraft.map((t) => t.trim()).filter(Boolean),
+      ...extraDraft.flatMap((c) => c.items.map((t) => t.trim()).filter(Boolean)),
+    ];
+    const oxTargets = oxDraft.map((t) => t.trim()).filter(Boolean);
+    const qOptions = (sel) =>
+      `<option value="">대상 문항 선택</option>`
+      + (scaleTargets.length ? `<optgroup label="5점 문항">${scaleTargets.map((t) => `<option${t === sel ? " selected" : ""}>${escapeHtml(t)}</option>`).join("")}</optgroup>` : "")
+      + (oxTargets.length ? `<optgroup label="O/X 문항">${oxTargets.map((t) => `<option${t === sel ? " selected" : ""}>${escapeHtml(t)}</option>`).join("")}</optgroup>` : "");
+    fbox2.innerHTML = fuDraft.length ? "" : `<p class="hint">조건부 후속 문항이 없습니다.</p>`;
+    fuDraft.forEach((f, i) => {
+      const isOxTarget = oxTargets.includes(f.q);
+      const div = document.createElement("div");
+      div.className = "load-row";
+      div.innerHTML = `
+        <select class="fu-q" data-i="${i}">${qOptions(f.q)}</select>
+        <select class="fu-cond" data-i="${i}">
+          ${isOxTarget
+            ? `<option value="yes"${f.cond === "yes" ? " selected" : ""}>'예' 선택 시</option>
+               <option value="no"${f.cond === "no" ? " selected" : ""}>'아니오' 선택 시</option>`
+            : `<option value="score"${f.cond === "score" ? " selected" : ""}>N점 이하 선택 시</option>`}
+        </select>
+        <label class="fu-score-wrap"${f.cond === "score" ? "" : " hidden"}>N= <input type="number" class="fu-score" data-i="${i}" min="1" max="4" value="${f.maxScore || 2}" style="width:3.5rem"></label>
+        <select class="fu-type" data-i="${i}">
+          <option value="text"${f.type === "text" ? " selected" : ""}>후속: 주관식</option>
+          <option value="ox"${f.type === "ox" ? " selected" : ""}>후속: 예/아니오</option>
+        </select>
+        <input class="fu-label" data-i="${i}" value="${escapeHtml(f.label || "")}" placeholder="후속 문항 문구" style="min-width:220px">
+        <button type="button" class="del fu-del" data-i="${i}">삭제</button>`;
+      fbox2.appendChild(div);
+    });
+    fbox2.querySelectorAll(".fu-q").forEach((el) => el.addEventListener("change", (e) => {
+      const f = fuDraft[+e.target.dataset.i];
+      f.q = e.target.value;
+      f.cond = oxTargets.includes(f.q) ? (f.cond === "no" ? "no" : "yes") : "score";
+      paintSurveyItems();
+    }));
+    fbox2.querySelectorAll(".fu-cond").forEach((el) => el.addEventListener("change", (e) => {
+      fuDraft[+e.target.dataset.i].cond = e.target.value;
+      paintSurveyItems();
+    }));
+    fbox2.querySelectorAll(".fu-score").forEach((el) => el.addEventListener("input", (e) => {
+      fuDraft[+e.target.dataset.i].maxScore = Math.min(4, Math.max(1, Number(e.target.value) || 2));
+    }));
+    fbox2.querySelectorAll(".fu-type").forEach((el) => el.addEventListener("change", (e) => {
+      fuDraft[+e.target.dataset.i].type = e.target.value;
+    }));
+    fbox2.querySelectorAll(".fu-label").forEach((el) => el.addEventListener("input", (e) => {
+      fuDraft[+e.target.dataset.i].label = e.target.value;
+    }));
+    fbox2.querySelectorAll(".fu-del").forEach((b) => b.addEventListener("click", () => {
+      fuDraft.splice(+b.dataset.i, 1); paintSurveyItems();
+    }));
   }
   renderItemRevisions();
 }
@@ -338,6 +415,8 @@ function bindItemEditors(boxId, draft) {
     el.addEventListener("input", (e) => { draft[+e.target.dataset.i] = e.target.value; }));
   box.querySelectorAll(".chip-del").forEach((b) =>
     b.addEventListener("click", () => { draft.splice(+b.dataset.i, 1); paintSurveyItems(); }));
+  box.querySelectorAll(".chip-move").forEach((b) =>
+    b.addEventListener("click", () => { moveItem(draft, +b.dataset.i, +b.dataset.d); paintSurveyItems(); }));
 }
 function collectItems() {
   return {
@@ -351,6 +430,9 @@ function collectItems() {
     extraCats: extraDraft
       .map((c) => ({ title: (c.title || "").trim(), items: c.items.map((t) => t.trim()).filter(Boolean) }))
       .filter((c) => c.title && c.items.length),
+    followUps: fuDraft
+      .map((f) => ({ q: (f.q || "").trim(), cond: f.cond, maxScore: f.cond === "score" ? (f.maxScore || 2) : null, type: f.type, label: (f.label || "").trim() }))
+      .filter((f) => f.q && f.label && ["yes", "no", "score"].includes(f.cond) && ["text", "ox"].includes(f.type)),
   };
 }
 // 기본 세트 top-level의 주관식·O/X 현행값(세트 편집·삭제 등에서 보존용).
@@ -362,6 +444,7 @@ function topExtras() {
     oxItems: x.oxItems || [],
     titles: x.titles || DEFAULT_SECTION_TITLES,
     extraCats: x.extraCats || [],
+    followUps: x.followUps || [],
   };
 }
 function renderItemRevisions() {
@@ -427,7 +510,7 @@ async function addItemRevision() {
     await setDocById("settings", "surveyItems",
       { eduItems: latest.eduItems, instructorItems: latest.instructorItems,
         freeItems: items.freeItems, oxItems: items.oxItems,
-        titles: items.titles, extraCats: items.extraCats, history: hist,
+        titles: items.titles, extraCats: items.extraCats, followUps: items.followUps, history: hist,
         sets: Array.isArray(cur0.sets) ? cur0.sets : [] });
     alert(`설문 문항 개정본을 등록했습니다. (${from}부터 생성되는 설문에 적용)`);
   } catch (e) { alert("등록 실패: " + e.message); }
@@ -453,6 +536,7 @@ export function initSettings() {
   document.getElementById("si-inst-add").addEventListener("click", () => { instDraft.push(""); paintSurveyItems(); });
   document.getElementById("si-ox-add").addEventListener("click", () => { oxDraft.push(""); paintSurveyItems(); });
   document.getElementById("si-extra-add").addEventListener("click", () => { extraDraft.push({ title: "", items: [""] }); paintSurveyItems(); });
+  document.getElementById("si-fu-add").addEventListener("click", () => { fuDraft.push({ q: "", cond: "score", maxScore: 2, type: "text", label: "" }); paintSurveyItems(); });
   document.getElementById("si-save").addEventListener("click", saveCurrentSet);
   document.getElementById("si-set").addEventListener("change", (e) => {
     editingSetId = e.target.value; draftLoadedFor = null; paintSurveyItems();

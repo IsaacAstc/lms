@@ -443,7 +443,7 @@
           <div class="load-row">
             <label>기간 <input id="ft-month" type="month" /></label>
             <label>종류
-              <select id="ft-kind"><option value="">전체</option><option>불만족</option><option>제안개선</option></select>
+              <select id="ft-kind"><option value="">전체</option><option>불만족</option><option>제안개선</option><option>조건부</option></select>
             </label>
             <label>키워드 <input id="ft-kw" placeholder="본문 검색" /></label>
             <button id="ft-search" type="button">조회</button>
@@ -516,11 +516,16 @@
           <div id="si-ox-list"></div>
           <p class="hint"><b>추가 카테고리</b> — 5점 척도 문항 그룹을 카테고리 단위로 자유롭게 추가·삭제할 수 있습니다(집계는 카테고리별 표).</p>
           <div id="si-extra-list"></div>
+          <p class="hint"><b>조건부 후속 문항</b> — 앞선 문항의 답변에 따라 추가로 노출되는 문항입니다(1단계 분기).
+            대상: 교육 만족도·추가 카테고리(5점 — N점 이하 조건) 또는 O/X 문항(예/아니오 조건).
+            후속이 주관식이면 원문은 '주관식 원문' 탭에 <b>조건부</b> 종류로 표시되고, 후속이 O/X면 예/아니오 집계표에 포함됩니다.</p>
+          <div id="si-fu-list"></div>
           <div class="form-actions">
             <button id="si-edu-add" type="button">교육 문항 추가</button>
             <button id="si-inst-add" type="button">강사 문항 추가</button>
             <button id="si-ox-add" type="button">O/X 문항 추가</button>
             <button id="si-extra-add" type="button">카테고리 추가</button>
+            <button id="si-fu-add" type="button">후속 문항 추가</button>
             <button id="si-save" type="button">설문 문항 저장</button>
             <span class="rev-group" id="si-rev-group">
               <label>개정 발효일자 <input type="date" id="si-rev-date" /></label>

@@ -76,6 +76,7 @@ export function buildSurvey(course, sessions, roomId, instructorsById = {}, item
     oxItems: Array.isArray(itemsAt?.oxItems) ? itemsAt.oxItems : [],
     titles: { ...DEFAULT_SECTION_TITLES, ...(itemsAt?.titles || {}) },
     extraCats: Array.isArray(itemsAt?.extraCats) ? itemsAt.extraCats : [],
+    followUps: Array.isArray(itemsAt?.followUps) ? itemsAt.followUps : [],
     instructorTargets,
     updatedAtMs: Date.now(),
   };
