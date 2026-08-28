@@ -120,6 +120,7 @@ service cloud.firestore {
         : docId == 'apply' ? canTab('board')
         : docId == 'surveyCategories' ? canTab('freetext')
         : docId == 'logiPush' ? canTab('logi')
+        : docId == 'surveyItems' ? (canTab('surveyitems') || canTab('settings'))
         : canTab('settings');
       // 로지보드 푸시 공개키(VAPID public key — 원래 공개값): 참가자 페이지가 읽는다.
       allow read: if docId == 'logiPush';
