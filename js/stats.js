@@ -7,7 +7,7 @@ import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import { coursesCache } from "./courses.js";
 import { getProgramById } from "./programs.js";
-import { deserializeAgg } from "./agg.js";
+import { deserializeAgg, computeAgg, mergeAgg, emptyAgg, renderExtraHTML, renderOxHTML, renderChoiceHTML } from "./agg.js";
 import { fmtDot } from "./time.js";
 
 function courseTypeOf(c) {
@@ -90,13 +90,21 @@ function overallsFromAgg(agg) {
   for (const kind in agg.inst.groups) for (const key in agg.inst.groups[kind]) for (const it of agg.inst.groups[kind][key].items) { s += it.sum; c += it.count; }
   return { edu: eduM, inst: c ? (s / c) * 20 : null };
 }
+// 월별 개요 + 그 달의 전체 집계(agg — 커스텀 문항 합산용)를 함께 반환.
 async function monthOveralls(month) {
   const snap = await getDocs(query(collection(db, "surveyResponses"),
     where("collectedDate", ">=", `${month}-01`), where("collectedDate", "<=", `${month}-31`)));
-  if (snap.size) return overallsFromResponses(snap.docs.map((d) => d.data()));
+  if (snap.size) {
+    const rs = snap.docs.map((d) => d.data());
+    return { ...overallsFromResponses(rs), agg: computeAgg(rs) };
+  }
   const sdoc = await getDoc(doc(db, "surveyAggregates", month));
-  if (sdoc.exists()) { const o = overallsFromAgg(deserializeAgg(sdoc.data())); return { ...o, n: sdoc.data().count || 0, snapshot: true }; }
-  return { edu: null, inst: null, n: 0 };
+  if (sdoc.exists()) {
+    const agg = deserializeAgg(sdoc.data());
+    const o = overallsFromAgg(agg);
+    return { ...o, n: sdoc.data().count || 0, snapshot: true, agg };
+  }
+  return { edu: null, inst: null, n: 0, agg: null };
 }
 
 // ── B. 월별 만족도 추이 ──
@@ -120,8 +128,10 @@ async function renderTrend() {
   if (months.length > 24 && !confirm(`${months.length}개월을 조회합니다. 읽기량이 커질 수 있습니다. 계속할까요?`)) return;
   box.innerHTML = "조회 중…";
   const rows = [];
+  const total = emptyAgg(); // 기간 전체 합산(커스텀 문항 표용).
   for (const mth of months) {
     const o = await monthOveralls(mth);
+    if (o.agg) mergeAgg(total, o.agg);
     rows.push(`<tr>
       <td>${mth}${o.snapshot ? " <span class='warn'>(스냅샷)</span>" : ""}</td>
       <td style="text-align:right">${o.n}</td>
@@ -129,6 +139,10 @@ async function renderTrend() {
       <td>${fmt(o.inst)} ${bar(o.inst)}</td></tr>`);
   }
   box.innerHTML = `<table><thead><tr><th>월</th><th>응답수</th><th>교육만족도(100)</th><th>강사만족도(100)</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+  // 커스텀 문항(빌더 카테고리) 기간 합산 — 있을 때만 표시.
+  const customHtml = renderExtraHTML(total) + renderOxHTML(total) + renderChoiceHTML(total);
+  document.getElementById("stat-custom").innerHTML = customHtml
+    ? `<h3>커스텀 문항 (기간 합산: ${start} ~ ${end})</h3>${customHtml}` : "";
 }
 
 // ── C. 차수 간 비교 ──

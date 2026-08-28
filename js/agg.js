@@ -36,6 +36,7 @@ export function emptyAgg() {
     ox: {},     // O/X 문항: label → {yes, no}
     extra: {},  // 카테고리 5점 문항: catTitle → {label → {sum, count}}
     choice: {}, // 선다형·복수 응답: label → {n(응답자), multi, opts: {보기 → count}}
+    ftx: {},    // 자유·조건부 주관식 응답 건수: label → n (원문 파기 후 건수만 보존)
   };
 }
 
@@ -98,6 +99,9 @@ export function computeAgg(responses) {
       t.n++;
       for (const o of c.options) if (o) t.opts[o] = (t.opts[o] || 0) + 1;
     }
+    for (const t of [...(r.freeExtra || []), ...(r.fuTexts || [])]) {
+      if (t?.label && t?.text) a.ftx[t.label] = (a.ftx[t.label] || 0) + 1;
+    }
   }
   return a;
 }
@@ -133,6 +137,7 @@ export function mergeAgg(a, b) {
     t.n += bt.n || 0;
     for (const o in bt.opts || {}) t.opts[o] = (t.opts[o] || 0) + bt.opts[o];
   }
+  for (const lb in b.ftx || {}) a.ftx[lb] = (a.ftx[lb] || 0) + b.ftx[lb];
   return a;
 }
 
@@ -159,6 +164,7 @@ export function serializeAgg(a) {
     choice: Object.entries(a.choice).map(([label, t]) => ({
       label, n: t.n, multi: !!t.multi, opts: Object.entries(t.opts).map(([option, count]) => ({ option, count })),
     })),
+    ftx: Object.entries(a.ftx).map(([label, n]) => ({ label, n })),
   };
 }
 export function deserializeAgg(d) {
@@ -173,6 +179,7 @@ export function deserializeAgg(d) {
   for (const o of d.ox || []) a.ox[o.label] = { yes: o.yes || 0, no: o.no || 0 };
   for (const c of d.extra || []) { a.extra[c.cat] = {}; for (const it of c.items || []) a.extra[c.cat][it.label] = { sum: it.sum, count: it.count }; }
   for (const c of d.choice || []) a.choice[c.label] = { n: c.n || 0, multi: !!c.multi, opts: Object.fromEntries((c.opts || []).map((o) => [o.option, o.count || 0])) };
+  for (const f of d.ftx || []) a.ftx[f.label] = f.n || 0;
   return a;
 }
 
@@ -227,6 +234,15 @@ export function renderChoiceHTML(a) {
     return `<p class="hint" style="margin-bottom:0.2rem"><b>${escapeHtml(lb)}</b> — ${t.multi ? "복수 응답" : "택1"} · 응답 ${t.n}건${t.multi ? " (비율은 응답자 대비)" : ""}</p>
       <table><thead><tr><th>보기</th><th>선택</th><th>비율</th></tr></thead><tbody>${rows}</tbody></table>`;
   }).join("");
+}
+
+// 자유·조건부 주관식 응답 건수(원문 파기 후 스냅샷용). 없으면 빈 문자열.
+export function renderFtxHTML(a) {
+  const labels = Object.keys(a?.ftx || {});
+  if (!labels.length) return "";
+  const rows = labels.map((lb) =>
+    `<tr><td>${escapeHtml(lb)}</td><td style="text-align:right">${a.ftx[lb]}</td></tr>`).join("");
+  return `<table><thead><tr><th>주관식 문항(자유·조건부)</th><th>응답 건수</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 // 카테고리 5점 문항: 카테고리별 표(100점 환산 평균). 없으면 빈 문자열.

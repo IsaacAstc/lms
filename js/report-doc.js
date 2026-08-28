@@ -8,7 +8,7 @@ import { escapeHtml } from "./app.js";
 import { coursesCache } from "./courses.js";
 import { getProgramById } from "./programs.js";
 import {
-  computeAgg, deserializeAgg, renderEduHTML, renderInstMergedHTML, renderOxHTML, renderExtraHTML, renderChoiceHTML,
+  computeAgg, deserializeAgg, renderEduHTML, renderInstMergedHTML, renderOxHTML, renderExtraHTML, renderChoiceHTML, renderFtxHTML,
 } from "./agg.js";
 import { fmtDot } from "./time.js";
 
@@ -197,7 +197,8 @@ async function run() {
       summaryHtml = `<p class="hint">원문이 파기되어 과정유형별 요약은 세부 집계표로 대체합니다.</p>`;
       detailEdu = renderEduHTML(agg);
       detailInst = renderInstMergedHTML(agg);
-      freetext = `<p class="empty">원문이 파기되어 주관식 원문은 표시할 수 없습니다.</p>`;
+      // 자유·조건부 주관식은 원문 파기 후 건수 스냅샷만 표시.
+      freetext = `<p class="empty">원문이 파기되어 주관식 원문은 표시할 수 없습니다.</p>` + renderFtxHTML(agg);
     } else {
       summaryHtml = detailEdu = detailInst = freetext = `<p class="empty">해당 기간 설문 데이터가 없습니다.</p>`;
     }
