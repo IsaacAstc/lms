@@ -25,6 +25,7 @@ export const ORG_FEATURES = [
   // 상단바 바로가기(퀴즈·히어로 미션은 기본 기관 백엔드로 연결되는 링크).
   ["quiz", "퀴즈 바로가기"],
   ["scfe", "히어로 미션 바로가기"],
+  ["vault", "비디오 볼트 바로가기(마스터 전용)"],
 ];
 // 탭 id → 기능 id. 매핑에 없는 탭(설정 핵심)은 기능 선택과 무관하게 항상 표시.
 const TAB_FEATURE = {
@@ -39,6 +40,7 @@ const TAB_FEATURE = {
   board: "board",
   pad: "pad",
   logi: "logi",
+  vault: "vault", // 탭이 아닌 상단바 링크지만 기관 기능 판정(orgAllows)에 사용.
 };
 export function tabFeature(tab) { return TAB_FEATURE[tab] || null; }
 
