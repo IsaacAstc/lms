@@ -247,9 +247,24 @@ function renderSetSelect() {
     : "기본 세트는 개정 발효일자 이력으로 관리됩니다.";
 }
 
+// 저장 버튼 라벨: 개정 이력이 있으면 '무엇을 덮어쓰는지'를 드러낸다(같은 판 정정 vs 개정판 발행 구분).
+function saveButtonLabel(baseLabel, hist) {
+  return hist.length ? `최신 개정본(${hist[hist.length - 1].from}~) 수정 저장` : baseLabel;
+}
+
 function paintSurveyItems() {
   loadDraftForSet();
   renderSetSelect();
+  const saveBtn = document.getElementById("si-save");
+  if (saveBtn) {
+    if (editingSetId) saveBtn.textContent = "문항 세트 저장";
+    else {
+      const d = docByName("surveyItems");
+      const hist = (Array.isArray(d?.history) ? d.history : []).filter((h) => h && h.from)
+        .sort((a, b) => a.from.localeCompare(b.from));
+      saveBtn.textContent = saveButtonLabel("설문 문항 저장", hist);
+    }
+  }
   itemListRows("si-edu-list", eduDraft);
   itemListRows("si-inst-list", instDraft);
   bindItemEditors("si-edu-list", eduDraft);
@@ -595,6 +610,8 @@ function renderAll() {
   renderTravel();
   renderRevisions("feeRates", "fee-rev-list");
   renderRevisions("travelRates", "travel-rev-list");
+  document.getElementById("fee-save").textContent = saveButtonLabel("강사료 기준 저장", getRateHistory("feeRates"));
+  document.getElementById("travel-save").textContent = saveButtonLabel("여비 기준 저장", getRateHistory("travelRates"));
   paintSurveyItems();
 }
 
