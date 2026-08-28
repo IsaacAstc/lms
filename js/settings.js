@@ -68,7 +68,14 @@ export function getSurveySets() {
 // 발효일자 이력 없이 현재값만 유지(세트별 별도 저장).
 function extrasOf(src) {
   return {
-    freeItems: Array.isArray(src?.freeItems) && src.freeItems.length === 2 ? src.freeItems : null,
+    // 기본 주관식 2종: 구버전(문자열 2개) → {use, label} 정규화. use=false면 설문에 미표시.
+    freeItems: Array.isArray(src?.freeItems) && src.freeItems.length === 2
+      ? src.freeItems.map((x, i) => (typeof x === "string"
+        ? { use: true, label: x }
+        : { use: x?.use !== false, label: x?.label || DEFAULT_FREE_ITEMS[i] }))
+      : null,
+    // 자유 주관식(항상 노출, 라벨 기반 저장).
+    freeExtraItems: Array.isArray(src?.freeExtraItems) ? src.freeExtraItems.filter(Boolean) : null,
     oxItems: Array.isArray(src?.oxItems) ? src.oxItems.filter(Boolean) : null,
     titles: (src?.titles && typeof src.titles === "object") ? { ...DEFAULT_SECTION_TITLES, ...src.titles } : null,
     extraCats: Array.isArray(src?.extraCats)
@@ -181,6 +188,7 @@ let eduDraft = null, instDraft = null, freeDraft = null, oxDraft = null;
 let titlesDraft = null;   // {edu, inst, free, ox} — 섹션(카테고리) 제목
 let extraDraft = null;    // [{title, items:[]}] — 추가 카테고리(5점 척도)
 let fuDraft = null;       // [{q, cond, maxScore, type, label}] — 조건부 후속 문항
+let freeExtraDraft = null; // [label] — 자유 주관식(항상 노출)
 let editingSetId = "";   // "" = 기본 세트
 let draftLoadedFor = null; // 현재 draft가 어느 세트에서 로드됐는지
 
@@ -191,7 +199,8 @@ function loadDraftForSet() {
     const set = getSurveySets().find((x) => x.id === editingSetId);
     eduDraft = (set?.eduItems || DEFAULT_EDU_ITEMS).slice();
     instDraft = (set?.instructorItems || DEFAULT_INST_ITEMS).slice();
-    freeDraft = (extrasOf(set).freeItems || DEFAULT_FREE_ITEMS).slice();
+    freeDraft = (extrasOf(set).freeItems || DEFAULT_FREE_ITEMS.map((t) => ({ use: true, label: t }))).map((x) => ({ ...x }));
+    freeExtraDraft = (extrasOf(set).freeExtraItems || []).slice();
     oxDraft = (extrasOf(set).oxItems || []).slice();
     titlesDraft = { ...(extrasOf(set).titles || DEFAULT_SECTION_TITLES) };
     extraDraft = (extrasOf(set).extraCats || []).map((c) => ({ title: c.title, items: c.items.slice() }));
@@ -201,7 +210,8 @@ function loadDraftForSet() {
     const d = docByName("surveyItems");
     eduDraft = (cur.eduItems || DEFAULT_EDU_ITEMS).slice();
     instDraft = (cur.instructorItems || DEFAULT_INST_ITEMS).slice();
-    freeDraft = (extrasOf(d).freeItems || DEFAULT_FREE_ITEMS).slice();
+    freeDraft = (extrasOf(d).freeItems || DEFAULT_FREE_ITEMS.map((t) => ({ use: true, label: t }))).map((x) => ({ ...x }));
+    freeExtraDraft = (extrasOf(d).freeExtraItems || []).slice();
     oxDraft = (extrasOf(d).oxItems || []).slice();
     titlesDraft = { ...(extrasOf(d).titles || DEFAULT_SECTION_TITLES) };
     extraDraft = (extrasOf(d).extraCats || []).map((c) => ({ title: c.title, items: c.items.slice() }));
@@ -232,13 +242,24 @@ function paintSurveyItems() {
   itemListRows("si-inst-list", instDraft);
   bindItemEditors("si-edu-list", eduDraft);
   bindItemEditors("si-inst-list", instDraft);
-  // 주관식 문구: 2개 고정(삭제·추가 없음), 문구만 수정.
+  // 기본 주관식 2종: 문구 수정 + 개별 사용/미사용(둘 다 끄면 주관식 0개 가능).
   const fbox = document.getElementById("si-free-list");
   if (fbox) {
-    fbox.innerHTML = `<div class="chip-row">${freeDraft.map((t, i) =>
-      `<span class="chip"><input class="si-free" data-i="${i}" value="${escapeHtml(t)}" size="26"></span>`).join("")}</div>`;
+    const slotName = ["불만족 성격", "제안·개선 성격"];
+    fbox.innerHTML = `<div class="chip-row">${freeDraft.map((f, i) =>
+      `<span class="chip"><label class="chk" title="끄면 설문에 표시되지 않습니다"><input type="checkbox" class="si-free-use" data-i="${i}"${f.use ? " checked" : ""}> 사용</label>
+        <small>${slotName[i]}</small> <input class="si-free" data-i="${i}" value="${escapeHtml(f.label)}" size="24"${f.use ? "" : " disabled"}></span>`).join("")}</div>`;
     fbox.querySelectorAll(".si-free").forEach((el) =>
-      el.addEventListener("input", (e) => { freeDraft[+e.target.dataset.i] = e.target.value; }));
+      el.addEventListener("input", (e) => { freeDraft[+e.target.dataset.i].label = e.target.value; }));
+    fbox.querySelectorAll(".si-free-use").forEach((el) =>
+      el.addEventListener("change", (e) => { freeDraft[+e.target.dataset.i].use = e.target.checked; paintSurveyItems(); }));
+  }
+  // 자유 주관식(항상 노출): 자유 추가·삭제·순서 이동.
+  const fxbox = document.getElementById("si-freex-list");
+  if (fxbox) {
+    itemListRows("si-freex-list", freeExtraDraft);
+    if (!freeExtraDraft.length) fxbox.innerHTML = `<p class="hint">자유 주관식 문항이 없습니다.</p>`;
+    bindItemEditors("si-freex-list", freeExtraDraft);
   }
   // O/X(예/아니오) 문항: 자유 추가·삭제(없으면 설문에 미표시).
   const obox = document.getElementById("si-ox-list");
@@ -422,8 +443,9 @@ function collectItems() {
   return {
     eduItems: eduDraft.map((t) => t.trim()).filter(Boolean),
     instructorItems: instDraft.map((t) => t.trim()).filter(Boolean),
-    // 주관식은 2개 고정 — 비워두면 기본 문구로 복원.
-    freeItems: freeDraft.map((t, i) => (t.trim() || DEFAULT_FREE_ITEMS[i])),
+    // 기본 주관식 2종: 문구 비우면 기본 문구, use=false면 설문에 미표시.
+    freeItems: freeDraft.map((f, i) => ({ use: !!f.use, label: (f.label || "").trim() || DEFAULT_FREE_ITEMS[i] })),
+    freeExtraItems: freeExtraDraft.map((t) => t.trim()).filter(Boolean),
     oxItems: oxDraft.map((t) => t.trim()).filter(Boolean),
     titles: Object.fromEntries(Object.keys(DEFAULT_SECTION_TITLES).map((k) =>
       [k, (titlesDraft[k] || "").trim() || DEFAULT_SECTION_TITLES[k]])),
@@ -440,7 +462,8 @@ function topExtras() {
   const d = docByName("surveyItems");
   const x = extrasOf(d);
   return {
-    freeItems: x.freeItems || DEFAULT_FREE_ITEMS,
+    freeItems: x.freeItems || DEFAULT_FREE_ITEMS.map((t) => ({ use: true, label: t })),
+    freeExtraItems: x.freeExtraItems || [],
     oxItems: x.oxItems || [],
     titles: x.titles || DEFAULT_SECTION_TITLES,
     extraCats: x.extraCats || [],
@@ -509,7 +532,7 @@ async function addItemRevision() {
     const cur0 = docByName("surveyItems") || {};
     await setDocById("settings", "surveyItems",
       { eduItems: latest.eduItems, instructorItems: latest.instructorItems,
-        freeItems: items.freeItems, oxItems: items.oxItems,
+        freeItems: items.freeItems, freeExtraItems: items.freeExtraItems, oxItems: items.oxItems,
         titles: items.titles, extraCats: items.extraCats, followUps: items.followUps, history: hist,
         sets: Array.isArray(cur0.sets) ? cur0.sets : [] });
     alert(`설문 문항 개정본을 등록했습니다. (${from}부터 생성되는 설문에 적용)`);
@@ -535,6 +558,7 @@ export function initSettings() {
   document.getElementById("si-edu-add").addEventListener("click", () => { eduDraft.push(""); paintSurveyItems(); });
   document.getElementById("si-inst-add").addEventListener("click", () => { instDraft.push(""); paintSurveyItems(); });
   document.getElementById("si-ox-add").addEventListener("click", () => { oxDraft.push(""); paintSurveyItems(); });
+  document.getElementById("si-freex-add").addEventListener("click", () => { freeExtraDraft.push(""); paintSurveyItems(); });
   document.getElementById("si-extra-add").addEventListener("click", () => { extraDraft.push({ title: "", items: [""] }); paintSurveyItems(); });
   document.getElementById("si-fu-add").addEventListener("click", () => { fuDraft.push({ q: "", cond: "score", maxScore: 2, type: "text", label: "" }); paintSurveyItems(); });
   document.getElementById("si-save").addEventListener("click", saveCurrentSet);
