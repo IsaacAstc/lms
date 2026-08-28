@@ -80,6 +80,10 @@ function currentEntries() {
     const cn = courseNameOf(r.courseId);
     if (r.freeDissatisfied) out.push({ id: r.id, kind: "불만족", text: r.freeDissatisfied, field: "catDissatisfied", cat: r.catDissatisfied || "", when, courseName: cn });
     if (r.freeSuggestion) out.push({ id: r.id, kind: "제안개선", text: r.freeSuggestion, field: "catSuggestion", cat: r.catSuggestion || "", when, courseName: cn });
+    // 자유 주관식(항상 노출 — 문항 문구를 함께 표시, 분류 미지원).
+    for (const t of r.freeExtra || []) {
+      if (t?.text) out.push({ id: r.id, kind: "추가주관식", text: `[${t.label}] ${t.text}`, field: "", cat: "", when, courseName: cn });
+    }
     // 조건부 후속 주관식(분류 미지원 — 후속 문항 문구를 함께 표시).
     for (const t of r.fuTexts || []) {
       if (t?.text) out.push({ id: r.id, kind: "조건부", text: `[${t.label}] ${t.text}`, field: "", cat: "", when, courseName: cn });

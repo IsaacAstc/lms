@@ -77,6 +77,7 @@ function freetextHTML(responses) {
     const items = byCourse[name] = byCourse[name] || [];
     if (r.freeDissatisfied) items.push({ kind: "불만족", text: r.freeDissatisfied });
     if (r.freeSuggestion) items.push({ kind: "제안·개선", text: r.freeSuggestion });
+    for (const t of r.freeExtra || []) if (t?.text) items.push({ kind: "추가주관식", text: `[${t.label}] ${t.text}` });
     for (const t of r.fuTexts || []) if (t?.text) items.push({ kind: "조건부", text: `[${t.label}] ${t.text}` });
   }
   const names = Object.keys(byCourse).filter((n) => byCourse[n].length).sort();
