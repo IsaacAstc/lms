@@ -86,6 +86,30 @@
     border-radius: 1vh; padding: 1vh 1.5vw; width: 100%; text-align: center;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: none;
   }
+
+  /* 모바일(세로 화면) 보조 표시: TV 기준 vh 크기가 세로 화면에서 과대해지므로
+     폭(vw) 기준으로 재조정하고 세로 스크롤을 허용한다. (주 용도는 TV 가로 화면) */
+  @media (orientation: portrait), (max-width: 760px) {
+    .wrap { height: auto; min-height: 100vh; padding: 2vh 3vw; }
+    #logo { max-height: 7vh; max-width: 42vw; }
+    #title { font-size: 4.2vw; }
+    #date { font-size: 3.2vw; }
+    #clock { font-size: 6vw; }
+    h2 { font-size: 4.4vw; padding: 1.2vh 2.5vw; }
+    h2 .pageinfo { font-size: 3vw; }
+    .card { padding: 1.2vh 3vw; }
+    .card .name { font-size: 6.4vw; }
+    .card .sub { font-size: 3.4vw; }
+    .card .room { font-size: 5vw; }
+    .empty { font-size: 3.6vw; }
+    .two-col .card { width: 100%; margin-left: 0; margin-right: 0; }
+    .two-col .name { font-size: 6.4vw; }
+    .two-col .sub { font-size: 3.4vw; }
+    .two-col .room { font-size: 5vw; }
+    footer .ticker, footer div { font-size: 3.2vw; }
+    #idle img { width: 60vw; max-height: 26vh; }
+    #idle.one img { width: 72vw; max-height: 32vh; }
+  }
 </style>
 </head>
 <body>
