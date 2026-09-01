@@ -132,6 +132,13 @@ service cloud.firestore {
       allow write: if canTab('expenses');
     }
 
+    // 지급 조정(월별 건별 — 강사료·여비 최종액과 사유): 관리자 전용.
+    // 강사료 집계 탭에서 편집하고 소요경비·보고서가 함께 읽는다.
+    match /payAdjustments/{ym} {
+      allow read: if isAdmin();
+      allow write: if canTab('payroll') || canTab('expenses');
+    }
+
     // 공개 설문 정의: 누구나 읽기(응답 페이지 렌더), 쓰기는 관리자만.
     match /publicSurveys/{courseId} {
       allow read: if true;

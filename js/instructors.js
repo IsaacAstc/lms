@@ -80,9 +80,15 @@ export function initInstructors() {
       position: form.position.value.trim(),
       careerYears: form.careerYears.value ? Number(form.careerYears.value) : null,
       careerDetail: form.careerDetail.value.trim(),
+      // 상시 지급 조정(소속기관 내부 규정 등 — 강사료·소요경비·보고서에 동일 반영, 월별 건별이 우선).
+      adjustTravelPerDay: form.adjustTravelPerDay.value === "" ? null : Math.max(0, Number(form.adjustTravelPerDay.value)),
+      adjustMonthlyCap: form.adjustMonthlyCap.value === "" ? null : Math.max(0, Number(form.adjustMonthlyCap.value)),
+      adjustReason: form.adjustReason.value.trim(),
     };
     if (!data.name) return alert("강사명을 입력하세요.");
     if (!data.instructorType) return alert("강사유형을 선택하세요.");
+    if ((data.adjustTravelPerDay != null || data.adjustMonthlyCap != null) && !data.adjustReason)
+      return alert("상시조정 값을 입력한 경우 사유를 반드시 기재하세요.");
     try {
       if (editingId) await updateItem("instructors", editingId, data);
       else await addItem("instructors", data);
@@ -211,7 +217,7 @@ function render(tbody, form, submitBtn, cancelBtn, keyword) {
   for (const i of list) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${escapeHtml(i.name)}</td>
+      <td>${escapeHtml(i.name)}${(i.adjustTravelPerDay != null || i.adjustMonthlyCap != null) ? ` <span class="warn" title="상시 지급 조정: ${escapeHtml(i.adjustReason || "")}">조정</span>` : ""}</td>
       <td>${escapeHtml(i.affiliation ?? "")}</td>
       <td>${escapeHtml(i.instructorType ?? "")}${histBadge(i)}</td>
       <td>${escapeHtml(i.travelBasis ?? "")}</td>
@@ -232,6 +238,9 @@ function render(tbody, form, submitBtn, cancelBtn, keyword) {
       form.position.value = i.position ?? "";
       form.careerYears.value = i.careerYears ?? "";
       form.careerDetail.value = i.careerDetail ?? "";
+      form.adjustTravelPerDay.value = i.adjustTravelPerDay ?? "";
+      form.adjustMonthlyCap.value = i.adjustMonthlyCap ?? "";
+      form.adjustReason.value = i.adjustReason ?? "";
       submitBtn.textContent = "수정 저장";
       cancelBtn.hidden = false;
       form.scrollIntoView({ behavior: "smooth" });
