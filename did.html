@@ -90,6 +90,9 @@
   /* 모바일(세로 화면) 보조 표시: TV 기준 vh 크기가 세로 화면에서 과대해지므로
      폭(vw) 기준으로 재조정하고 세로 스크롤을 허용한다. (주 용도는 TV 가로 화면) */
   @media (orientation: portrait), (max-width: 760px) {
+    /* TV용 overflow:hidden(스크롤 금지)을 해제 — iOS 주소표시줄에 상단이 가려지고
+       스크롤도 못 하던 문제. 모바일은 일반 문서처럼 스크롤한다. */
+    html, body { height: auto; overflow: auto; }
     .wrap { height: auto; min-height: 100vh; padding: 2vh 3vw; }
     #logo { max-height: 7vh; max-width: 42vw; }
     #title { font-size: 4.2vw; }
