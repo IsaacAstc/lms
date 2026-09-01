@@ -267,6 +267,20 @@ export function renderExtraHTML(a) {
 //  - 강사 열은 항상 '이름(소속)' 형태(소속 없으면 이름만).
 //  - 과정명 열은 출강 과정명을 중복 제거해 한 셀에 나열.
 //  - 문항별 점수는 응답 수 가중평균(과목별 sum/count 합산), n은 과목별 응답 합계.
+// 열 방향(항목별) 종합: 그룹들의 문항별 sum/count를 그대로 합산(응답자 수 가중)한 행 생성.
+// firstCells: 행 맨 앞 셀 HTML(colspan 처리 포함).
+function instTotalRow(groups, items, firstCells) {
+  const tot = items.map(() => sc());
+  let n = 0;
+  for (const g of groups) {
+    n += g.n;
+    items.forEach((_, i) => { const s = g.items[i]; if (s) add(tot[i], s); });
+  }
+  const all = sc();
+  tot.forEach((s) => add(all, s));
+  return `<tr class="sum-row">${firstCells}${tot.map((s) => `<td><b>${fmt(mean100(s))}</b></td>`).join("")}<td><b>${fmt(mean100(all))}</b></td><td style="text-align:right"><b>${n}</b></td></tr>`;
+}
+
 export function renderInstMergedHTML(a) {
   const kinds = Object.keys(a.inst.groups).sort();
   if (!kinds.length) return `<p class="empty">강사 만족도 응답이 없습니다.</p>`;
@@ -292,9 +306,13 @@ export function renderInstMergedHTML(a) {
       const itemTds = itemMeans.map((v) => `<td>${fmt(v)}</td>`).join("");
       const overall = (() => { const v = itemMeans.filter((x) => x != null); return v.length ? v.reduce((p, c) => p + c, 0) / v.length : null; })();
       const nameCell = `${escapeHtml(m.name)}${m.affiliation ? `(${escapeHtml(m.affiliation)})` : ""}`;
-      body += `<tr>${idx === 0 ? `<td rowspan="${rows.length}">${escapeHtml(kind)}</td>` : ""}<td>${nameCell}</td><td>${[...m.courses].map(escapeHtml).join(", ")}</td>${itemTds}<td><b>${fmt(overall)}</b></td><td style="text-align:right">${m.n}</td></tr>`;
+      body += `<tr>${idx === 0 ? `<td rowspan="${rows.length + 1}">${escapeHtml(kind)}</td>` : ""}<td>${nameCell}</td><td>${[...m.courses].map(escapeHtml).join(", ")}</td>${itemTds}<td><b>${fmt(overall)}</b></td><td style="text-align:right">${m.n}</td></tr>`;
     });
+    // 교관유형 소계(항목별 응답자 수 가중평균).
+    body += instTotalRow(Object.values(a.inst.groups[kind]), items, `<td colspan="2"><b>소계(응답자 수 가중)</b></td>`);
   }
+  // 전체 평균(항목별 응답자 수 가중평균).
+  body += instTotalRow(kinds.flatMap((k) => Object.values(a.inst.groups[k])), items, `<td colspan="3"><b>전체 평균(응답자 수 가중)</b></td>`);
   return `<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
 
@@ -314,8 +332,10 @@ export function renderInstHTML(a) {
       const itemMeans = g.items.map((s) => mean100(s));
       const itemTds = itemMeans.map((m) => `<td>${fmt(m)}</td>`).join("");
       const overall = (() => { const v = itemMeans.filter((x) => x != null); return v.length ? v.reduce((p, c) => p + c, 0) / v.length : null; })();
-      body += `<tr>${idx === 0 ? `<td rowspan="${rows.length}">${escapeHtml(kind)}</td>` : ""}<td>${escapeHtml(dispName(g))}</td><td>${escapeHtml(g.courseName)}(${escapeHtml(g.subject)})</td>${itemTds}<td><b>${fmt(overall)}</b></td><td style="text-align:right">${g.n}</td></tr>`;
+      body += `<tr>${idx === 0 ? `<td rowspan="${rows.length + 1}">${escapeHtml(kind)}</td>` : ""}<td>${escapeHtml(dispName(g))}</td><td>${escapeHtml(g.courseName)}(${escapeHtml(g.subject)})</td>${itemTds}<td><b>${fmt(overall)}</b></td><td style="text-align:right">${g.n}</td></tr>`;
     });
+    body += instTotalRow(Object.values(a.inst.groups[kind]), instItemsOf(a), `<td colspan="2"><b>소계(응답자 수 가중)</b></td>`);
   }
+  body += instTotalRow(kinds.flatMap((k) => Object.values(a.inst.groups[k])), instItemsOf(a), `<td colspan="3"><b>전체 평균(응답자 수 가중)</b></td>`);
   return `<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
