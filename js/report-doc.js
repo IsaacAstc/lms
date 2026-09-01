@@ -251,7 +251,14 @@ function printDoc() {
     </style></head><body>${box.innerHTML}</body></html>`);
   w.document.close();
   w.focus();
-  w.onload = () => { w.print(); };
-  // onload가 이미 지났을 수 있어 보조 호출.
-  setTimeout(() => { try { w.print(); } catch { /* */ } }, 300);
+  // onload와 보조 타이머가 둘 다 실행돼 인쇄창이 두 번 뜨지 않도록 1회 가드.
+  let printed = false;
+  const printOnce = () => {
+    if (printed) return;
+    printed = true;
+    try { w.print(); } catch { /* */ }
+  };
+  w.onload = printOnce;
+  // onload가 이미 지났을 수 있어 보조 호출(가드로 중복 방지).
+  setTimeout(printOnce, 300);
 }
