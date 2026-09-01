@@ -253,6 +253,9 @@
               <label>직책<input name="position" /></label>
               <label>경력(년)<input name="careerYears" type="number" min="0" /></label>
               <label>경력산정상세<input name="careerDetail" /></label>
+              <label title="비우면 조정 없음 · 0=미지급. 매월 자동 적용(월별 건별 조정이 우선)">상시조정: 출강일당 여비(원)<input name="adjustTravelPerDay" type="number" min="0" placeholder="비우면 기준 적용" /></label>
+              <label title="비우면 기준 월상한 적용 · 0=미지급">상시조정: 월 강사료 상한(원)<input name="adjustMonthlyCap" type="number" min="0" placeholder="비우면 기준 적용" /></label>
+              <label>상시조정 사유<input name="adjustReason" placeholder="조정값 입력 시 필수" /></label>
             </div>
             <div class="form-actions">
               <button id="instructor-submit" type="submit">등록</button>
@@ -290,6 +293,22 @@
             </table>
           </div>
           <p id="pay-total" class="total-line"></p>
+          <p class="hint">월별 집계에서 각 강사의 <b>조정</b> 버튼으로 소속기관 내부 규정 등에 따른 감액·제외를 반영할 수 있습니다(사유 필수). 상시 규칙은 강사 마스터에서 등록하며, 월별 건별 조정이 상시 규칙보다 우선합니다. 조정은 소요경비·운영 보고서에도 동일 반영됩니다.</p>
+
+          <dialog id="pay-adjust-dialog" class="apply-dialog">
+            <div style="padding:1.2rem 1.3rem;display:flex;flex-direction:column;gap:0.7rem;min-width:min(360px,85vw);">
+              <h3 id="pay-adj-title" style="margin:0;">지급 조정</h3>
+              <p id="pay-adj-auto" class="hint" style="margin:0;"></p>
+              <label>강사료 최종액(원) <input id="pay-adj-fee" type="number" min="0" placeholder="비우면 조정 없음 · 0=미지급" /></label>
+              <label>여비 최종액(원) <input id="pay-adj-travel" type="number" min="0" placeholder="비우면 조정 없음 · 0=미지급" /></label>
+              <label>조정 사유(필수) <input id="pay-adj-reason" maxlength="200" placeholder="예: 소속기관 내부 규정에 따른 여비 미지급" /></label>
+              <div class="form-actions">
+                <button type="button" id="pay-adj-save">조정 저장</button>
+                <button type="button" id="pay-adj-clear" class="del">조정 해제</button>
+                <button type="button" id="pay-adj-close">닫기</button>
+              </div>
+            </div>
+          </dialog>
         </section>
 
         <!-- 소요경비 -->

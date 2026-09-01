@@ -162,7 +162,14 @@ async function expensesHTML(month) {
     <tr class="sum-row"><td><b>합계</b></td><td style="text-align:right"><b>${won(total)}</b></td></tr>
     <tr><td>입교인원(명)</td><td style="text-align:right">${enrolled}</td></tr>
     <tr class="sum-row"><td><b>교육생 1인당 단가</b></td><td style="text-align:right"><b>${unit == null ? "-" : won(unit) + " 원/명"}</b></td></tr>
-    </tbody></table>`;
+    </tbody></table>
+    ${Array.isArray(e.payAdjustNotes) && e.payAdjustNotes.length ? `
+      <h4>지급 조정 내역 (소속기관 내부 규정 등 — 위 강사료·여비에 반영됨)</h4>
+      <table><thead><tr><th>강사</th><th>유형</th><th>조정 후 강사료(원)</th><th>조정 후 여비(원)</th><th>사유</th></tr></thead>
+      <tbody>${e.payAdjustNotes.map((n) => `<tr>
+        <td>${escapeHtml(n.name || "")}</td><td>${escapeHtml(n.type || "")}</td>
+        <td style="text-align:right">${won(n.fee)}</td><td style="text-align:right">${won(n.travel)}</td>
+        <td>${escapeHtml(n.reason || "")}</td></tr>`).join("")}</tbody></table>` : ""}`;
 }
 
 async function run() {

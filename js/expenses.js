@@ -7,10 +7,10 @@ import { escapeHtml } from "./app.js";
 import { coursesCache, getHiddenCourseIds } from "./courses.js";
 import { getInstructorById, resolveInstructorAt } from "./instructors.js";
 import { getFeeRatesAt, getTravelRatesAt } from "./settings.js";
-import { calcHour, calcFee, applyMonthlyCap, calcTravel } from "./payroll.js";
+import { calcHour, calcFee, fetchPayAdjustments, adjustedMonthFee, adjustedDayTravel } from "./payroll.js";
 import { isPayExcludedSubject } from "./constants.js";
 
-let auto = { 사내: 0, 사외: 0, travel: 0, detail: [] }; // 자동 산출값(원) + 강사별 세부
+let auto = { 사내: 0, 사외: 0, travel: 0, detail: [], adjNotes: [] }; // 자동 산출값(원) + 강사별 세부 + 지급 조정 내역
 let customItems = []; // 사용자 추가 수동 항목 [{label, amount}]
 
 export function initExpenses() {
@@ -61,18 +61,34 @@ async function computeAuto(month) {
     g.hours += h;
     g.dates.set(s.date, eff.travelBasis); // 출강일 → 그날의 여비기준
   }
-  const out = { 사내: 0, 사외: 0, travel: 0, detail: [] };
-  for (const g of Object.values(byKey)) {
-    const capped = applyMonthlyCap(g.fee, g.type, getFeeRatesAt(`${month}-01`));
+  // 지급 조정(상시 규칙 + 월별 건별) — 강사료 집계와 동일 순서로 적용.
+  const adjItems = (await fetchPayAdjustments("month", month))[month] || {};
+  const out = { 사내: 0, 사외: 0, travel: 0, detail: [], adjNotes: [] };
+  for (const [key, g] of Object.entries(byKey)) {
+    const o = adjItems[key];
+    const feeR = adjustedMonthFee(g.fee, g.type, getFeeRatesAt(`${month}-01`), g.inst, o);
+    const capped = feeR.fee;
     const t = g.type || "";
-    let travel = 0;
-    for (const [date, basis] of g.dates.entries()) { const tr = calcTravel(basis, getTravelRatesAt(date)); if (!tr.manual) travel += tr.amount; }
+    let travel = 0, travelAdjusted = false;
+    const reasons = new Set();
+    if (feeR.adjusted && feeR.reason) reasons.add(feeR.reason);
+    for (const [date, basis] of g.dates.entries()) {
+      const tr = adjustedDayTravel(basis, getTravelRatesAt(date), g.inst);
+      if (!tr.manual) travel += tr.amount;
+      if (tr.adjusted) { travelAdjusted = true; if (tr.reason) reasons.add(tr.reason); }
+    }
+    if (o && o.travel != null) { travel = o.travel; travelAdjusted = true; if (o.reason) reasons.add(o.reason); }
     if (t.startsWith("사내")) out.사내 += capped;
     else if (t.startsWith("사외")) out.사외 += capped;
     out.travel += travel;
+    const adjusted = feeR.adjusted || travelAdjusted;
     out.detail.push({
       name: g.inst.name || "(미상)", type: t || "(미지정)",
-      days: g.dates.size, hours: g.hours, fee: capped, travel,
+      days: g.dates.size, hours: g.hours, fee: capped, travel, adjusted,
+    });
+    if (adjusted) out.adjNotes.push({
+      name: g.inst.name || "(미상)", type: t || "(미지정)",
+      fee: capped, travel, reason: [...reasons].join(" / ") || "(사유 미기재)",
     });
   }
   out.detail.sort((a, b) => (b.fee + b.travel) - (a.fee + a.travel));
@@ -178,15 +194,23 @@ function renderDetail() {
   if (!auto.detail.length) { box.innerHTML = `<p class="hint">강사별 세부 내역: 해당 월 시간표에 강사 배정 세션이 없습니다.</p>`; return; }
   const won = (n) => (n || 0).toLocaleString("ko-KR");
   const rows = auto.detail.map((d) => `<tr>
-    <td>${escapeHtml(d.name)}</td><td>${escapeHtml(d.type)}</td>
+    <td>${escapeHtml(d.name)}${d.adjusted ? " <span class='warn'>(조정)</span>" : ""}</td><td>${escapeHtml(d.type)}</td>
     <td style="text-align:right">${d.days}</td>
     <td style="text-align:right">${d.hours}</td>
     <td class="num">${won(d.fee)}</td>
     <td class="num">${won(d.travel)}</td>
     <td class="num">${won(d.fee + d.travel)}</td></tr>`).join("");
+  const adjRows = auto.adjNotes.map((n) => `<tr>
+    <td>${escapeHtml(n.name)}</td><td>${escapeHtml(n.type)}</td>
+    <td class="num">${won(n.fee)}</td><td class="num">${won(n.travel)}</td>
+    <td>${escapeHtml(n.reason)}</td></tr>`).join("");
   box.innerHTML = `<details open><summary>강사별 세부 내역 (강사료·여비 산출 근거)</summary>
     <table id="exp-detail-tbl"><thead><tr><th>강사</th><th>유형</th><th>출강일수</th><th>강의시간</th><th>강사료(월상한 적용)</th><th>여비</th><th>소계</th></tr></thead>
-    <tbody>${rows}</tbody></table></details>`;
+    <tbody>${rows}</tbody></table>
+    ${auto.adjNotes.length ? `<p class="hint" style="margin-bottom:0.2rem"><b>지급 조정 내역</b> (소속기관 내부 규정 등 — 위 표·합계에 반영됨)</p>
+    <table><thead><tr><th>강사</th><th>유형</th><th>조정 후 강사료</th><th>조정 후 여비</th><th>사유</th></tr></thead>
+    <tbody>${adjRows}</tbody></table>` : ""}
+    </details>`;
 }
 
 async function save() {
@@ -203,6 +227,7 @@ async function save() {
     refreshments: num("e-refresh"),
     enrolled: num("e-enrolled"),
     custom,
+    payAdjustNotes: auto.adjNotes, // 지급 조정 내역(운영 보고서 표시용)
     autoInHouse: auto.사내, autoOutsource: auto.사외, autoTravel: auto.travel,
     total: auto.사내 + auto.사외 + auto.travel
       + num("e-material") + num("e-supplies") + num("e-refresh")
