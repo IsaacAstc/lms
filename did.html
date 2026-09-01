@@ -331,8 +331,15 @@
   }
 
   // 과정/행사명이 칸을 넘치면 글자를 단계적으로 줄여 한 줄에 맞춘다(최소 절반).
+  // 모바일(세로/좁은 화면)에서는 CSS 미디어 쿼리(vw 기준·줄바꿈)가 담당하므로
+  // 인라인 px 지정(vh 기준)을 하지 않는다 — 세로 화면에서 글자가 과대해지는 문제 방지.
   function fitNames(box, big) {
     var names = box.querySelectorAll(".name");
+    var isMobile = window.innerHeight > window.innerWidth || window.innerWidth <= 760;
+    if (isMobile) {
+      for (var j = 0; j < names.length; j++) names[j].style.fontSize = "";
+      return;
+    }
     var vh = window.innerHeight / 100;
     for (var i = 0; i < names.length; i++) {
       var el = names[i];
