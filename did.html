@@ -97,8 +97,9 @@
     #clock { font-size: 6vw; }
     h2 { font-size: 4.4vw; padding: 1.2vh 2.5vw; }
     h2 .pageinfo { font-size: 3vw; }
-    .card { padding: 1.2vh 3vw; }
-    .card .name { font-size: 6.4vw; }
+    .card { padding: 1.2vh 3vw; flex-wrap: wrap; }
+    /* TV용 한 줄 고정(nowrap·말줄임)을 풀어 과정명이 줄바꿈되게 */
+    .card .name { font-size: 5.6vw; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; flex: 1 1 100%; }
     .card .sub { font-size: 3.4vw; }
     .card .room { font-size: 5vw; }
     .empty { font-size: 3.6vw; }
