@@ -132,11 +132,11 @@
   </header>
   <main id="main">
     <section id="sec-edu">
-      <h2><span class="ico">📚</span> 오늘의 교육 <span class="pageinfo" id="edu-page"></span></h2>
+      <h2><span class="ico">📚</span> <span id="edu-title">오늘의 교육</span> <span class="pageinfo" id="edu-page"></span></h2>
       <div id="edu-cards"></div>
     </section>
     <section id="sec-rent" class="hidden">
-      <h2><span class="ico">🏢</span> 대관 행사 <span class="pageinfo" id="rent-page"></span></h2>
+      <h2><span class="ico">🏢</span> <span id="rent-title">오늘의 행사</span> <span class="pageinfo" id="rent-page"></span></h2>
       <div id="rent-cards"></div>
     </section>
   </main>
@@ -364,6 +364,9 @@
     $("title").textContent = cfg.title || "";
     document.title = cfg.title || "KAC 항공보안교육센터";
     $("title").style.display = cfg.title ? "" : "none";
+    // 섹션 제목(현장 안내 탭에서 편집). 미설정 시 기본 문구.
+    $("edu-title").textContent = cfg.eduTitle || "오늘의 교육";
+    $("rent-title").textContent = cfg.rentTitle || "오늘의 행사";
     var n = $("notice");
     n.textContent = cfg.notice || "";
     n.style.display = cfg.notice ? "block" : "none";

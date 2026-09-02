@@ -309,6 +309,9 @@ function initDidConfig() {
       await setDoc(doc(db, "publicBoard", "__did"), {
         title: document.getElementById("did-title").value.trim(),
         notice: document.getElementById("did-notice").value.trim(),
+        // 섹션 제목(비우면 DID에서 기본 문구 사용).
+        eduTitle: document.getElementById("did-edu-title").value.trim(),
+        rentTitle: document.getElementById("did-rent-title").value.trim(),
         logoUrl: document.getElementById("did-logo").value.trim(),
         logoUrl2: document.getElementById("did-logo2").value.trim(),
         bgUrl: document.getElementById("did-bg").value.trim(),
@@ -328,6 +331,8 @@ async function loadDidConfig() {
     const c = d.exists() ? d.data() : {};
     document.getElementById("did-title").value = c.title || "";
     document.getElementById("did-notice").value = c.notice || "";
+    document.getElementById("did-edu-title").value = c.eduTitle || "";
+    document.getElementById("did-rent-title").value = c.rentTitle || "";
     document.getElementById("did-logo").value = c.logoUrl || "";
     document.getElementById("did-logo2").value = c.logoUrl2 || "";
     document.getElementById("did-bg").value = c.bgUrl || "";
