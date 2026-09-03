@@ -346,6 +346,13 @@
               <tbody id="survey-tbody"></tbody>
             </table>
           </div>
+          <div class="load-row">
+            <label>제출코드 조회 <input id="sv-code" maxlength="12" placeholder="사진 메일의 제출코드" style="width:10rem" /></label>
+            <button id="sv-code-find" type="button">응답 찾기</button>
+            <span class="hint">사진 첨부 문항으로 받은 메일의 제출코드를 입력하면 시스템에 기록된 해당 응답을 확인할 수 있습니다.</span>
+          </div>
+          <div id="sv-code-result"></div>
+
           <dialog id="sv-mail-dialog" class="apply-dialog">
             <div style="padding:1.2rem 1.3rem;display:flex;flex-direction:column;gap:0.7rem;min-width:min(380px,85vw);">
               <h3 id="sv-mail-title" style="margin:0;">사진 수신 이메일</h3>
