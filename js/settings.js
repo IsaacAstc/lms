@@ -72,7 +72,7 @@ export function getSurveySets() {
 // 발효일자 이력 없이 현재값만 유지(세트별 별도 저장). 구버전 필드(freeItems 등)는 읽을 때 변환.
 export const Q_TYPES = [
   ["scale", "5점 척도"], ["ox", "예/아니오"], ["text", "주관식"],
-  ["choice", "선다형(택1)"], ["multi", "복수 응답"], ["fu", "조건부 후속"],
+  ["choice", "선다형(택1)"], ["multi", "복수 응답"], ["photo", "사진 첨부"], ["fu", "조건부 후속"],
 ];
 const Q_TYPE_IDS = Q_TYPES.map(([t]) => t);
 
@@ -87,6 +87,8 @@ function normQuestion(q) {
     type: q.type, label: q.label,
     options: Array.isArray(q.options) ? q.options.filter(Boolean) : [],
     slot: q.slot === "dis" || q.slot === "sug" ? q.slot : null,
+    // 사진 첨부 문항의 필수 여부(다른 유형에서는 의미 없음).
+    required: q.type === "photo" ? !!q.required : false,
   };
 }
 // 섹션 내 fu 항목들 → buildSurvey용 followUps 형식으로 변환.
@@ -408,6 +410,9 @@ function renderSectionsBuilder() {
         <input class="sec-q-label" data-s="${si}" data-i="${i}" value="${escapeHtml(q.label)}" placeholder="문항 문구" style="min-width:220px">
         ${(q.type === "choice" || q.type === "multi")
           ? `<input class="sec-q-opts" data-s="${si}" data-i="${i}" value="${escapeHtml(q.options.join(" / "))}" placeholder="보기 — ' / '로 구분 (예: A / B / C)" style="min-width:220px">`
+          : ""}
+        ${q.type === "photo"
+          ? `<label class="chk" title="체크하면 사진을 첨부해야 제출할 수 있습니다"><input type="checkbox" class="sec-q-req" data-s="${si}" data-i="${i}"${q.required ? " checked" : ""}> 필수</label>`
           : ""}`}
         <button type="button" class="chip-move sec-q-move" data-s="${si}" data-i="${i}" data-d="-1" title="위로">◀</button>
         <button type="button" class="chip-move sec-q-move" data-s="${si}" data-i="${i}" data-d="1" title="아래로">▶</button>
@@ -458,6 +463,8 @@ function renderSectionsBuilder() {
       sectionsDraft[+e.target.dataset.s].items[+e.target.dataset.i].options =
         e.target.value.split("/").map((t) => t.trim()).filter(Boolean);
     }));
+  box.querySelectorAll(".sec-q-req").forEach((el) =>
+    el.addEventListener("change", (e) => { sectionsDraft[+e.target.dataset.s].items[+e.target.dataset.i].required = e.target.checked; }));
   box.querySelectorAll(".sec-q-move").forEach((b) =>
     b.addEventListener("click", () => { moveItem(sectionsDraft[+b.dataset.s].items, +b.dataset.i, +b.dataset.d); paintSurveyItems(); }));
   box.querySelectorAll(".sec-q-del").forEach((b) =>
@@ -553,7 +560,7 @@ function collectItems() {
       items: s.items
         .map((q) => (q.type === "fu"
           ? { type: "fu", label: (q.label || "").trim(), q: (q.q || "").trim(), cond: q.cond, maxScore: q.maxScore || 2, futype: q.futype, options: [], slot: null }
-          : { type: q.type, label: (q.label || "").trim(), options: q.options.map((o) => o.trim()).filter(Boolean), slot: q.slot || null }))
+          : { type: q.type, label: (q.label || "").trim(), options: q.options.map((o) => o.trim()).filter(Boolean), slot: q.slot || null, required: q.type === "photo" ? !!q.required : false }))
         .filter((q) => q.label && (q.type !== "fu" || (q.q && ["yes", "no", "score"].includes(q.cond) && ["text", "ox"].includes(q.futype)))),
     }))
     .filter((s) => s.title && s.items.length);

@@ -394,3 +394,76 @@ exports.sendLogiPush = onCall(
     return { sent: res.successCount, targets: tokens.length, removed: dead.size };
   }
 );
+
+/* ================================================================
+ *  submitSurveyPhotos — 설문 '사진 첨부' 문항 중계 (비로그인 공개 호출)
+ *  사진은 저장하지 않고 메모리에서 담당자 메일로 첨부 발송만 한다.
+ *  (설문 응답 본문은 클라이언트가 별도로 surveyResponses에 익명 기록)
+ *  수신 주소: settings/surveyPhotoMail.byCourse[courseId] → 없으면 .default
+ *  (관리자 전용 문서이므로 서버에서만 조회 — 공개 페이지에 주소가 노출되지 않는다)
+ * ================================================================ */
+exports.submitSurveyPhotos = onCall(
+  { region: "asia-northeast3", secrets: [MAIL_USER, MAIL_PASS], memory: "512MiB", timeoutSeconds: 60, maxInstances: 5 },
+  async (req) => {
+    const d = req.data || {};
+    const courseId = str(d.courseId, 100, "과정 ID", true);
+    const roomId = str(d.roomId, 100, "강의실 ID", false);
+    const answers = str(d.answers, 6000, "응답 요약", false);
+
+    // 남용 방지(설문은 비로그인 공개 제출이므로 신청 접수와 동일한 IP 제한 적용).
+    await checkRateLimit(req.rawRequest?.ip || req.rawRequest?.headers?.["x-forwarded-for"] || "");
+
+    const rawPhotos = Array.isArray(d.photos) ? d.photos : [];
+    if (!rawPhotos.length) bad("전송할 사진이 없습니다.");
+    if (rawPhotos.length > 5) bad("사진은 최대 5장까지 첨부할 수 있습니다.");
+    let totalBytes = 0;
+    const attachments = rawPhotos.map((p, i) => {
+      const label = str(p && p.label, 200, "문항명", false).replace(/[\r\n"]/g, "_") || `사진${i + 1}`;
+      if (!p || typeof p.dataBase64 !== "string" || !p.dataBase64) bad("사진 데이터가 비었습니다.");
+      const bytes = Math.floor(p.dataBase64.length * 3 / 4);
+      if (bytes > MAX_ATTACH_BYTES) bad("사진은 장당 5MB 이하만 가능합니다.");
+      totalBytes += bytes;
+      return { filename: `${label}_${i + 1}.jpg`, content: Buffer.from(p.dataBase64, "base64") };
+    });
+    if (totalBytes > 8 * 1024 * 1024) bad("사진 전체 합계는 8MB 이하만 가능합니다.");
+
+    // 과정명(메일 제목용)과 수신 주소 조회.
+    let courseName = courseId;
+    try {
+      const c = await db.doc(`courses/${courseId}`).get();
+      if (c.exists) courseName = `${c.data().name || courseId}${c.data().round ? ` ${c.data().round}차수` : ""}`;
+    } catch { /* 이름 없이 진행 */ }
+
+    let to = "";
+    try {
+      const s = await db.doc("settings/surveyPhotoMail").get();
+      const cfg = s.exists ? s.data() : {};
+      to = String((cfg.byCourse || {})[courseId] || cfg.default || "").trim();
+    } catch { /* */ }
+    if (!to) throw new HttpsError("failed-precondition", "사진 수신 이메일이 설정되지 않았습니다. 관리자에게 문의하세요.");
+
+    const now = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" }).format(new Date());
+    try {
+      await mailer().sendMail({
+        from: MAIL_USER.value(),
+        to,
+        subject: `[설문 사진] ${courseName} — ${now}`,
+        text: [
+          `과정: ${courseName}`,
+          roomId ? `강의실 ID: ${roomId}` : "",
+          `제출 시각(KST): ${now}`,
+          `첨부 사진: ${attachments.length}장`,
+          "",
+          "─ 응답 요약 ─",
+          answers || "(요약 없음)",
+          "",
+          "※ 사진은 시스템에 저장되지 않으며 이 메일로만 전달됩니다.",
+        ].filter(Boolean).join("\n"),
+        attachments,
+      });
+    } catch (e) {
+      throw new HttpsError("internal", "사진 메일 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+    }
+    return { sent: attachments.length };
+  }
+);

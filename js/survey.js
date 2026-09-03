@@ -3,7 +3,8 @@
 import {
   collection, query, where, getDocs, getDoc, doc, addDoc, Timestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { db } from "./firebase.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+import { db, app } from "./firebase.js";
 import { fmtKst, kstToday } from "./time.js";
 
 // 5점 척도 설명(2·4점은 설명 없이 숫자만).
@@ -89,6 +90,7 @@ function render(survey, preview = false) {
     </form>`;
 
   wireFollowUps(survey);
+  wirePhotoPreview();
 
   if (preview) {
     const btn = document.getElementById("s-submit");
@@ -100,6 +102,49 @@ function render(survey, preview = false) {
 }
 
 // 설문 문서의 섹션 목록. 신형(sections) 우선, 구버전 문서(extraCats·oxItems·freeItems 등)는 변환.
+/* ── 사진 첨부 ──
+ * 브라우저에서 긴 변 1600px·JPEG로 축소해 전송 부담을 줄인다.
+ * 이미지 데이터는 Cloud Function이 메일로 중계만 하고 어디에도 저장하지 않는다. */
+const PHOTO_MAX_DIM = 1600;
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, PHOTO_MAX_DIM / Math.max(img.width, img.height));
+        const cv = document.createElement("canvas");
+        cv.width = Math.round(img.width * scale);
+        cv.height = Math.round(img.height * scale);
+        cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+        let out = cv.toDataURL("image/jpeg", 0.8);
+        if (out.length > 3000000) out = cv.toDataURL("image/jpeg", 0.6);
+        resolve(out);
+      };
+      img.onerror = () => reject(new Error("이미지를 읽지 못했습니다."));
+      img.src = fr.result;
+    };
+    fr.onerror = () => reject(new Error("파일을 읽지 못했습니다."));
+    fr.readAsDataURL(file);
+  });
+}
+// 선택 즉시 미리보기(제출 전 확인용).
+function wirePhotoPreview() {
+  document.querySelectorAll('input[type="file"][name^="sec_"]').forEach((inp) => {
+    inp.addEventListener("change", async () => {
+      const box = document.getElementById(`pv-${inp.name}`);
+      if (!box) return;
+      box.innerHTML = "";
+      const f = inp.files[0];
+      if (!f) return;
+      try {
+        const data = await compressImage(f);
+        box.innerHTML = `<img src="${data}" alt="첨부 미리보기">`;
+      } catch { box.textContent = "미리보기를 표시할 수 없습니다."; }
+    });
+  });
+}
+
 const FREE_DEFAULTS = ["교육 불만족 의견", "교육 관련 제안·개선요구 의견"];
 function sectionsOfSurvey(survey) {
   if (Array.isArray(survey.sections)) {
@@ -145,6 +190,11 @@ function questionHtml(q, name, i) {
     <div class="scale-row">${(q.options || []).map((o, oi) =>
       `<label class="scale-opt"><input type="checkbox" name="${name}" value="${oi}"><span>${esc(o)}</span></label>`).join("")}
     </div><small class="hint">해당하는 항목을 모두 선택</small></div>`;
+  // 사진 첨부: 브라우저에서 축소 후 담당자 메일로만 전송되며 시스템에는 저장되지 않는다.
+  if (q.type === "photo") return `<div class="q-item">${head}
+    <input type="file" name="${name}" accept="image/*" capture="environment" />
+    <div class="photo-preview" id="pv-${name}"></div>
+    <small class="hint">${q.required ? "필수 · " : "선택 · "}사진은 담당자 이메일로만 전달되고 시스템에는 저장되지 않습니다. 타인의 얼굴·개인정보가 담기지 않게 촬영해 주세요.</small></div>`;
   return `<div class="q-item">${head}<textarea name="${name}" rows="3"></textarea></div>`; // text
 }
 
@@ -229,6 +279,7 @@ async function submit(e, survey) {
   const oxAnswers = [];      // 예/아니오: {label, yes}
   const choiceAnswers = [];  // 선다형·복수: {cat, label, options:[보기 문구], multi}
   const freeExtra = [];      // 자유 주관식: {label, text}
+  const photoFiles = [];     // 사진 첨부: {label, file} — 메일 전송용(응답 문서에는 미저장)
   let freeDis = "", freeSug = "";
   for (let si = 0; si < sections.length; si++) {
     const sec = sections[si];
@@ -251,6 +302,15 @@ async function submit(e, survey) {
         const sel = [...document.querySelectorAll(`input[name="${name}"]:checked`)].map((el) => q.options[Number(el.value)]).filter(Boolean);
         if (!sel.length) { err.textContent = `'${sec.title}'의 복수 응답 문항에서 하나 이상 선택해 주세요.`; return; }
         choiceAnswers.push({ cat: sec.title, label: q.label, options: sel, multi: true });
+      } else if (q.type === "photo") {
+        const f = form[name]?.files?.[0];
+        if (!f) {
+          if (q.required) { err.textContent = `'${q.label}' 사진을 첨부해 주세요.`; return; }
+        } else if (!/^image\//.test(f.type)) {
+          err.textContent = "이미지 파일만 첨부할 수 있습니다."; return;
+        } else {
+          photoFiles.push({ label: q.label, file: f });
+        }
       } else { // text — 기본 2종(slot)은 기존 필드로, 나머지는 자유 주관식으로.
         const t = (form[name]?.value || "").trim();
         if (q.slot === "dis") freeDis = t;
@@ -297,8 +357,10 @@ async function submit(e, survey) {
   if (extraAnswers.length) payload.extraAnswers = extraAnswers;
   if (choiceAnswers.length) payload.choiceAnswers = choiceAnswers;
   if (fuTexts.length) payload.fuTexts = fuTexts; // 조건부 주관식 원문(180일 파기 대상 동일)
+  // 사진은 저장하지 않고 제출 기록만 남긴다(문항 라벨·첨부 여부).
+  if (photoFiles.length) payload.photoNotes = photoFiles.map((p) => ({ label: p.label, attached: true }));
   // 제출 전 한 번 더 확인.
-  confirmSubmit(() => doSubmit(payload, survey));
+  confirmSubmit(() => doSubmit(payload, survey, photoFiles));
 }
 
 // 확인 오버레이: 뒤로(수정) / 확인(제출).
@@ -318,19 +380,59 @@ function confirmSubmit(onConfirm) {
   document.body.appendChild(ov);
 }
 
-async function doSubmit(payload, survey) {
+async function doSubmit(payload, survey, photoFiles = []) {
   const err = document.getElementById("s-error");
   const submitBtn = document.getElementById("s-submit");
   submitBtn.disabled = true;
   try {
+    // 1) 사진이 있으면 먼저 메일로 전송(저장 없이 중계). 실패 시 제출을 중단해
+    //    "사진은 안 갔는데 응답만 기록"되는 상태를 만들지 않는다.
+    if (photoFiles.length) {
+      err.textContent = "사진 전송 중… (잠시 기다려 주세요)";
+      const photos = [];
+      for (const p of photoFiles) {
+        const dataUrl = await compressImage(p.file);
+        photos.push({ label: p.label, dataBase64: dataUrl.split(",")[1] || "" });
+      }
+      const fns = getFunctions(app, "asia-northeast3");
+      await httpsCallable(fns, "submitSurveyPhotos")({
+        courseId: survey.courseId,
+        roomId: survey.roomId || "",
+        photos,
+        answers: summarizeAnswers(payload, survey), // 메일 본문용 응답 요약(개인정보 없음)
+      });
+    }
+    // 2) 사진을 제외한 응답을 익명으로 기록.
+    err.textContent = "";
     const expireAt = Timestamp.fromDate(new Date(Date.now() + 180 * 24 * 3600 * 1000));
     await addDoc(collection(db, "surveyResponses"), { ...payload, expireAt });
     localStorage.setItem(`survey_done_${survey.courseId}`, "1");
     msg(`<p class="empty">응답이 제출되었습니다. 참여해 주셔서 감사합니다.</p>`);
   } catch (e2) {
-    err.textContent = "제출에 실패했습니다. 다시 시도해 주세요.";
+    err.textContent = (e2 && e2.message) ? `제출에 실패했습니다: ${e2.message}` : "제출에 실패했습니다. 다시 시도해 주세요.";
     submitBtn.disabled = false;
   }
+}
+
+// 메일 본문에 넣을 응답 요약(문항 라벨 + 값). 개인 식별정보는 애초에 수집하지 않는다.
+function summarizeAnswers(payload, survey) {
+  const lines = [];
+  (survey.eduItems || []).forEach((t, i) => {
+    const v = payload.edu?.[`q${i}`];
+    if (v != null) lines.push(`[교육] ${t}: ${v}점`);
+  });
+  for (const it of payload.instructors || []) {
+    const vals = (survey.instructorItems || []).map((t, i) => it[`q${i}`] != null ? `${t} ${it[`q${i}`]}점` : null).filter(Boolean);
+    if (vals.length) lines.push(`[강사] ${it.instructorName || ""}(${it.subject || ""}): ${vals.join(", ")}`);
+  }
+  for (const x of payload.extraAnswers || []) lines.push(`[${x.cat}] ${x.label}: ${x.v}점`);
+  for (const o of payload.oxAnswers || []) lines.push(`[예/아니오] ${o.label}: ${o.yes ? "예" : "아니오"}`);
+  for (const c of payload.choiceAnswers || []) lines.push(`[${c.cat}] ${c.label}: ${(c.options || []).join(", ")}`);
+  if (payload.freeDissatisfied) lines.push(`[주관식-불만족] ${payload.freeDissatisfied}`);
+  if (payload.freeSuggestion) lines.push(`[주관식-제안개선] ${payload.freeSuggestion}`);
+  for (const t of payload.freeExtra || []) lines.push(`[주관식] ${t.label}: ${t.text}`);
+  for (const t of payload.fuTexts || []) lines.push(`[조건부] ${t.label}: ${t.text}`);
+  return lines.join("\n").slice(0, 4000);
 }
 
 main();

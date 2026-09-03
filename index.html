@@ -346,6 +346,18 @@
               <tbody id="survey-tbody"></tbody>
             </table>
           </div>
+          <dialog id="sv-mail-dialog" class="apply-dialog">
+            <div style="padding:1.2rem 1.3rem;display:flex;flex-direction:column;gap:0.7rem;min-width:min(380px,85vw);">
+              <h3 id="sv-mail-title" style="margin:0;">사진 수신 이메일</h3>
+              <p class="hint" style="margin:0;">설문의 <b>사진 첨부</b> 문항으로 제출된 사진이 전달될 주소입니다(여러 개는 쉼표로 구분). 사진은 시스템에 저장되지 않고 이 메일로만 발송됩니다.</p>
+              <label>이 차수 전용 <input id="sv-mail-course" placeholder="예: staff@airport.co.kr" /></label>
+              <label>기본 주소(차수 미지정 시) <input id="sv-mail-default" placeholder="예: astc@airport.co.kr" /></label>
+              <div class="form-actions">
+                <button type="button" id="sv-mail-save">저장</button>
+                <button type="button" id="sv-mail-close">닫기</button>
+              </div>
+            </div>
+          </dialog>
           <dialog id="sv-qr-dialog" class="apply-dialog">
             <div style="padding:1.2rem 1.3rem;display:flex;flex-direction:column;gap:0.7rem;align-items:center;">
               <h3 id="sv-qr-title" style="margin:0;">설문 QR</h3>

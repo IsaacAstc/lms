@@ -1,6 +1,6 @@
 // 관리자 설문 관리: 생성된 공개 설문 목록·노출창·응답수·강의실 URL·미리보기·재생성·삭제.
 import {
-  collection, getCountFromServer, query, where, doc, deleteDoc, setDoc,
+  collection, getCountFromServer, query, where, doc, deleteDoc, setDoc, getDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { watchCollection, onCollection, getCache } from "./store.js";
@@ -58,6 +58,42 @@ export function initSurveys() {
     document.getElementById("sv-window-dialog").close());
   document.getElementById("sv-qr-close").addEventListener("click", () =>
     document.getElementById("sv-qr-dialog").close());
+  document.getElementById("sv-mail-save").addEventListener("click", saveMail);
+  document.getElementById("sv-mail-close").addEventListener("click", () =>
+    document.getElementById("sv-mail-dialog").close());
+}
+
+/* ── 사진 첨부 문항 수신 이메일 (settings/surveyPhotoMail) ──
+ * 관리자 전용 문서라 공개 설문 페이지에는 주소가 노출되지 않고,
+ * 발송 시 Cloud Function이 서버에서만 조회한다. 차수별 지정 + 기본값. */
+let mailTarget = null;
+async function openMailDialog(s) {
+  mailTarget = s;
+  document.getElementById("sv-mail-title").textContent = `${s.courseName} — 사진 수신 이메일`;
+  let cfg = {};
+  try {
+    const d = await getDoc(doc(db, "settings", "surveyPhotoMail"));
+    cfg = d.exists() ? d.data() : {};
+  } catch { /* */ }
+  document.getElementById("sv-mail-course").value = (cfg.byCourse || {})[s.courseId] || "";
+  document.getElementById("sv-mail-default").value = cfg.default || "";
+  document.getElementById("sv-mail-dialog").showModal();
+}
+const validEmails = (v) => v.split(/[,;\s]+/).filter(Boolean).every((a) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a));
+async function saveMail() {
+  if (!mailTarget) return;
+  const course = document.getElementById("sv-mail-course").value.trim();
+  const def = document.getElementById("sv-mail-default").value.trim();
+  if ((course && !validEmails(course)) || (def && !validEmails(def)))
+    return alert("이메일 주소 형식을 확인하세요(여러 개는 쉼표로 구분).");
+  try {
+    await setDoc(doc(db, "settings", "surveyPhotoMail"), {
+      byCourse: { [mailTarget.courseId]: course },
+      default: def,
+      updatedAtMs: Date.now(),
+    }, { merge: true });
+    document.getElementById("sv-mail-dialog").close();
+  } catch (e) { alert("저장 실패: " + e.message); }
 }
 
 // ── 설문 URL QR (라이브러리는 최초 사용 시 지연 로드 — 다른 모듈과 공유) ──
@@ -180,7 +216,7 @@ function render() {
         <button type="button" class="pad-mini win-edit" title="노출기간 수정">✎</button></td>
       <td style="text-align:right">${(s.instructorTargets || []).length}</td>
       <td class="resp-count" data-course="${s.courseId}">–</td>
-      <td class="url-cell"><button type="button" class="copy url-copy" title="${escapeHtml(url)}">복사</button><button type="button" class="url-qr">QR</button><a class="btn-link url-open" href="${escapeHtml(url)}" target="_blank" title="${escapeHtml(url)}">열기</a></td>
+      <td class="url-cell"><button type="button" class="copy url-copy" title="${escapeHtml(url)}">복사</button><button type="button" class="url-qr">QR</button><a class="btn-link url-open" href="${escapeHtml(url)}" target="_blank" title="${escapeHtml(url)}">열기</a><button type="button" class="mail-edit" title="사진 첨부 문항 수신 이메일">📧</button></td>
       <td class="actions">
         <a href="${escapeHtml(previewUrl(s.courseId))}" target="_blank" class="btn-link">미리보기</a>
         <button type="button" class="regen">재생성</button>
@@ -188,6 +224,7 @@ function render() {
       </td>`;
     tr.querySelector(".win-edit").addEventListener("click", () => openWindowDialog(s));
     tr.querySelector(".url-qr").addEventListener("click", () => showSurveyQr(s, url));
+    tr.querySelector(".mail-edit").addEventListener("click", () => openMailDialog(s));
     tr.querySelector(".url-copy").addEventListener("click", () => {
       navigator.clipboard?.writeText(url);
       tr.querySelector(".url-copy").textContent = "복사됨";
