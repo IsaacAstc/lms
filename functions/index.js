@@ -415,8 +415,16 @@ exports.submitSurveyPhotos = onCall(
     // 남용 방지(설문은 비로그인 공개 제출이므로 신청 접수와 동일한 IP 제한 적용).
     await checkRateLimit(req.rawRequest?.ip || req.rawRequest?.headers?.["x-forwarded-for"] || "");
 
+    // 메일 전용 입력(연락처 등) — 시스템에 저장되지 않고 이 메일에만 실린다.
+    const rawTexts = Array.isArray(d.mailTexts) ? d.mailTexts : [];
+    if (rawTexts.length > 10) bad("추가 입력 항목이 너무 많습니다.");
+    const mailTexts = rawTexts.map((t) => ({
+      label: str(t && t.label, 200, "항목명", false) || "추가 입력",
+      text: str(t && t.text, 200, "입력값", true),
+    }));
+
     const rawPhotos = Array.isArray(d.photos) ? d.photos : [];
-    if (!rawPhotos.length) bad("전송할 사진이 없습니다.");
+    if (!rawPhotos.length && !mailTexts.length) bad("전송할 내용이 없습니다.");
     if (rawPhotos.length > 5) bad("사진은 최대 5장까지 첨부할 수 있습니다.");
     let totalBytes = 0;
     const attachments = rawPhotos.map((p, i) => {
@@ -449,13 +457,14 @@ exports.submitSurveyPhotos = onCall(
       await mailer().sendMail({
         from: MAIL_USER.value(),
         to,
-        subject: `[설문 사진] ${courseName} — ${now}${submitCode ? ` (제출코드 ${submitCode})` : ""}`,
+        subject: `[설문 제출] ${courseName} — ${now}${submitCode ? ` (제출코드 ${submitCode})` : ""}`,
         text: [
           `과정: ${courseName}`,
           submitCode ? `제출코드: ${submitCode}  ← 설문 관리 탭의 '제출코드 조회'에 입력하면 이 사진에 해당하는 응답 기록을 볼 수 있습니다.` : "",
           roomId ? `강의실 ID: ${roomId}` : "",
           `제출 시각(KST): ${now}`,
           `첨부 사진: ${attachments.length}장`,
+          ...(mailTexts.length ? ["", "─ 추가 입력(시스템 미저장) ─", ...mailTexts.map((t) => `${t.label}: ${t.text}`)] : []),
           "",
           "─ 응답 요약 ─",
           answers || "(요약 없음)",
