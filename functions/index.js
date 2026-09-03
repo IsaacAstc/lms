@@ -409,6 +409,8 @@ exports.submitSurveyPhotos = onCall(
     const courseId = str(d.courseId, 100, "과정 ID", true);
     const roomId = str(d.roomId, 100, "강의실 ID", false);
     const answers = str(d.answers, 6000, "응답 요약", false);
+    // 제출코드: 시스템에 남는 익명 응답 기록과 이 메일을 잇는 임의 식별자.
+    const submitCode = str(d.submitCode, 16, "제출코드", false).toUpperCase().replace(/[^A-Z0-9]/g, "");
 
     // 남용 방지(설문은 비로그인 공개 제출이므로 신청 접수와 동일한 IP 제한 적용).
     await checkRateLimit(req.rawRequest?.ip || req.rawRequest?.headers?.["x-forwarded-for"] || "");
@@ -447,9 +449,10 @@ exports.submitSurveyPhotos = onCall(
       await mailer().sendMail({
         from: MAIL_USER.value(),
         to,
-        subject: `[설문 사진] ${courseName} — ${now}`,
+        subject: `[설문 사진] ${courseName} — ${now}${submitCode ? ` (제출코드 ${submitCode})` : ""}`,
         text: [
           `과정: ${courseName}`,
+          submitCode ? `제출코드: ${submitCode}  ← 설문 관리 탭의 '제출코드 조회'에 입력하면 이 사진에 해당하는 응답 기록을 볼 수 있습니다.` : "",
           roomId ? `강의실 ID: ${roomId}` : "",
           `제출 시각(KST): ${now}`,
           `첨부 사진: ${attachments.length}장`,
