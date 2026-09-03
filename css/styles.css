@@ -208,6 +208,11 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .survey-box h1 { font-size: 1.3rem; }
 .survey-box h2 { font-size: 1.05rem; margin: 1.5rem 0 0.75rem; border-bottom: 2px solid var(--primary); padding-bottom: 0.3rem; }
 .q-item { margin-bottom: 1rem; }
+/* 설문 중간 안내 문구(응답 입력 없는 note 유형) */
+.survey-note {
+  white-space: pre-wrap; background: #f2f6fb; border-left: 4px solid var(--primary);
+  border-radius: 6px; padding: 0.7rem 0.9rem; margin: 0.9rem 0; line-height: 1.6;
+}
 /* 사진 첨부 문항 미리보기(제출 전 확인용) */
 .photo-preview { margin-top: 0.5rem; }
 .photo-preview img { max-width: 100%; max-height: 40vh; border-radius: 8px; border: 1px solid var(--border); }

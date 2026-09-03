@@ -72,7 +72,8 @@ export function getSurveySets() {
 // 발효일자 이력 없이 현재값만 유지(세트별 별도 저장). 구버전 필드(freeItems 등)는 읽을 때 변환.
 export const Q_TYPES = [
   ["scale", "5점 척도"], ["ox", "예/아니오"], ["text", "주관식"],
-  ["choice", "선다형(택1)"], ["multi", "복수 응답"], ["photo", "사진 첨부"], ["fu", "조건부 후속"],
+  ["choice", "선다형(택1)"], ["multi", "복수 응답"], ["photo", "사진 첨부"],
+  ["note", "안내 문구"], ["fu", "조건부 후속"],
 ];
 const Q_TYPE_IDS = Q_TYPES.map(([t]) => t);
 
@@ -408,13 +409,16 @@ function renderSectionsBuilder() {
         <span class="hint">${q.type === "fu" ? "↳ 조건부 후속" : escapeHtml(Q_TYPES.find(([t]) => t === q.type)?.[1] || q.type)}</span>
         ${slotBadge(q)}
         ${q.type === "fu" ? fuRow(q, si, i) : `
-        <input class="sec-q-label" data-s="${si}" data-i="${i}" value="${escapeHtml(q.label)}" placeholder="문항 문구" style="min-width:220px">
+        ${q.type === "note"
+          ? `<textarea class="sec-q-label" data-s="${si}" data-i="${i}" rows="2" placeholder="응답자에게 보여줄 안내 문구(줄바꿈 가능)" style="min-width:340px">${escapeHtml(q.label)}</textarea>`
+          : `<input class="sec-q-label" data-s="${si}" data-i="${i}" value="${escapeHtml(q.label)}" placeholder="문항 문구" style="min-width:220px">`}
         ${(q.type === "choice" || q.type === "multi")
           ? `<input class="sec-q-opts" data-s="${si}" data-i="${i}" value="${escapeHtml(q.options.join(" / "))}" placeholder="보기 — ' / '로 구분 (예: A / B / C)" style="min-width:220px">`
           : ""}
         ${q.type === "photo"
           ? `<label class="chk" title="체크하면 사진을 첨부해야 제출할 수 있습니다"><input type="checkbox" class="sec-q-req" data-s="${si}" data-i="${i}"${q.required ? " checked" : ""}> 필수</label>`
-          : ""}`}
+          : ""}
+        ${q.type === "note" ? `<span class="hint">응답 입력 없이 안내만 표시(줄바꿈 가능)</span>` : ""}`}
         <button type="button" class="chip-move sec-q-move" data-s="${si}" data-i="${i}" data-d="-1" title="위로">◀</button>
         <button type="button" class="chip-move sec-q-move" data-s="${si}" data-i="${i}" data-d="1" title="아래로">▶</button>
         <button type="button" class="chip-del sec-q-del" data-s="${si}" data-i="${i}"${q.slot ? ` title="기본 주관식은 삭제하면 해당 분류가 설문에서 빠집니다"` : ""}>×</button>
