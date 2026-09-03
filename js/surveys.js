@@ -104,6 +104,7 @@ function renderResponse(r) {
   for (const t of r.freeExtra || []) push(`[주관식] ${t.label}`, t.text);
   for (const t of r.fuTexts || []) push(`[조건부] ${t.label}`, t.text);
   for (const p of r.photoNotes || []) push(`[사진] ${p.label}`, "메일로 전달됨(시스템 미저장)");
+  for (const m of r.mailNotes || []) push(`[메일 전용] ${m.label}`, "메일로 전달됨(시스템 미저장)");
   return `<div class="load-box"><b>제출코드 ${escapeHtml(r.submitCode || "")}</b>
     <table><tbody>${rows.join("")}</tbody></table></div>`;
 }

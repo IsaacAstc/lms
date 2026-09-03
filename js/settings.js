@@ -73,7 +73,7 @@ export function getSurveySets() {
 export const Q_TYPES = [
   ["scale", "5점 척도"], ["ox", "예/아니오"], ["text", "주관식"],
   ["choice", "선다형(택1)"], ["multi", "복수 응답"], ["photo", "사진 첨부"],
-  ["note", "안내 문구"], ["fu", "조건부 후속"],
+  ["mailtext", "메일 전용 입력"], ["note", "안내 문구"], ["fu", "조건부 후속"],
 ];
 const Q_TYPE_IDS = Q_TYPES.map(([t]) => t);
 
@@ -88,8 +88,8 @@ function normQuestion(q) {
     type: q.type, label: q.label,
     options: Array.isArray(q.options) ? q.options.filter(Boolean) : [],
     slot: q.slot === "dis" || q.slot === "sug" ? q.slot : null,
-    // 사진 첨부 문항의 필수 여부(다른 유형에서는 의미 없음).
-    required: q.type === "photo" ? !!q.required : false,
+    // 사진 첨부·메일 전용 입력의 필수 여부(다른 유형에서는 의미 없음).
+    required: (q.type === "photo" || q.type === "mailtext") ? !!q.required : false,
   };
 }
 // 섹션 내 fu 항목들 → buildSurvey용 followUps 형식으로 변환.
@@ -415,9 +415,10 @@ function renderSectionsBuilder() {
         ${(q.type === "choice" || q.type === "multi")
           ? `<input class="sec-q-opts" data-s="${si}" data-i="${i}" value="${escapeHtml(q.options.join(" / "))}" placeholder="보기 — ' / '로 구분 (예: A / B / C)" style="min-width:220px">`
           : ""}
-        ${q.type === "photo"
-          ? `<label class="chk" title="체크하면 사진을 첨부해야 제출할 수 있습니다"><input type="checkbox" class="sec-q-req" data-s="${si}" data-i="${i}"${q.required ? " checked" : ""}> 필수</label>`
+        ${(q.type === "photo" || q.type === "mailtext")
+          ? `<label class="chk" title="체크하면 입력해야 제출할 수 있습니다"><input type="checkbox" class="sec-q-req" data-s="${si}" data-i="${i}"${q.required ? " checked" : ""}> 필수</label>`
           : ""}
+        ${q.type === "mailtext" ? `<span class="hint">시스템에 저장하지 않고 사진과 함께 담당자 메일로만 전달(예: 연락처)</span>` : ""}
         ${q.type === "note" ? `<span class="hint">응답 입력 없이 안내만 표시(줄바꿈 가능)</span>` : ""}`}
         <button type="button" class="chip-move sec-q-move" data-s="${si}" data-i="${i}" data-d="-1" title="위로">◀</button>
         <button type="button" class="chip-move sec-q-move" data-s="${si}" data-i="${i}" data-d="1" title="아래로">▶</button>
