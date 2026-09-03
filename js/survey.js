@@ -206,6 +206,10 @@ function questionHtml(q, name, i) {
     <div class="scale-row">${(q.options || []).map((o, oi) =>
       `<label class="scale-opt"><input type="checkbox" name="${name}" value="${oi}"><span>${esc(o)}</span></label>`).join("")}
     </div><small class="hint">해당하는 항목을 모두 선택</small></div>`;
+  // 메일 전용 입력(연락처 등): 값이 시스템에 저장되지 않고 사진과 함께 메일로만 전달된다.
+  if (q.type === "mailtext") return `<div class="q-item">${head}
+    <input type="text" name="${name}" maxlength="100" autocomplete="off" />
+    <small class="hint">${q.required ? "필수 · " : "선택 · "}입력한 내용은 시스템에 저장되지 않고 담당자 이메일로만 전달됩니다.</small></div>`;
   // 사진 첨부: 브라우저에서 축소 후 담당자 메일로만 전송되며 시스템에는 저장되지 않는다.
   if (q.type === "photo") return `<div class="q-item">${head}
     <input type="file" name="${name}" accept="image/*" capture="environment" />
@@ -253,7 +257,11 @@ function wireFollowUps(survey) {
            <input type="file" name="fu_${fi}" accept="image/*" capture="environment" />
            <div class="photo-preview" id="pv-fu_${fi}"></div>
            <small class="hint">선택 · 사진은 담당자 이메일로만 전달되고 시스템에는 저장되지 않습니다.</small>`
-        : `<div class="q-label">↳ ${esc(f.label)}</div><textarea name="fu_${fi}" rows="2"></textarea>`;
+        : f.type === "mailtext"
+          ? `<div class="q-label">↳ ${esc(f.label)}</div>
+             <input type="text" name="fu_${fi}" maxlength="100" autocomplete="off" />
+             <small class="hint">선택 · 입력한 내용은 시스템에 저장되지 않고 담당자 이메일로만 전달됩니다.</small>`
+          : `<div class="q-label">↳ ${esc(f.label)}</div><textarea name="fu_${fi}" rows="2"></textarea>`;
     // 대상 문항 바로 아래에 삽입.
     inputs[0].closest(".q-item").after(div);
     const update = () => {
@@ -269,6 +277,9 @@ function wireFollowUps(survey) {
           if (fi2) fi2.value = "";
           const pv = div.querySelector(".photo-preview");
           if (pv) pv.innerHTML = "";
+        } else if (f.type === "mailtext") {
+          const ti = div.querySelector('input[type="text"]');
+          if (ti) ti.value = "";
         } else div.querySelector("textarea").value = "";
       }
     };
@@ -306,6 +317,8 @@ async function submit(e, survey) {
   const choiceAnswers = [];  // 선다형·복수: {cat, label, options:[보기 문구], multi}
   const freeExtra = [];      // 자유 주관식: {label, text}
   const photoFiles = [];     // 사진 첨부: {label, file} — 메일 전송용(응답 문서에는 미저장)
+  const mailTexts = [];      // 메일 전용 입력: {label, text} — 메일 전송용(응답 문서에는 미저장)
+  const mailDefined = { photo: 0, text: 0 }; // 설문에 정의된 메일 전용 문항 수(응모 완결 판정용)
   let freeDis = "", freeSug = "";
   for (let si = 0; si < sections.length; si++) {
     const sec = sections[si];
@@ -330,6 +343,7 @@ async function submit(e, survey) {
         if (!sel.length) { err.textContent = `'${sec.title}'의 복수 응답 문항에서 하나 이상 선택해 주세요.`; return; }
         choiceAnswers.push({ cat: sec.title, label: q.label, options: sel, multi: true });
       } else if (q.type === "photo") {
+        mailDefined.photo++;
         const f = form[name]?.files?.[0];
         if (!f) {
           if (q.required) { err.textContent = `'${q.label}' 사진을 첨부해 주세요.`; return; }
@@ -337,6 +351,14 @@ async function submit(e, survey) {
           err.textContent = "이미지 파일만 첨부할 수 있습니다."; return;
         } else {
           photoFiles.push({ label: q.label, file: f });
+        }
+      } else if (q.type === "mailtext") {
+        mailDefined.text++;
+        const t = (form[name]?.value || "").trim();
+        if (!t) {
+          if (q.required) { err.textContent = `'${q.label}'을(를) 입력해 주세요.`; return; }
+        } else {
+          mailTexts.push({ label: q.label, text: t.slice(0, 100) });
         }
       } else { // text — 기본 2종(slot)은 기존 필드로, 나머지는 자유 주관식으로.
         const t = (form[name]?.value || "").trim();
@@ -358,11 +380,16 @@ async function submit(e, survey) {
       if (v !== "0" && v !== "1") { err.textContent = `'${f.label}' 문항에 응답해 주세요.`; return; }
       oxAnswers.push({ label: f.label, yes: v === "1" });
     } else if (f.type === "photo") { // 조건부 사진(선택) — 첨부한 경우에만 메일로 전달.
+      mailDefined.photo++;
       const file = form[`fu_${fi}`]?.files?.[0];
       if (file) {
         if (!/^image\//.test(file.type)) { err.textContent = "이미지 파일만 첨부할 수 있습니다."; return; }
         photoFiles.push({ label: f.label, file });
       }
+    } else if (f.type === "mailtext") { // 조건부 메일 전용 입력(선택).
+      mailDefined.text++;
+      const t = (form[`fu_${fi}`]?.value || "").trim();
+      if (t) mailTexts.push({ label: f.label, text: t.slice(0, 100) });
     } else {
       const t = (form[`fu_${fi}`]?.value || "").trim();
       if (t) fuTexts.push({ q: f.q, label: f.label, text: t });
@@ -390,14 +417,28 @@ async function submit(e, survey) {
   if (extraAnswers.length) payload.extraAnswers = extraAnswers;
   if (choiceAnswers.length) payload.choiceAnswers = choiceAnswers;
   if (fuTexts.length) payload.fuTexts = fuTexts; // 조건부 주관식 원문(180일 파기 대상 동일)
-  // 사진은 저장하지 않고 제출 기록만 남긴다(문항 라벨·첨부 여부).
-  // 사진이 있으면 제출코드를 발급해 메일과 응답 기록 양쪽에 남긴다(관리자 매칭용).
-  if (photoFiles.length) {
-    payload.photoNotes = photoFiles.map((p) => ({ label: p.label, attached: true }));
+  /* ── 메일 전송 판정(이벤트 응모 완결) ──
+   * 설문에 정의된 메일 전용 문항(사진·메일 전용 입력)을 '모두' 채운 경우에만 발송한다.
+   * 일부만 채웠으면 응모가 성립하지 않으므로, 안내 후 응답만 저장한다. */
+  const complete = photoFiles.length >= mailDefined.photo && mailTexts.length >= mailDefined.text;
+  const partial = !complete && (photoFiles.length || mailTexts.length);
+  if (partial) {
+    const missing = [
+      photoFiles.length < mailDefined.photo ? "사진" : "",
+      mailTexts.length < mailDefined.text ? "추가 입력(연락처 등)" : "",
+    ].filter(Boolean).join("·");
+    if (!confirm(`${missing}이(가) 비어 있어 응모가 완료되지 않습니다.\n이대로 제출하면 입력하신 내용은 담당자에게 전달되지 않고 설문 응답만 기록됩니다.\n\n계속 제출할까요?`)) return;
+  }
+  const sendMail = complete && (photoFiles.length > 0 || mailTexts.length > 0);
+  // 사진·메일 전용 입력은 저장하지 않고 제출 기록만 남긴다(문항 라벨·제출 여부).
+  // 전송하는 경우 제출코드를 발급해 메일과 응답 기록 양쪽에 남긴다(관리자 매칭용).
+  if (sendMail) {
+    if (photoFiles.length) payload.photoNotes = photoFiles.map((p) => ({ label: p.label, attached: true }));
+    if (mailTexts.length) payload.mailNotes = mailTexts.map((m) => ({ label: m.label, submitted: true }));
     payload.submitCode = newSubmitCode();
   }
   // 제출 전 한 번 더 확인.
-  confirmSubmit(() => doSubmit(payload, survey, photoFiles));
+  confirmSubmit(() => doSubmit(payload, survey, sendMail ? photoFiles : [], sendMail ? mailTexts : []));
 }
 
 // 확인 오버레이: 뒤로(수정) / 확인(제출).
@@ -417,15 +458,15 @@ function confirmSubmit(onConfirm) {
   document.body.appendChild(ov);
 }
 
-async function doSubmit(payload, survey, photoFiles = []) {
+async function doSubmit(payload, survey, photoFiles = [], mailTexts = []) {
   const err = document.getElementById("s-error");
   const submitBtn = document.getElementById("s-submit");
   submitBtn.disabled = true;
   try {
-    // 1) 사진이 있으면 먼저 메일로 전송(저장 없이 중계). 실패 시 제출을 중단해
-    //    "사진은 안 갔는데 응답만 기록"되는 상태를 만들지 않는다.
-    if (photoFiles.length) {
-      err.textContent = "사진 전송 중… (잠시 기다려 주세요)";
+    // 1) 사진·메일 전용 입력이 있으면 먼저 메일로 전송(저장 없이 중계). 실패 시 제출을 중단해
+    //    "메일은 안 갔는데 응답만 기록"되는 상태를 만들지 않는다.
+    if (photoFiles.length || mailTexts.length) {
+      err.textContent = "제출 정보 전송 중… (잠시 기다려 주세요)";
       const photos = [];
       for (const p of photoFiles) {
         const dataUrl = await compressImage(p.file);
@@ -437,6 +478,7 @@ async function doSubmit(payload, survey, photoFiles = []) {
         roomId: survey.roomId || "",
         submitCode: payload.submitCode || "", // 시스템 응답 기록과 매칭하는 제출코드
         photos,
+        mailTexts, // 메일 전용 입력(연락처 등) — 시스템 미저장
         answers: summarizeAnswers(payload, survey), // 메일 본문용 응답 요약(개인정보 없음)
       });
     }
