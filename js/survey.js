@@ -145,6 +145,15 @@ function wirePhotoPreview() {
   });
 }
 
+// 제출코드: 사진(메일)과 시스템 응답 기록을 잇는 무작위 8자. 혼동 문자(0/O,1/I/L) 제외.
+// 응답자 개인정보가 아니라 이 제출 건에만 붙는 임의 식별자다.
+function newSubmitCode() {
+  const chars = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+  const buf = new Uint8Array(8);
+  crypto.getRandomValues(buf);
+  return [...buf].map((b) => chars[b % chars.length]).join("");
+}
+
 const FREE_DEFAULTS = ["교육 불만족 의견", "교육 관련 제안·개선요구 의견"];
 function sectionsOfSurvey(survey) {
   if (Array.isArray(survey.sections)) {
@@ -358,7 +367,11 @@ async function submit(e, survey) {
   if (choiceAnswers.length) payload.choiceAnswers = choiceAnswers;
   if (fuTexts.length) payload.fuTexts = fuTexts; // 조건부 주관식 원문(180일 파기 대상 동일)
   // 사진은 저장하지 않고 제출 기록만 남긴다(문항 라벨·첨부 여부).
-  if (photoFiles.length) payload.photoNotes = photoFiles.map((p) => ({ label: p.label, attached: true }));
+  // 사진이 있으면 제출코드를 발급해 메일과 응답 기록 양쪽에 남긴다(관리자 매칭용).
+  if (photoFiles.length) {
+    payload.photoNotes = photoFiles.map((p) => ({ label: p.label, attached: true }));
+    payload.submitCode = newSubmitCode();
+  }
   // 제출 전 한 번 더 확인.
   confirmSubmit(() => doSubmit(payload, survey, photoFiles));
 }
@@ -398,6 +411,7 @@ async function doSubmit(payload, survey, photoFiles = []) {
       await httpsCallable(fns, "submitSurveyPhotos")({
         courseId: survey.courseId,
         roomId: survey.roomId || "",
+        submitCode: payload.submitCode || "", // 시스템 응답 기록과 매칭하는 제출코드
         photos,
         answers: summarizeAnswers(payload, survey), // 메일 본문용 응답 요약(개인정보 없음)
       });

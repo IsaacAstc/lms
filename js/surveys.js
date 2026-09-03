@@ -1,6 +1,6 @@
 // 관리자 설문 관리: 생성된 공개 설문 목록·노출창·응답수·강의실 URL·미리보기·재생성·삭제.
 import {
-  collection, getCountFromServer, query, where, doc, deleteDoc, setDoc, getDoc,
+  collection, getCountFromServer, query, where, doc, deleteDoc, setDoc, getDoc, getDocs,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { watchCollection, onCollection, getCache } from "./store.js";
@@ -58,9 +58,54 @@ export function initSurveys() {
     document.getElementById("sv-window-dialog").close());
   document.getElementById("sv-qr-close").addEventListener("click", () =>
     document.getElementById("sv-qr-dialog").close());
+  document.getElementById("sv-code-find").addEventListener("click", findByCode);
+  document.getElementById("sv-code").addEventListener("keydown", (e) => { if (e.key === "Enter") findByCode(); });
   document.getElementById("sv-mail-save").addEventListener("click", saveMail);
   document.getElementById("sv-mail-close").addEventListener("click", () =>
     document.getElementById("sv-mail-dialog").close());
+}
+
+/* ── 제출코드 조회 ──
+ * 사진 첨부 메일에 찍힌 제출코드로 시스템에 남은 익명 응답 기록을 찾아 표시한다.
+ * (사진 자체는 어디에도 저장되지 않으므로 메일 쪽에서만 확인 가능) */
+async function findByCode() {
+  const box = document.getElementById("sv-code-result");
+  const code = document.getElementById("sv-code").value.trim().toUpperCase();
+  if (!code) { box.innerHTML = `<p class="hint">제출코드를 입력하세요.</p>`; return; }
+  box.innerHTML = "조회 중…";
+  try {
+    const snap = await getDocs(query(collection(db, "surveyResponses"), where("submitCode", "==", code)));
+    if (snap.empty) {
+      box.innerHTML = `<p class="empty">해당 제출코드의 응답을 찾을 수 없습니다. (원문 파기 기간이 지났거나 코드가 다를 수 있습니다)</p>`;
+      return;
+    }
+    box.innerHTML = snap.docs.map((d) => renderResponse(d.data())).join("");
+  } catch (e) {
+    box.innerHTML = `<p class="empty">조회 실패: ${escapeHtml(e.message)}</p>`;
+  }
+}
+// 응답 1건을 문항·값 표로 렌더(사진은 첨부 여부만 표시).
+function renderResponse(r) {
+  const rows = [];
+  const push = (k, v) => rows.push(`<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`);
+  const courseName = coursesCache.find((c) => c.id === r.courseId)?.name || r.courseId || "";
+  push("과정", courseName);
+  push("수집 일시(KST)", r.collectedAt || r.collectedDate || "");
+  (r.eduItems || []).forEach((t, i) => { const v = r.edu?.[`q${i}`]; if (v != null) push(`[교육] ${t}`, `${v}점`); });
+  for (const it of r.instructors || []) {
+    const vals = (r.instructorItems || []).map((t, i) => it[`q${i}`] != null ? `${t} ${it[`q${i}`]}점` : null).filter(Boolean);
+    if (vals.length) push(`[강사] ${it.instructorName || ""}(${it.subject || ""})`, vals.join(", "));
+  }
+  for (const x of r.extraAnswers || []) push(`[${x.cat}] ${x.label}`, `${x.v}점`);
+  for (const o of r.oxAnswers || []) push(`[예/아니오] ${o.label}`, o.yes ? "예" : "아니오");
+  for (const c of r.choiceAnswers || []) push(`[${c.cat}] ${c.label}`, (c.options || []).join(", "));
+  if (r.freeDissatisfied) push("[주관식] 불만족", r.freeDissatisfied);
+  if (r.freeSuggestion) push("[주관식] 제안·개선", r.freeSuggestion);
+  for (const t of r.freeExtra || []) push(`[주관식] ${t.label}`, t.text);
+  for (const t of r.fuTexts || []) push(`[조건부] ${t.label}`, t.text);
+  for (const p of r.photoNotes || []) push(`[사진] ${p.label}`, "메일로 전달됨(시스템 미저장)");
+  return `<div class="load-box"><b>제출코드 ${escapeHtml(r.submitCode || "")}</b>
+    <table><tbody>${rows.join("")}</tbody></table></div>`;
 }
 
 /* ── 사진 첨부 문항 수신 이메일 (settings/surveyPhotoMail) ──
