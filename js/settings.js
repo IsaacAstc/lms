@@ -80,7 +80,7 @@ function normQuestion(q) {
   if (!q || typeof q.label !== "string" || !q.label || !Q_TYPE_IDS.includes(q.type)) return null;
   if (q.type === "fu") {
     // 조건부 후속: 대상 문항(q)·조건·후속 유형을 함께 보관. 설문에서는 대상 문항 아래에 렌더.
-    if (!q.q || !["yes", "no", "score"].includes(q.cond) || !["text", "ox"].includes(q.futype)) return null;
+    if (!q.q || !["yes", "no", "score"].includes(q.cond) || !["text", "ox", "photo"].includes(q.futype)) return null;
     return { type: "fu", label: q.label, q: q.q, cond: q.cond, maxScore: q.maxScore || 2, futype: q.futype, options: [], slot: null };
   }
   return {
@@ -157,7 +157,7 @@ function extrasOf(src) {
     followUps: sections
       ? followUpsFromSections(sections)
       : (Array.isArray(src?.followUps)
-        ? src.followUps.filter((f) => f && f.q && f.label && ["yes", "no", "score"].includes(f.cond) && ["text", "ox"].includes(f.type)) : null),
+        ? src.followUps.filter((f) => f && f.q && f.label && ["yes", "no", "score"].includes(f.cond) && ["text", "ox", "photo"].includes(f.type)) : null),
   };
 }
 
@@ -389,6 +389,7 @@ function renderSectionsBuilder() {
     <select class="fu-futype" data-s="${si}" data-i="${i}">
       <option value="text"${q.futype === "text" ? " selected" : ""}>후속: 주관식</option>
       <option value="ox"${q.futype === "ox" ? " selected" : ""}>후속: 예/아니오</option>
+      <option value="photo"${q.futype === "photo" ? " selected" : ""}>후속: 사진 첨부</option>
     </select>
     <input class="sec-q-label" data-s="${si}" data-i="${i}" value="${escapeHtml(q.label)}" placeholder="후속 문항 문구" style="min-width:200px">`;
   sectionsDraft.forEach((sec, si) => {
@@ -561,7 +562,7 @@ function collectItems() {
         .map((q) => (q.type === "fu"
           ? { type: "fu", label: (q.label || "").trim(), q: (q.q || "").trim(), cond: q.cond, maxScore: q.maxScore || 2, futype: q.futype, options: [], slot: null }
           : { type: q.type, label: (q.label || "").trim(), options: q.options.map((o) => o.trim()).filter(Boolean), slot: q.slot || null, required: q.type === "photo" ? !!q.required : false }))
-        .filter((q) => q.label && (q.type !== "fu" || (q.q && ["yes", "no", "score"].includes(q.cond) && ["text", "ox"].includes(q.futype)))),
+        .filter((q) => q.label && (q.type !== "fu" || (q.q && ["yes", "no", "score"].includes(q.cond) && ["text", "ox", "photo"].includes(q.futype)))),
     }))
     .filter((s) => s.title && s.items.length);
   return {
