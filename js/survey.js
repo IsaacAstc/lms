@@ -130,7 +130,7 @@ function compressImage(file) {
 }
 // 선택 즉시 미리보기(제출 전 확인용).
 function wirePhotoPreview() {
-  document.querySelectorAll('input[type="file"][name^="sec_"]').forEach((inp) => {
+  document.querySelectorAll('#s-form input[type="file"]').forEach((inp) => {
     inp.addEventListener("change", async () => {
       const box = document.getElementById(`pv-${inp.name}`);
       if (!box) return;
@@ -241,7 +241,12 @@ function wireFollowUps(survey) {
            <label class="scale-opt"><input type="radio" name="fu_${fi}" value="1"><span>예</span></label>
            <label class="scale-opt"><input type="radio" name="fu_${fi}" value="0"><span>아니오</span></label>
          </div>`
-      : `<div class="q-label">↳ ${esc(f.label)}</div><textarea name="fu_${fi}" rows="2"></textarea>`;
+      : f.type === "photo"
+        ? `<div class="q-label">↳ ${esc(f.label)}</div>
+           <input type="file" name="fu_${fi}" accept="image/*" capture="environment" />
+           <div class="photo-preview" id="pv-fu_${fi}"></div>
+           <small class="hint">선택 · 사진은 담당자 이메일로만 전달되고 시스템에는 저장되지 않습니다.</small>`
+        : `<div class="q-label">↳ ${esc(f.label)}</div><textarea name="fu_${fi}" rows="2"></textarea>`;
     // 대상 문항 바로 아래에 삽입.
     inputs[0].closest(".q-item").after(div);
     const update = () => {
@@ -250,9 +255,14 @@ function wireFollowUps(survey) {
         ? Number(v) <= (f.maxScore || 2) && f.cond === "score"
         : (f.cond === "yes" ? v === "1" : v === "0"));
       div.hidden = !show;
-      if (!show) {
+      if (!show) { // 조건이 풀리면 입력값을 비워 잘못 제출되지 않게 한다.
         if (f.type === "ox") div.querySelectorAll("input").forEach((r) => { r.checked = false; });
-        else div.querySelector("textarea").value = "";
+        else if (f.type === "photo") {
+          const fi2 = div.querySelector('input[type="file"]');
+          if (fi2) fi2.value = "";
+          const pv = div.querySelector(".photo-preview");
+          if (pv) pv.innerHTML = "";
+        } else div.querySelector("textarea").value = "";
       }
     };
     inputs.forEach((r) => r.addEventListener("change", update));
@@ -339,6 +349,12 @@ async function submit(e, survey) {
       const v = form[`fu_${fi}`]?.value;
       if (v !== "0" && v !== "1") { err.textContent = `'${f.label}' 문항에 응답해 주세요.`; return; }
       oxAnswers.push({ label: f.label, yes: v === "1" });
+    } else if (f.type === "photo") { // 조건부 사진(선택) — 첨부한 경우에만 메일로 전달.
+      const file = form[`fu_${fi}`]?.files?.[0];
+      if (file) {
+        if (!/^image\//.test(file.type)) { err.textContent = "이미지 파일만 첨부할 수 있습니다."; return; }
+        photoFiles.push({ label: f.label, file });
+      }
     } else {
       const t = (form[`fu_${fi}`]?.value || "").trim();
       if (t) fuTexts.push({ q: f.q, label: f.label, text: t });
