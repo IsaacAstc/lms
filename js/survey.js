@@ -73,9 +73,16 @@ function render(survey, preview = false) {
   // 문항 카테고리(섹션): 5점/O·X/주관식/선다형/복수 응답 혼합(설정 빌더에서 구성).
   const T = survey.titles || {};
   const sections = sectionsOfSurvey(survey);
-  const secHtml = sections.map((sec, si) => `
-    <h2>${esc(sec.title)}</h2>
-    ${sec.items.map((q, i) => questionHtml(q, `sec_${si}_${i}`, i)).join("")}`).join("");
+  // 안내 문구(note)는 응답 입력이 없으므로 번호를 매기지 않고 건너뛴다.
+  const secHtml = sections.map((sec, si) => {
+    let no = 0;
+    const body = sec.items.map((q, i) => {
+      if (q.type === "note") return `<div class="survey-note">${esc(q.label)}</div>`;
+      no++;
+      return questionHtml(q, `sec_${si}_${i}`, no - 1);
+    }).join("");
+    return `<h2>${esc(sec.title)}</h2>${body}`;
+  }).join("");
 
   root.innerHTML = `
     ${preview ? `<p class="preview-banner">미리보기 — 실제 제출되지 않습니다.</p>` : ""}
@@ -305,6 +312,7 @@ async function submit(e, survey) {
     for (let i = 0; i < sec.items.length; i++) {
       const q = sec.items[i];
       const name = `sec_${si}_${i}`;
+      if (q.type === "note") continue; // 안내 문구 — 수집할 응답 없음
       if (q.type === "scale") {
         const v = form[name]?.value;
         if (!v) { err.textContent = `'${sec.title}' 문항에 모두 응답해 주세요.`; return; }
