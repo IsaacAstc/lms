@@ -41,7 +41,10 @@
 - `namedSurveys`: 목록 전체 구독(필터 없음) → **추가 인덱스 불필요.**
 - `namedResponses`: 모든 접근이 서버 함수 경유. 쿼리는 `where("surveyId","==",…)` 단일 필드와
   `where("purgeAt","<=",…)`(보유기간 만료 파기 배치) → 각각 단일 필드라 **추가 인덱스 불필요.**
-  중복 응답 차단은 쿼리가 아니라 문서 ID(`{조사ID}__{식별자해시}`) 선점으로 처리하므로
-  `surveyId` + `idHash` 복합 인덱스가 필요 없다.
+- `namedRespondents`(중복 방지 표시 — 식별자 해시만, 응답과 연결선 없음):
+  중복 차단은 쿼리가 아니라 문서 ID(`{조사ID}__{식별자해시}`) 선점으로 처리한다.
+  기간 파기에서 `where("surveyId","==",…) + where("collectedDate",">=",…)+("<=",…)`를 쓰므로
+  **`surveyId`(asc) + `collectedDate`(asc) 복합 인덱스 1개가 필요하다.**
+  보유기간 만료 파기는 `where("purgeAt","<=",…)` 단일 필드.
 - `accessLogs`: 화면 조회는 `orderBy("atMs","desc") + limit(300)` 단일 필드 정렬,
   파기 배치는 `where("expireAt","<=",…)` → **추가 인덱스 불필요.**

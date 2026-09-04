@@ -189,6 +189,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // 중복 방지 표시: 식별자 해시만 담고 응답과 연결선이 없다(가명정보).
+    // 응답보다 민감도는 낮지만 열람할 이유가 없으므로 클라이언트 접근을 전면 차단한다.
+    match /namedRespondents/{markId} {
+      allow read, write: if false;
+    }
+
     // 취급자 접속기록(법 제29조): 기록은 함수만, 화면에서는 읽기만 —
     // 수정·삭제 경로를 두지 않아 위·변조를 막는다(보관기간 만료 파기는 배치).
     match /accessLogs/{logId} {
