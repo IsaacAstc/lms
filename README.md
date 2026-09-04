@@ -82,10 +82,27 @@ python3 -m http.server 8000
 3. 배포 실행:
    - `main` 에 병합하면 자동 배포, 또는
    - **Actions 탭 → Deploy to GitHub Pages → Run workflow** 로 수동 실행(브랜치 지정 가능).
-4. 배포된 URL(예: `https://<계정>.github.io/lms/`)로 접속해 로그인.
+4. 배포된 URL로 접속해 로그인.
+   - 커스텀 도메인: `https://kac-astc.edu.eu.org/`
+   - 기본 주소: `https://isaacastc.github.io/lms/` (계속 동작)
 
-> Firebase 콘솔 **Authentication → Settings → 승인된 도메인**에 `<계정>.github.io` 를 추가해야
-> 배포본에서 로그인이 동작한다.
+> Firebase 콘솔 **Authentication → Settings → 승인된 도메인**에 접속에 사용하는 도메인을
+> 모두 추가해야 로그인이 동작한다(`kac-astc.edu.eu.org`, `isaacastc.github.io`).
+
+### 커스텀 도메인 (`kac-astc.edu.eu.org`)
+
+- **`CNAME` 파일(저장소 루트)이 도메인 설정의 실체다.** Actions로 Pages를 배포하면
+  업로드 아티팩트에 `CNAME`이 없을 때 Settings의 커스텀 도메인이 배포마다 풀릴 수 있다.
+  도메인을 바꾸려면 이 파일 내용을 바꾸고, 쓰지 않으려면 파일을 지운다.
+- DNS는 도메인 등록처에서 GitHub Pages를 가리키도록 설정한다(A 레코드 4개 또는 CNAME).
+- **소스코드는 도메인에 의존하지 않는다.** 공개 링크·QR은 모두 접속한 주소(`location.origin`)
+  기준으로 생성되므로 도메인이 바뀌어도 코드 수정이 필요 없다.
+
+> ⚠️ **주소가 바뀌면 브라우저 저장소(localStorage)가 초기화된다** — 주소별로 별개 취급.
+> 두 주소가 동시에 살아 있으면 익명 설문의 **기기당 1회 응답 제한이 주소별로 갈리므로**
+> 같은 사람이 양쪽에서 각각 응답할 수 있다. 강의실 QR은 새 주소로 재출력하는 것이 좋다.
+> 로지보드 닉네임·푸시 알림 허용도 새 주소에서 다시 설정해야 한다.
+> (기명 조사는 중복 방지를 서버 해시로 하므로 도메인과 무관하다)
 
 ## 데이터 모델 메모
 
@@ -261,7 +278,8 @@ Daily Schedule(강사명 미표시 스냅샷)·Bulletins·Polls·Ask Staff(1:1 Q
    - Firestore Database 활성화(프로덕션 모드, `asia-northeast3` 권장)
    - Authentication → 이메일/비밀번호 활성화, 가입(신규 생성) 차단, 관리자 계정 생성
    - Firestore 규칙 탭에 이 저장소의 `firestore.rules` 게시
-   - Authentication → Settings → 승인된 도메인에 `<계정>.github.io` 추가
+   - Authentication → Settings → 승인된 도메인에 접속 도메인 추가
+     (`kac-astc.edu.eu.org`, `isaacastc.github.io`)
    - (선택) 퀴즈를 기관별로 쓰려면 Realtime Database + `rtdb.rules.json` — 현재
      동거 앱(퀴즈·히어로 미션)은 기본 기관 전용이다.
 2. **기관 등록**: 기본 기관에 마스터로 로그인 → 설정 → **기관 관리** →
