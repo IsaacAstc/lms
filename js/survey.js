@@ -53,13 +53,15 @@ async function main() {
   render(survey);
 }
 
-function ratingRow(name, label) {
+function ratingRow(name, label, required = true) {
   const opts = SCALE_DESC.map((desc, i) => {
     const txt = desc ? `${i + 1} ${desc}` : `${i + 1}`;
-    return `<label class="scale"><input type="radio" name="${name}" value="${i + 1}" required><span>${esc(txt)}</span></label>`;
+    return `<label class="scale"><input type="radio" name="${name}" value="${i + 1}"${required ? " required" : ""}><span>${esc(txt)}</span></label>`;
   }).join("");
-  return `<div class="q-item"><div class="q-label">${esc(label)}</div><div class="scale-row">${opts}</div></div>`;
+  return `<div class="q-item"><div class="q-label">${esc(label)}${optMark(required)}</div><div class="scale-row">${opts}</div></div>`;
 }
+// 선택 문항임을 응답자에게 표시(필수 문항은 별도 표식 없음 — 대부분이 필수).
+function optMark(required) { return required ? "" : ` <span class="q-opt">(선택)</span>`; }
 
 function render(survey, preview = false) {
   const edu = (survey.eduItems || []).map((t, i) => ratingRow(`edu_${i}`, `${i + 1}. ${t}`)).join("");
@@ -162,11 +164,19 @@ function newSubmitCode() {
 }
 
 const FREE_DEFAULTS = ["교육 불만족 의견", "교육 관련 제안·개선요구 의견"];
+// 문항별 필수 여부를 저장하기 전에 발행된 설문의 기본값 — 당시 동작(객관식 필수, 주관식·첨부 선택)을 유지한다.
+const REQUIRED_LEGACY = { scale: true, ox: true, choice: true, multi: true, text: false, photo: false, mailtext: false, note: false };
+function withRequired(q) {
+  return { ...q, required: q.required === undefined || q.required === null ? !!REQUIRED_LEGACY[q.type] : !!q.required };
+}
 function sectionsOfSurvey(survey) {
   if (Array.isArray(survey.sections)) {
     // 조건부 후속(fu) 항목은 대상 문항 아래에 별도 렌더(wireFollowUps)되므로 섹션 흐름에서 제외.
     return survey.sections
-      .map((s) => ({ title: s?.title || "", items: (Array.isArray(s?.items) ? s.items : []).filter((q) => q && q.label && q.type && q.type !== "fu") }))
+      .map((s) => ({
+        title: s?.title || "",
+        items: (Array.isArray(s?.items) ? s.items : []).filter((q) => q && q.label && q.type && q.type !== "fu").map(withRequired),
+      }))
       .filter((s) => s.title && s.items.length);
   }
   // ── 구버전 변환(기존 발행 설문 호환) ──
@@ -187,13 +197,13 @@ function sectionsOfSurvey(survey) {
   });
   for (const lb of survey.freeExtraItems || []) free.push({ type: "text", label: lb, options: [], slot: null });
   if (free.length) out.push({ title: T.free || "주관식", items: free });
-  return out;
+  return out.map((s) => ({ ...s, items: s.items.map(withRequired) }));
 }
 
 // 문항 유형별 입력 UI(필수 검증은 제출 시 일괄 처리).
 function questionHtml(q, name, i) {
-  const head = `<div class="q-label">${i + 1}. ${esc(q.label)}</div>`;
-  if (q.type === "scale") return ratingRow(name, `${i + 1}. ${q.label}`);
+  const head = `<div class="q-label">${i + 1}. ${esc(q.label)}${optMark(q.required)}</div>`;
+  if (q.type === "scale") return ratingRow(name, `${i + 1}. ${q.label}`, !!q.required);
   if (q.type === "ox") return `<div class="q-item">${head}
     <div class="scale-row">
       <label class="scale-opt"><input type="radio" name="${name}" value="1"><span>예</span></label>
@@ -237,7 +247,7 @@ function parentNameOf(survey, label) {
 }
 function wireFollowUps(survey) {
   const form = document.getElementById("s-form");
-  (survey.followUps || []).forEach((f, fi) => {
+  (survey.followUps || []).map(withRequired).forEach((f, fi) => {
     const p = parentNameOf(survey, f.q);
     if (!p) return; // 대상 문항이 이 설문에 없음(세트 변경 등) — 무시.
     const inputs = form.querySelectorAll(`input[name="${p.name}"]`);
@@ -246,22 +256,24 @@ function wireFollowUps(survey) {
     div.className = "q-item fu-item";
     div.id = `fu-${fi}`;
     div.hidden = true;
+    const fuHead = `<div class="q-label">↳ ${esc(f.label)}${optMark(f.required)}</div>`;
+    const fuMark = f.required ? "필수 · " : "선택 · ";
     div.innerHTML = f.type === "ox"
-      ? `<div class="q-label">↳ ${esc(f.label)}</div>
+      ? `${fuHead}
          <div class="scale-row">
            <label class="scale-opt"><input type="radio" name="fu_${fi}" value="1"><span>예</span></label>
            <label class="scale-opt"><input type="radio" name="fu_${fi}" value="0"><span>아니오</span></label>
          </div>`
       : f.type === "photo"
-        ? `<div class="q-label">↳ ${esc(f.label)}</div>
+        ? `${fuHead}
            <input type="file" name="fu_${fi}" accept="image/*" capture="environment" />
            <div class="photo-preview" id="pv-fu_${fi}"></div>
-           <small class="hint">선택 · 사진은 담당자 이메일로만 전달되고 시스템에는 저장되지 않습니다.</small>`
+           <small class="hint">${fuMark}사진은 담당자 이메일로만 전달되고 시스템에는 저장되지 않습니다.</small>`
         : f.type === "mailtext"
-          ? `<div class="q-label">↳ ${esc(f.label)}</div>
+          ? `${fuHead}
              <input type="text" name="fu_${fi}" maxlength="100" autocomplete="off" />
-             <small class="hint">선택 · 입력한 내용은 시스템에 저장되지 않고 담당자 이메일로만 전달됩니다.</small>`
-          : `<div class="q-label">↳ ${esc(f.label)}</div><textarea name="fu_${fi}" rows="2"></textarea>`;
+             <small class="hint">${fuMark}입력한 내용은 시스템에 저장되지 않고 담당자 이메일로만 전달됩니다.</small>`
+          : `${fuHead}<textarea name="fu_${fi}" rows="2"></textarea>`;
     // 대상 문항 바로 아래에 삽입.
     inputs[0].closest(".q-item").after(div);
     const update = () => {
@@ -328,20 +340,20 @@ async function submit(e, survey) {
       if (q.type === "note") continue; // 안내 문구 — 수집할 응답 없음
       if (q.type === "scale") {
         const v = form[name]?.value;
-        if (!v) { err.textContent = `'${sec.title}' 문항에 모두 응답해 주세요.`; return; }
-        extraAnswers.push({ cat: sec.title, label: q.label, v: Number(v) });
+        if (!v) { if (q.required) { err.textContent = `'${q.label}' 문항에 응답해 주세요.`; return; } }
+        else extraAnswers.push({ cat: sec.title, label: q.label, v: Number(v) });
       } else if (q.type === "ox") {
         const v = form[name]?.value;
-        if (v !== "0" && v !== "1") { err.textContent = `'${sec.title}'의 예/아니오 문항에 응답해 주세요.`; return; }
-        oxAnswers.push({ label: q.label, yes: v === "1" });
+        if (v !== "0" && v !== "1") { if (q.required) { err.textContent = `'${q.label}' 문항에 응답해 주세요.`; return; } }
+        else oxAnswers.push({ label: q.label, yes: v === "1" });
       } else if (q.type === "choice") {
         const v = form[name]?.value;
-        if (v === "" || v == null) { err.textContent = `'${sec.title}'의 선택 문항에 응답해 주세요.`; return; }
-        choiceAnswers.push({ cat: sec.title, label: q.label, options: [q.options[Number(v)]].filter(Boolean), multi: false });
+        if (v === "" || v == null) { if (q.required) { err.textContent = `'${q.label}' 문항에 응답해 주세요.`; return; } }
+        else choiceAnswers.push({ cat: sec.title, label: q.label, options: [q.options[Number(v)]].filter(Boolean), multi: false });
       } else if (q.type === "multi") {
         const sel = [...document.querySelectorAll(`input[name="${name}"]:checked`)].map((el) => q.options[Number(el.value)]).filter(Boolean);
-        if (!sel.length) { err.textContent = `'${sec.title}'의 복수 응답 문항에서 하나 이상 선택해 주세요.`; return; }
-        choiceAnswers.push({ cat: sec.title, label: q.label, options: sel, multi: true });
+        if (!sel.length) { if (q.required) { err.textContent = `'${q.label}' 문항에서 하나 이상 선택해 주세요.`; return; } }
+        else choiceAnswers.push({ cat: sec.title, label: q.label, options: sel, multi: true });
       } else if (q.type === "photo") {
         mailDefined.photo++;
         const f = form[name]?.files?.[0];
@@ -362,6 +374,7 @@ async function submit(e, survey) {
         }
       } else { // text — 기본 2종(slot)은 기존 필드로, 나머지는 자유 주관식으로.
         const t = (form[name]?.value || "").trim();
+        if (!t && q.required) { err.textContent = `'${q.label}'을(를) 입력해 주세요.`; return; }
         if (q.slot === "dis") freeDis = t;
         else if (q.slot === "sug") freeSug = t;
         else if (t) freeExtra.push({ label: q.label, text: t });
@@ -372,26 +385,31 @@ async function submit(e, survey) {
   // 조건부 후속 문항: 노출된 것만 수집. O/X 후속은 필수, 주관식 후속은 선택.
   const fuTexts = [];
   for (let fi = 0; fi < (survey.followUps || []).length; fi++) {
-    const f = survey.followUps[fi];
+    const f = withRequired(survey.followUps[fi]);
     const div = document.getElementById(`fu-${fi}`);
     if (!div || div.hidden) continue;
     if (f.type === "ox") {
       const v = form[`fu_${fi}`]?.value;
-      if (v !== "0" && v !== "1") { err.textContent = `'${f.label}' 문항에 응답해 주세요.`; return; }
-      oxAnswers.push({ label: f.label, yes: v === "1" });
-    } else if (f.type === "photo") { // 조건부 사진(선택) — 첨부한 경우에만 메일로 전달.
+      if (v !== "0" && v !== "1") { if (f.required) { err.textContent = `'${f.label}' 문항에 응답해 주세요.`; return; } }
+      else oxAnswers.push({ label: f.label, yes: v === "1" });
+    } else if (f.type === "photo") { // 조건부 사진 — 첨부한 경우에만 메일로 전달.
       mailDefined.photo++;
       const file = form[`fu_${fi}`]?.files?.[0];
-      if (file) {
-        if (!/^image\//.test(file.type)) { err.textContent = "이미지 파일만 첨부할 수 있습니다."; return; }
+      if (!file) {
+        if (f.required) { err.textContent = `'${f.label}' 사진을 첨부해 주세요.`; return; }
+      } else if (!/^image\//.test(file.type)) {
+        err.textContent = "이미지 파일만 첨부할 수 있습니다."; return;
+      } else {
         photoFiles.push({ label: f.label, file });
       }
-    } else if (f.type === "mailtext") { // 조건부 메일 전용 입력(선택).
+    } else if (f.type === "mailtext") { // 조건부 메일 전용 입력.
       mailDefined.text++;
       const t = (form[`fu_${fi}`]?.value || "").trim();
-      if (t) mailTexts.push({ label: f.label, text: t.slice(0, 100) });
+      if (!t) { if (f.required) { err.textContent = `'${f.label}'을(를) 입력해 주세요.`; return; } }
+      else mailTexts.push({ label: f.label, text: t.slice(0, 100) });
     } else {
       const t = (form[`fu_${fi}`]?.value || "").trim();
+      if (!t && f.required) { err.textContent = `'${f.label}'을(를) 입력해 주세요.`; return; }
       if (t) fuTexts.push({ q: f.q, label: f.label, text: t });
     }
   }

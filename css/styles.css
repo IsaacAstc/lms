@@ -217,6 +217,8 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 .photo-preview { margin-top: 0.5rem; }
 .photo-preview img { max-width: 100%; max-height: 40vh; border-radius: 8px; border: 1px solid var(--border); }
 .q-label { font-size: 0.95rem; margin-bottom: 0.4rem; font-weight: 500; }
+/* 선택 문항 표식(필수 문항에는 표시하지 않음) */
+.q-opt { font-weight: 400; color: var(--muted, #667); font-size: 0.85em; }
 .scale-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .scale { display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.55rem; cursor: pointer; }
 .scale input { width: auto; }

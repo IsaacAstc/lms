@@ -76,26 +76,39 @@ export const Q_TYPES = [
   ["mailtext", "메일 전용 입력"], ["note", "안내 문구"], ["fu", "조건부 후속"],
 ];
 const Q_TYPE_IDS = Q_TYPES.map(([t]) => t);
+export const FU_TYPES = [
+  ["text", "후속: 주관식"], ["ox", "후속: 예/아니오"],
+  ["photo", "후속: 사진 첨부"], ["mailtext", "후속: 메일 전용 입력"],
+];
+const FU_TYPE_IDS = FU_TYPES.map(([t]) => t);
+// 필수 여부를 저장하지 않던 구버전 문서의 기본값 — 당시 동작(객관식은 필수, 주관식·첨부는 선택)을 유지한다.
+const REQUIRED_LEGACY = { scale: true, ox: true, choice: true, multi: true, text: false, photo: false, mailtext: false, note: false };
+function requiredOf(q, fallback) {
+  return q.required === undefined || q.required === null ? !!fallback : !!q.required;
+}
 
 function normQuestion(q) {
   if (!q || typeof q.label !== "string" || !q.label || !Q_TYPE_IDS.includes(q.type)) return null;
   if (q.type === "fu") {
     // 조건부 후속: 대상 문항(q)·조건·후속 유형을 함께 보관. 설문에서는 대상 문항 아래에 렌더.
-    if (!q.q || !["yes", "no", "score"].includes(q.cond) || !["text", "ox", "photo"].includes(q.futype)) return null;
-    return { type: "fu", label: q.label, q: q.q, cond: q.cond, maxScore: q.maxScore || 2, futype: q.futype, options: [], slot: null };
+    if (!q.q || !["yes", "no", "score"].includes(q.cond) || !FU_TYPE_IDS.includes(q.futype)) return null;
+    return {
+      type: "fu", label: q.label, q: q.q, cond: q.cond, maxScore: q.maxScore || 2, futype: q.futype,
+      required: requiredOf(q, REQUIRED_LEGACY[q.futype]), options: [], slot: null,
+    };
   }
   return {
     type: q.type, label: q.label,
     options: Array.isArray(q.options) ? q.options.filter(Boolean) : [],
     slot: q.slot === "dis" || q.slot === "sug" ? q.slot : null,
-    // 사진 첨부·메일 전용 입력의 필수 여부(다른 유형에서는 의미 없음).
-    required: (q.type === "photo" || q.type === "mailtext") ? !!q.required : false,
+    // 문항별 필수 여부(안내 문구는 응답이 없으므로 항상 false).
+    required: q.type === "note" ? false : requiredOf(q, REQUIRED_LEGACY[q.type]),
   };
 }
 // 섹션 내 fu 항목들 → buildSurvey용 followUps 형식으로 변환.
 function followUpsFromSections(sections) {
   return (sections || []).flatMap((s) => s.items.filter((q) => q.type === "fu")
-    .map((q) => ({ q: q.q, cond: q.cond, maxScore: q.cond === "score" ? (q.maxScore || 2) : null, type: q.futype, label: q.label })));
+    .map((q) => ({ q: q.q, cond: q.cond, maxScore: q.cond === "score" ? (q.maxScore || 2) : null, type: q.futype, label: q.label, required: !!q.required })));
 }
 // sections 정규화: 신형 필드가 있으면 그대로, 없으면 구버전 필드(주관식·O/X·추가 카테고리)를 변환.
 function sectionsOf(src) {
@@ -378,6 +391,9 @@ function renderSectionsBuilder() {
     `<option value="">대상 문항 선택</option>`
     + (scaleTargets.length ? `<optgroup label="5점 문항">${scaleTargets.map((t) => `<option${t === sel ? " selected" : ""}>${escapeHtml(t)}</option>`).join("")}</optgroup>` : "")
     + (oxTargets.length ? `<optgroup label="O/X 문항">${oxTargets.map((t) => `<option${t === sel ? " selected" : ""}>${escapeHtml(t)}</option>`).join("")}</optgroup>` : "");
+  // 문항별 필수 체크박스(안내 문구 제외 — 응답 입력이 없음).
+  const reqBox = (q, si, i, note) =>
+    `<label class="chk" title="체크하면 응답해야 제출할 수 있습니다${note ? ` — ${note}` : ""}"><input type="checkbox" class="sec-q-req" data-s="${si}" data-i="${i}"${q.required ? " checked" : ""}> 필수</label>`;
   const fuRow = (q, si, i) => `
     <select class="fu-q" data-s="${si}" data-i="${i}">${fuTargetOptions(q.q)}</select>
     <select class="fu-cond" data-s="${si}" data-i="${i}">
@@ -388,11 +404,10 @@ function renderSectionsBuilder() {
     </select>
     ${q.cond === "score" ? `<label>N= <input type="number" class="fu-score" data-s="${si}" data-i="${i}" min="1" max="4" value="${q.maxScore || 2}" style="width:3.5rem"></label>` : ""}
     <select class="fu-futype" data-s="${si}" data-i="${i}">
-      <option value="text"${q.futype === "text" ? " selected" : ""}>후속: 주관식</option>
-      <option value="ox"${q.futype === "ox" ? " selected" : ""}>후속: 예/아니오</option>
-      <option value="photo"${q.futype === "photo" ? " selected" : ""}>후속: 사진 첨부</option>
+      ${FU_TYPES.map(([t, lb]) => `<option value="${t}"${q.futype === t ? " selected" : ""}>${lb}</option>`).join("")}
     </select>
-    <input class="sec-q-label" data-s="${si}" data-i="${i}" value="${escapeHtml(q.label)}" placeholder="후속 문항 문구" style="min-width:200px">`;
+    <input class="sec-q-label" data-s="${si}" data-i="${i}" value="${escapeHtml(q.label)}" placeholder="후속 문항 문구" style="min-width:200px">
+    ${reqBox(q, si, i, "노출됐을 때만 적용됩니다")}`;
   sectionsDraft.forEach((sec, si) => {
     const div = document.createElement("div");
     div.className = "load-box";
@@ -415,9 +430,7 @@ function renderSectionsBuilder() {
         ${(q.type === "choice" || q.type === "multi")
           ? `<input class="sec-q-opts" data-s="${si}" data-i="${i}" value="${escapeHtml(q.options.join(" / "))}" placeholder="보기 — ' / '로 구분 (예: A / B / C)" style="min-width:220px">`
           : ""}
-        ${(q.type === "photo" || q.type === "mailtext")
-          ? `<label class="chk" title="체크하면 입력해야 제출할 수 있습니다"><input type="checkbox" class="sec-q-req" data-s="${si}" data-i="${i}"${q.required ? " checked" : ""}> 필수</label>`
-          : ""}
+        ${q.type === "note" ? "" : reqBox(q, si, i)}
         ${q.type === "mailtext" ? `<span class="hint">시스템에 저장하지 않고 사진과 함께 담당자 메일로만 전달(예: 연락처)</span>` : ""}
         ${q.type === "note" ? `<span class="hint">응답 입력 없이 안내만 표시(줄바꿈 가능)</span>` : ""}`}
         <button type="button" class="chip-move sec-q-move" data-s="${si}" data-i="${i}" data-d="-1" title="위로">◀</button>
@@ -432,9 +445,10 @@ function renderSectionsBuilder() {
     b.addEventListener("click", () => {
       const si = +b.dataset.s;
       const type = b.parentElement.querySelector(".sec-add-type").value;
+      // 새 문항은 '필수' 체크 상태로 시작(안내 문구는 응답이 없으므로 제외).
       sectionsDraft[si].items.push(type === "fu"
-        ? { type: "fu", label: "", q: "", cond: "score", maxScore: 2, futype: "text", options: [], slot: null }
-        : { type, label: "", options: [], slot: null });
+        ? { type: "fu", label: "", q: "", cond: "score", maxScore: 2, futype: "text", required: true, options: [], slot: null }
+        : { type, label: "", options: [], slot: null, required: type !== "note" });
       paintSurveyItems();
     }));
   // 조건부 후속 항목 컨트롤.
@@ -565,9 +579,9 @@ function collectItems() {
       title: (s.title || "").trim(),
       items: s.items
         .map((q) => (q.type === "fu"
-          ? { type: "fu", label: (q.label || "").trim(), q: (q.q || "").trim(), cond: q.cond, maxScore: q.maxScore || 2, futype: q.futype, options: [], slot: null }
-          : { type: q.type, label: (q.label || "").trim(), options: q.options.map((o) => o.trim()).filter(Boolean), slot: q.slot || null, required: q.type === "photo" ? !!q.required : false }))
-        .filter((q) => q.label && (q.type !== "fu" || (q.q && ["yes", "no", "score"].includes(q.cond) && ["text", "ox", "photo"].includes(q.futype)))),
+          ? { type: "fu", label: (q.label || "").trim(), q: (q.q || "").trim(), cond: q.cond, maxScore: q.maxScore || 2, futype: q.futype, required: !!q.required, options: [], slot: null }
+          : { type: q.type, label: (q.label || "").trim(), options: q.options.map((o) => o.trim()).filter(Boolean), slot: q.slot || null, required: q.type === "note" ? false : !!q.required }))
+        .filter((q) => q.label && (q.type !== "fu" || (q.q && ["yes", "no", "score"].includes(q.cond) && FU_TYPE_IDS.includes(q.futype)))),
     }))
     .filter((s) => s.title && s.items.length);
   return {
