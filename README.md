@@ -159,8 +159,9 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
    firebase use <프로젝트ID>
    firebase functions:secrets:set MAIL_USER   # 발신 Gmail 주소 입력
    firebase functions:secrets:set MAIL_PASS   # 앱 비밀번호 입력
-   # 기명 조사를 쓸 때만 — 응답자 식별자 해시 키(무작위 32자 이상, 한 번 정하면 바꾸지 말 것.
-   # 바꾸면 기존 응답과 해시가 달라져 중복 판정이 어긋난다)
+   # 응답자 식별자 해시 키(기명 조사용). 무작위 32자 이상, 한 번 정하면 바꾸지 말 것 —
+   # 바꾸면 기존 응답과 해시가 달라져 중복 판정이 어긋난다.
+   # 기명 조사를 쓰지 않더라도 함수 배포에는 이 시크릿이 존재해야 하므로 반드시 등록한다.
    firebase functions:secrets:set SURVEY_ID_SALT
    cd functions && npm install && cd ..
    firebase deploy --only functions

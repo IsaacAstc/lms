@@ -62,6 +62,12 @@ service cloud.firestore {
     function canTab(t) {
       return canWrite() && (isMaster() || myTabs() == null || t in myTabs());
     }
+    // 개인정보를 처리하는 탭(기명 조사)은 '전체 허용'(tabs 미지정)으로는 열리지 않고,
+    // 계정별 사용 가능 탭에 명시적으로 지정된 경우에만 허용한다.
+    // 화면(app.js RESTRICTED_TABS)·함수(requireNamedTab)와 동일 기준.
+    function canNamedTab() {
+      return canWrite() && (isMaster() || (myTabs() != null && 'named' in myTabs()));
+    }
 
     // 관리자 계정 목록(문서ID=이메일).
     //  - 읽기: 관리자 공통
@@ -122,7 +128,7 @@ service cloud.firestore {
         : docId == 'surveyCategories' ? canTab('freetext')
         : docId == 'logiPush' ? canTab('logi')
         : docId == 'surveyPhotoMail' ? (canTab('surveys') || canTab('surveyitems'))
-        : docId == 'namedSurveyMail' ? canTab('named')
+        : docId == 'namedSurveyMail' ? canNamedTab()
         : docId == 'surveyItems' ? (canTab('surveyitems') || canTab('settings'))
         : canTab('settings');
       // 로지보드 푸시 공개키(VAPID public key — 원래 공개값): 참가자 페이지가 읽는다.
@@ -172,14 +178,22 @@ service cloud.firestore {
     // 쓰기는 '기명 조사' 탭 권한을 명시적으로 받은 계정만.
     match /namedSurveys/{surveyId} {
       allow read: if true;
-      allow write: if canTab('named');
+      allow write: if canNamedTab();
     }
-    // 기명 응답: 개인정보파일. 접수(생성)는 submitNamedSurvey 함수만 —
-    // 클라이언트 생성·수정을 막아 동의 확인·식별자 해시를 우회할 수 없게 한다.
-    // 조회·수동 파기는 '기명 조사' 탭 권한을 받은 계정만(보유기간 자동 파기는 배치).
+    // 기명 응답: 개인정보파일. 클라이언트 접근을 전면 차단하고 모든 취급을 함수로만 한다.
+    //  · 접수 = submitNamedSurvey (동의 확인·식별자 해시를 우회할 수 없게)
+    //  · 조회·내보내기·수동 파기 = namedResponses* 함수 (접속기록이 남는 경로)
+    //  · 보유기간 만료 파기 = purgeNamedResponses 배치
+    // 여기를 열어 두면 기록되지 않는 열람 경로가 생기므로 열지 말 것.
     match /namedResponses/{responseId} {
-      allow read, delete: if canTab('named');
-      allow create, update: if false;
+      allow read, write: if false;
+    }
+
+    // 취급자 접속기록(법 제29조): 기록은 함수만, 화면에서는 읽기만 —
+    // 수정·삭제 경로를 두지 않아 위·변조를 막는다(보관기간 만료 파기는 배치).
+    match /accessLogs/{logId} {
+      allow read: if canNamedTab();
+      allow write: if false;
     }
 
     // 집계 데이터(영구 보관): 읽기는 관리자 공통(집계·통계·보고서 탭에서 조회),

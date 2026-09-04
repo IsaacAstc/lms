@@ -35,3 +35,13 @@
 읽기 한도(50k/일) 보호를 위해 집계 화면은 전체 구독 대신 **선택 기간만 조회**한다. 모두 단일 필드 범위 쿼리라 **복합 인덱스 불필요**(자동 단일 인덱스로 충분):
 - 강사료·집계: `sessions` `where("date", ">=", …) & where("date","<=", …)`
 - 설문 집계: `surveyResponses` `where("collectedDate", ">=", …) & where("collectedDate","<=", …)`
+
+## 기명 조사 (개인정보 처리 경로)
+
+- `namedSurveys`: 목록 전체 구독(필터 없음) → **추가 인덱스 불필요.**
+- `namedResponses`: 모든 접근이 서버 함수 경유. 쿼리는 `where("surveyId","==",…)` 단일 필드와
+  `where("purgeAt","<=",…)`(보유기간 만료 파기 배치) → 각각 단일 필드라 **추가 인덱스 불필요.**
+  중복 응답 차단은 쿼리가 아니라 문서 ID(`{조사ID}__{식별자해시}`) 선점으로 처리하므로
+  `surveyId` + `idHash` 복합 인덱스가 필요 없다.
+- `accessLogs`: 화면 조회는 `orderBy("atMs","desc") + limit(300)` 단일 필드 정렬,
+  파기 배치는 `where("expireAt","<=",…)` → **추가 인덱스 불필요.**

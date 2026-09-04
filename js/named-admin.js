@@ -4,17 +4,23 @@
 //  · 조사 정의: namedSurveys — 문항·동의 문안·목적별 보유기간을 관리자가 직접 편집한다.
 //    (동의 문안과 보유기간을 코드에 박아두지 않는 이유: 개인정보 보호 담당부서 검토 결과가
 //     바뀌어도 화면에서 고치면 되도록 하기 위함)
-//  · 응답: namedResponses — 접수는 서버 함수만, 화면에서는 조회와 수동 파기만 한다.
+//  · 응답: namedResponses — 브라우저에서 직접 읽지 못한다. 조회·내보내기·파기를 모두
+//    서버 함수로만 수행하고, 그 호출이 취급자 접속기록(accessLogs)으로 남는다.
 //  · 응답자 식별자는 서버에서 해시로 변환돼 저장되므로 이 화면에서도 원문은 볼 수 없다.
 import { escapeHtml } from "./app.js";
+import { orgQuery } from "./orgs.js";
 import { watchCollection, onCollection, addItem, updateItem, removeItem, setDocById, getDocById } from "./store.js";
 import {
-  collection, query, where, getDocs, deleteDoc, doc,
+  collection, query, orderBy, limit as qLimit, getDocs,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { db } from "./firebase.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+import { db, app } from "./firebase.js";
+
+// 응답(namedResponses)은 보안규칙에서 클라이언트 접근을 전면 차단했다.
+// 조회·내보내기·파기는 모두 함수를 거치며, 그 호출이 곧 접속기록으로 남는다.
+const callFn = (name) => httpsCallable(getFunctions(app, "asia-northeast3"), name);
 
 const COLL = "namedSurveys";
-const RESP = "namedResponses";
 
 // 문항 유형 — 익명 설문과 달리 5점 척도·집계 기능은 두지 않는다(통계 목적 조사가 아님).
 const Q_TYPES = [
@@ -209,38 +215,41 @@ function paintQuestions() {
   }));
 }
 
+// 화면 값을 읽어 저장용 정의를 만든다.
+// draft를 직접 고치지 않는다 — 검증에 걸려 저장이 중단되면 화면과 draft가 어긋나
+// 문항 편집이 엉뚱한 행에 적용되기 때문이다(빈 라벨 문항이 조용히 사라지는 문제 포함).
 function readEditor() {
   const d = draft;
-  d.title = $("nm-title").value.trim();
-  d.intro = $("nm-intro").value.trim();
-  d.idLabel = $("nm-idlabel").value.trim() || "식별자";
-  d.idHint = $("nm-idhint").value.trim();
-  d.status = $("nm-status").value;
-  d.openMs = localToMs($("nm-open").value);
-  d.closeMs = localToMs($("nm-close").value);
-  d.purposeMain = {
-    label: $("nm-main-label").value.trim(),
-    items: $("nm-main-items").value.trim(),
-    retainDays: Math.max(1, Number($("nm-main-days").value) || 365),
-    notice: $("nm-main-notice").value.trim(),
-  };
-  d.purposeOpt = {
-    enabled: $("nm-opt-on").checked,
-    label: $("nm-opt-label").value.trim(),
-    items: $("nm-opt-items").value.trim(),
-    retainDays: Math.max(1, Number($("nm-opt-days").value) || 90),
-    notice: $("nm-opt-notice").value.trim(),
-    declineNote: $("nm-opt-decline").value.trim(),
-  };
-  d.questions = d.questions
-    .map((q) => ({
-      type: q.type, label: (q.label || "").trim(),
+  return {
+    title: $("nm-title").value.trim(),
+    intro: $("nm-intro").value.trim(),
+    idLabel: $("nm-idlabel").value.trim() || "식별자",
+    idHint: $("nm-idhint").value.trim(),
+    status: $("nm-status").value,
+    openMs: localToMs($("nm-open").value),
+    closeMs: localToMs($("nm-close").value),
+    purposeMain: {
+      label: $("nm-main-label").value.trim(),
+      items: $("nm-main-items").value.trim(),
+      retainDays: Math.max(1, Number($("nm-main-days").value) || 365),
+      notice: $("nm-main-notice").value.trim(),
+    },
+    purposeOpt: {
+      enabled: $("nm-opt-on").checked,
+      label: $("nm-opt-label").value.trim(),
+      items: $("nm-opt-items").value.trim(),
+      retainDays: Math.max(1, Number($("nm-opt-days").value) || 90),
+      notice: $("nm-opt-notice").value.trim(),
+      declineNote: $("nm-opt-decline").value.trim(),
+    },
+    questions: d.questions.map((q) => ({
+      type: q.type,
+      label: (q.label || "").trim(),
       options: Array.isArray(q.options) ? q.options : [],
       required: q.type === "note" ? false : !!q.required,
-    }))
-    .filter((q) => q.label);
-  d.optItems = d.optItems.map((q) => ({ type: q.type, label: (q.label || "").trim() })).filter((q) => q.label);
-  return d;
+    })),
+    optItems: d.optItems.map((q) => ({ type: q.type, label: (q.label || "").trim() })),
+  };
 }
 
 async function saveSurvey() {
@@ -250,9 +259,20 @@ async function saveSurvey() {
   if (d.purposeOpt.enabled && (!d.purposeOpt.label || !d.purposeOpt.items)) {
     return alert("선택 목적을 사용하려면 목적과 수집 항목을 입력하세요.");
   }
+  const blank = d.questions.findIndex((q) => !q.label);
+  if (blank >= 0) return alert(`${blank + 1}번 문항의 문구가 비어 있습니다. 입력하거나 삭제하세요.`);
+  const blankOpt = d.optItems.findIndex((q) => !q.label);
+  if (blankOpt >= 0) return alert(`선택 목적 항목 ${blankOpt + 1}번의 문구가 비어 있습니다.`);
   if (d.status === "open" && !d.questions.length) return alert("문항이 없는 조사는 접수를 시작할 수 없습니다.");
   if (d.purposeOpt.enabled && !d.optItems.length) {
     return alert("선택 목적을 사용하려면 선택 목적 항목(사진·입력)을 1개 이상 등록하세요.");
+  }
+  // 접수 중인 조사의 문항을 바꾸면, 그 사이 페이지를 열어 둔 응답자의 제출이
+  // 서버에서 거부된다(엉뚱한 문항에 답이 붙는 것을 막기 위한 동작).
+  const src = editingId ? list.find((x) => x.id === editingId) : null;
+  const changed = src && JSON.stringify(src.questions || []) !== JSON.stringify(d.questions);
+  if (changed && (src.status === "open" || d.status === "open")) {
+    if (!confirm("접수 중인 조사의 문항을 변경합니다.\n지금 응답 화면을 열어 둔 사람은 새로고침 후 다시 제출해야 합니다.\n계속할까요?")) return;
   }
   d.updatedAtMs = Date.now();
   try {
@@ -265,19 +285,25 @@ async function saveSurvey() {
 
 async function delSurvey(id) {
   const s = list.find((x) => x.id === id);
-  const cnt = await countResponses(id);
+  let cnt = 0;
+  try { cnt = await countResponses(id); }
+  catch (e) { return alert("응답 건수를 확인하지 못해 삭제를 중단합니다: " + (e.message || e)); }
   if (cnt > 0) return alert(`응답 ${cnt}건이 남아 있어 삭제할 수 없습니다. 응답 화면에서 먼저 파기하세요.`);
   if (!confirm(`'${s?.title || id}' 조사를 삭제할까요?`)) return;
   try { await removeItem(COLL, id); } catch (e) { alert("삭제 실패: " + e.message); }
 }
 
+// 건수만 확인하는 전용 함수를 쓴다. 목록 조회 함수를 부르면
+// 열람하지 않았는데도 접속기록에 '조회'가 남아 기록이 사실과 달라진다.
 async function countResponses(surveyId) {
-  const snap = await getDocs(query(collection(db, RESP), where("surveyId", "==", surveyId)));
-  return snap.size;
+  const res = await callFn("namedResponsesCount")({ surveyId });
+  return res?.data?.count ?? 0;
 }
 
 function showLink(id) {
-  const url = `${location.origin}${location.pathname.replace(/index\.html$/, "")}named.html?s=${id}`;
+  // 기관 파라미터(orgQuery)를 붙여야 추가 기관에서도 해당 기관 백엔드로 연결된다.
+  const org = orgQuery(false);
+  const url = `${location.origin}${location.pathname.replace(/index\.html$/, "")}named.html?s=${id}${org}`;
   const box = $("named-link-box");
   box.hidden = false;
   box.innerHTML = `<label>응답 페이지 주소 <input id="nm-url" readonly value="${esc(url)}" style="min-width:340px"></label>
@@ -289,7 +315,9 @@ function showLink(id) {
   });
 }
 
-/* ── 응답 조회·파기 ── */
+/* ── 응답 조회·내보내기·파기 (모두 함수 경유 — 호출이 접속기록으로 남는다) ── */
+let respCache = { surveyId: "", rows: [], labels: [] };
+
 async function showResponses(surveyId) {
   const s = list.find((x) => x.id === surveyId);
   const box = $("named-resp");
@@ -297,20 +325,24 @@ async function showResponses(surveyId) {
   box.innerHTML = `<p class="empty">불러오는 중…</p>`;
   let rows = [];
   try {
-    const snap = await getDocs(query(collection(db, RESP), where("surveyId", "==", surveyId)));
-    rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const res = await callFn("namedResponsesList")({ surveyId });
+    rows = res?.data?.rows || [];
   } catch (e) {
-    box.innerHTML = `<p class="empty">응답을 불러오지 못했습니다: ${esc(e.message)}</p>`;
+    box.innerHTML = `<p class="empty">응답을 불러오지 못했습니다: ${esc(e.message || e)}</p>`;
     return;
   }
   rows.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
   const labels = [...new Set(rows.flatMap((r) => (r.answers || []).map((a) => a.label)))];
+  respCache = { surveyId, rows, labels };
+
   box.innerHTML = `
     <h3>${esc(s?.title || surveyId)} — 응답 ${rows.length}건</h3>
     <p class="hint">응답자 식별자는 되돌릴 수 없는 형태로 저장되어 있어 원문을 볼 수 없습니다. 사진·연락처 등 선택 목적 항목은 시스템에 저장되지 않으며, 제출코드로 담당자 메일과 대조합니다.</p>
+    <p class="hint">이 화면의 <b>조회·내보내기·파기는 모두 접속기록으로 남습니다</b>(계정·일시·접속지·건수). 내보내기는 사유 입력이 필요합니다.</p>
     <div class="form-actions">
       <button type="button" id="nm-resp-csv">CSV 내보내기</button>
       <button type="button" class="del" id="nm-resp-purge">기간 지정 파기</button>
+      <button type="button" id="nm-resp-close">닫기</button>
     </div>
     ${rows.length ? `<div class="table-wrap"><table>
       <thead><tr><th>수집 일시</th><th>선택 동의</th><th>제출코드</th>${labels.map((l) => `<th>${esc(l)}</th>`).join("")}<th>파기 예정</th><th></th></tr></thead>
@@ -323,25 +355,36 @@ async function showResponses(surveyId) {
           const v = a ? (Array.isArray(a.value) ? a.value.join(", ") : a.value) : "";
           return `<td>${esc(v)}</td>`;
         }).join("")}
-        <td>${esc(fmtDate(r.purgeAt))}</td>
-        <td><button type="button" class="chip-del" data-rdel="${r.id}" title="이 응답 파기">×</button></td>
+        <td>${esc(fmtMs(r.purgeAtMs))}</td>
+        <td><button type="button" class="chip-del" data-rdel="${esc(r.id)}" title="이 응답 파기">×</button></td>
       </tr>`).join("")}</tbody></table></div>` : `<p class="empty">아직 응답이 없습니다.</p>`}`;
 
-  box.querySelectorAll("[data-rdel]").forEach((b) => b.addEventListener("click", async () => {
-    if (!confirm("이 응답을 파기할까요? 되돌릴 수 없습니다.")) return;
-    try { await deleteDoc(doc(db, RESP, b.dataset.rdel)); showResponses(surveyId); }
-    catch (e) { alert("파기 실패: " + e.message); }
-  }));
-  $("nm-resp-csv").addEventListener("click", () => exportCsv(s?.title || surveyId, labels, rows));
-  $("nm-resp-purge").addEventListener("click", () => purgeRange(surveyId, rows));
+  box.querySelectorAll("[data-rdel]").forEach((b) => b.addEventListener("click", () => purgeIds(surveyId, [b.dataset.rdel], "건별 파기")));
+  $("nm-resp-csv").addEventListener("click", exportCsv);
+  $("nm-resp-purge").addEventListener("click", () => purgeRange(surveyId));
+  $("nm-resp-close").addEventListener("click", () => {
+    box.hidden = true;
+    respCache = { surveyId: "", rows: [], labels: [] }; // 화면을 닫으면 개인정보를 메모리에 남기지 않는다
+  });
 }
 
-function fmtDate(ts) {
-  const ms = ts?.seconds ? ts.seconds * 1000 : ts?.toMillis?.() ?? 0;
-  return ms ? new Date(ms).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" }) : "";
-}
+const fmtMs = (ms) => (ms ? new Date(ms).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" }) : "");
 
-function exportCsv(title, labels, rows) {
+// 내보내기: 사유를 받아 함수로 다시 조회한다(내려받은 내용과 기록이 일치하도록).
+async function exportCsv() {
+  const { surveyId } = respCache;
+  if (!surveyId) return;
+  const reason = prompt("내보내기 사유를 입력하세요. 접속기록에 함께 남습니다.\n(예: 2026년 취업 실태 통계 작성)");
+  if (reason == null) return;
+  if (reason.trim().length < 5) return alert("사유를 5자 이상 입력하세요.");
+  let rows = [];
+  try {
+    const res = await callFn("namedResponsesExport")({ surveyId, reason: reason.trim() });
+    rows = res?.data?.rows || [];
+  } catch (e) { return alert("내보내기 실패: " + (e.message || e)); }
+
+  const labels = [...new Set(rows.flatMap((r) => (r.answers || []).map((a) => a.label)))];
+  const title = list.find((x) => x.id === surveyId)?.title || surveyId;
   const head = ["수집일시", "선택동의", "제출코드", ...labels];
   const body = rows.map((r) => [
     r.collectedAt || r.collectedDate || "",
@@ -353,7 +396,7 @@ function exportCsv(title, labels, rows) {
     }),
   ]);
   const csv = [head, ...body].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `${title}_응답.csv`;
@@ -361,19 +404,71 @@ function exportCsv(title, labels, rows) {
   URL.revokeObjectURL(a.href);
 }
 
-async function purgeRange(surveyId, rows) {
+async function purgeIds(surveyId, ids, reason) {
+  if (!confirm(`응답 ${ids.length}건을 파기합니다. 되돌릴 수 없습니다.`)) return;
+  const why = prompt("파기 사유를 입력하세요. 접속기록에 함께 남습니다.", reason || "");
+  if (why == null) return;
+  if (!why.trim()) return alert("파기 사유를 입력하세요.");
+  try {
+    const res = await callFn("namedResponsesDelete")({ surveyId, ids, reason: why.trim() });
+    alert(`${res?.data?.deleted ?? 0}건을 파기했습니다.`);
+    showResponses(surveyId);
+  } catch (e) { alert("파기 실패: " + (e.message || e)); }
+}
+
+async function purgeRange(surveyId) {
   const from = prompt("파기 시작일(YYYY-MM-DD)");
   if (!from) return;
   const to = prompt("파기 종료일(YYYY-MM-DD)", from);
   if (!to) return;
-  const targets = rows.filter((r) => (r.collectedDate || "") >= from && (r.collectedDate || "") <= to);
+  const targets = respCache.rows.filter((r) => (r.collectedDate || "") >= from && (r.collectedDate || "") <= to);
   if (!targets.length) return alert("해당 기간의 응답이 없습니다.");
-  if (!confirm(`${from} ~ ${to} 수집분 ${targets.length}건을 파기합니다. 되돌릴 수 없습니다.`)) return;
+  await purgeIds(surveyId, targets.map((r) => r.id), `${from} ~ ${to} 수집분 보유기간 경과 파기`);
+}
+
+/* ── 취급자 접속기록(법 제29조) ── */
+async function showAccessLog() {
+  const box = $("named-log");
+  box.hidden = false;
+  box.innerHTML = `<p class="empty">불러오는 중…</p>`;
+  let rows = [];
   try {
-    for (const r of targets) await deleteDoc(doc(db, RESP, r.id));
-    alert(`${targets.length}건을 파기했습니다.`);
-    showResponses(surveyId);
-  } catch (e) { alert("파기 실패: " + e.message); }
+    const snap = await getDocs(query(collection(db, "accessLogs"), orderBy("atMs", "desc"), qLimit(300)));
+    rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    box.innerHTML = `<p class="empty">접속기록을 불러오지 못했습니다: ${esc(e.message || e)}</p>`;
+    return;
+  }
+  const titleOf = (id) => list.find((x) => x.id === id)?.title || id || "";
+  box.innerHTML = `
+    <h3>취급자 접속기록 <span class="hint" style="font-weight:400">최근 300건 · 1년 보관 · 기록은 수정·삭제 불가</span></h3>
+    <div class="form-actions">
+      <button type="button" id="nm-log-review">이번 달 점검 완료 기록</button>
+      <button type="button" id="nm-log-close">닫기</button>
+    </div>
+    ${rows.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>일시(KST)</th><th>계정</th><th>접속지</th><th>수행업무</th><th>대상 조사</th><th>건수</th><th>사유</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr>
+        <td>${esc(r.atKst || "")}</td>
+        <td>${esc(r.account || "")}</td>
+        <td>${esc(r.ip || "")}</td>
+        <td>${esc(r.op || "")}</td>
+        <td>${esc(titleOf(r.surveyId))}</td>
+        <td>${r.count ?? ""}</td>
+        <td>${esc(r.reason || "")}</td>
+      </tr>`).join("")}</tbody></table></div>` : `<p class="empty">기록이 없습니다.</p>`}`;
+
+  $("nm-log-close").addEventListener("click", () => { box.hidden = true; });
+  $("nm-log-review").addEventListener("click", async () => {
+    const month = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }).slice(0, 7);
+    const note = prompt(`${month} 접속기록 점검 결과를 기록합니다. 특이사항이 있으면 입력하세요.`, "특이사항 없음");
+    if (note == null) return;
+    try {
+      await callFn("namedAccessReview")({ month, note: note.trim() });
+      alert("점검 기록을 남겼습니다.");
+      showAccessLog();
+    } catch (e) { alert("기록 실패: " + (e.message || e)); }
+  });
 }
 
 /* ── 제출물 수신 메일 ── */
@@ -399,6 +494,7 @@ export function initNamedAdmin() {
   });
   $("named-new").addEventListener("click", () => openEditor(null));
   $("named-mail").addEventListener("click", openMailDialog);
+  $("named-logbtn").addEventListener("click", showAccessLog);
   $("nm-save").addEventListener("click", saveSurvey);
   $("nm-cancel").addEventListener("click", () => { $("named-editor").hidden = true; draft = null; editingId = null; });
   $("nm-opt-on").addEventListener("change", (e) => {

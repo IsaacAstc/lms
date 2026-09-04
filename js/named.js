@@ -196,6 +196,7 @@ async function submit(consentOpt, optItems) {
   // 문항 응답 수집(검증은 서버에서도 다시 수행한다).
   const qs = Array.isArray(survey.questions) ? survey.questions : [];
   const answers = [];
+  const labels = qs.map((q) => String(q.label || "")); // 서버가 현재 정의와 대조한다
   for (let i = 0; i < qs.length; i++) {
     const q = qs[i];
     if (q.type === "note") { answers.push(""); continue; }
@@ -246,6 +247,7 @@ async function submit(consentOpt, optItems) {
       consentMain: true,
       consentOpt: !!consentOpt,
       answers,
+      labels,
       photos: payloadPhotos,
       mailTexts,
     });
