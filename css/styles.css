@@ -503,3 +503,32 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
   display: inline-block; min-width: 1.2em; padding: 0 0.3em; margin-left: 0.15em;
   background: var(--danger); color: #fff; border-radius: 999px; font-size: 0.72rem; text-align: center;
 }
+
+/* ── 기명 조사(개인정보 처리 경로) ── */
+.wide { display: block; margin-top: 0.6rem; }
+.wide textarea { width: 100%; }
+.muted { color: var(--muted, #6b7788); }
+.row-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.row-actions button { padding: 0.2rem 0.5rem; font-size: 0.8rem; }
+.chip-on { background: #e2f0ea; border-color: #9fcbb8; }
+.load-box .grid label { display: flex; flex-direction: column; font-size: 0.85rem; gap: 0.25rem; }
+.load-box .grid input, .load-box .grid select { width: 100%; }
+/* 주의 안내(개인정보 처리 경로 등) — 기본 .notice는 안내용 초록이라 별도 톤 */
+.notice-warn {
+  font-size: 0.82rem; color: #8a5a00; background: #fdf6e3;
+  border: 1px solid #e8d59b; padding: 0.55rem 0.8rem; border-radius: 6px;
+}
+/* 동의 화면(응답 페이지) — 목적별로 시각적으로 분리해 각각 동의임을 드러낸다. */
+.consent-block {
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 0.9rem 1rem; margin: 0.9rem 0; background: #fbfcfe;
+}
+.consent-block h3 { margin: 0 0 0.6rem; font-size: 1rem; }
+.consent-dl { margin: 0 0 0.7rem; display: grid; gap: 0.35rem; }
+.consent-dl > div { display: grid; grid-template-columns: 8.5rem 1fr; gap: 0.5rem; font-size: 0.9rem; }
+.consent-dl dt { font-weight: 500; color: var(--muted, #6b7788); }
+.consent-dl dd { margin: 0; }
+.consent-chk { display: block; margin-top: 0.5rem; font-weight: 500; }
+@media (max-width: 560px) {
+  .consent-dl > div { grid-template-columns: 1fr; gap: 0.1rem; }
+}
