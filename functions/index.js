@@ -23,6 +23,7 @@ const MAIL_PASS = defineSecret("MAIL_PASS");
 const MAX_ATTACH_BYTES = 5 * 1024 * 1024; // 첨부 5MB 상한
 const MAX_COUNT = 20;                     // 1회 신청 인원 상한
 const RATE_LIMIT_PER_HOUR = 10;           // IP당 시간당 요청 상한(남용 방지)
+const NAMED_RATE_LIMIT_PER_HOUR = 300;    // 기명 조사 접수: 기관망 공유 IP를 고려한 별도 상한
 
 const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
 
@@ -66,14 +67,14 @@ function str(v, max, label, required) {
 }
 
 // IP 기준 시간당 호출 제한(간단한 남용 방지 — 해시로만 기록, 원IP 미저장).
-async function checkRateLimit(rawIp) {
+async function checkRateLimit(rawIp, maxPerHour = RATE_LIMIT_PER_HOUR) {
   const hour = Math.floor(Date.now() / 3600000);
-  const key = sha256(`${rawIp || "unknown"}:${hour}`).slice(0, 32);
+  const key = sha256(`${rawIp || "unknown"}:${hour}:${maxPerHour}`).slice(0, 32);
   const ref = db.collection("rateLimits").doc(key);
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const n = snap.exists ? (snap.data().n || 0) : 0;
-    if (n >= RATE_LIMIT_PER_HOUR) {
+    if (n >= maxPerHour) {
       throw new HttpsError("resource-exhausted", "요청이 너무 잦습니다. 잠시 후 다시 시도하세요.");
     }
     tx.set(ref, { n: n + 1, expireAt: new Date(Date.now() + 2 * 3600000) });
@@ -513,7 +514,9 @@ exports.submitNamedSurvey = onCall(
   async (req) => {
     const d = req.data || {};
     const surveyId = str(d.surveyId, 100, "조사 ID", true);
-    await checkRateLimit(req.rawRequest?.ip || req.rawRequest?.headers?.["x-forwarded-for"] || "");
+    // 대상자가 같은 기관망(하나의 공인 IP) 뒤에 몰릴 수 있어 접수 제한을 별도로 둔다.
+    // 중복 응답은 식별자 해시로 막으므로 IP 제한은 남용 방지 용도에 한한다.
+    await checkRateLimit(req.rawRequest?.ip || req.rawRequest?.headers?.["x-forwarded-for"] || "", NAMED_RATE_LIMIT_PER_HOUR);
 
     const snap = await db.doc(`namedSurveys/${surveyId}`).get();
     if (!snap.exists) bad("조사를 찾을 수 없습니다.");
@@ -535,6 +538,14 @@ exports.submitNamedSurvey = onCall(
     // ── 문항 응답 검증(정의 기준) ──
     const given = Array.isArray(d.answers) ? d.answers : [];
     const defs = Array.isArray(sv.questions) ? sv.questions : [];
+    // 클라이언트가 함께 보낸 문항 라벨이 현재 정의와 어긋나면(응답 중 문항 개정 등)
+    // 위치만 믿고 저장하지 않는다 — 엉뚱한 문항에 답이 붙는 것을 막는다.
+    const seenLabels = Array.isArray(d.labels) ? d.labels : null;
+    if (!seenLabels || seenLabels.length !== defs.length
+        || defs.some((q, i) => String(q?.label || "") !== String(seenLabels[i] || ""))) {
+      throw new HttpsError("failed-precondition",
+        "설문 문항이 변경되었습니다. 페이지를 새로고침한 뒤 다시 제출해 주세요.");
+    }
     const answers = [];
     for (let i = 0; i < defs.length; i++) {
       const q = defs[i] || {};
@@ -559,8 +570,10 @@ exports.submitNamedSurvey = onCall(
       text: str(t && t.text, 200, "입력값", true),
     }));
     let totalBytes = 0;
+    const photoLabels = [];
     const attachments = photos.map((p, i) => {
       const label = str(p && p.label, 200, "문항명", false).replace(/[\r\n"]/g, "_") || `사진${i + 1}`;
+      photoLabels.push(label);
       if (!p || typeof p.dataBase64 !== "string" || !p.dataBase64) bad("사진 데이터가 비었습니다.");
       const bytes = Math.floor(p.dataBase64.length * 3 / 4);
       if (bytes > MAX_ATTACH_BYTES) bad("사진은 장당 5MB 이하만 가능합니다.");
@@ -569,15 +582,43 @@ exports.submitNamedSurvey = onCall(
     });
     if (totalBytes > 8 * 1024 * 1024) bad("사진 전체 합계는 8MB 이하만 가능합니다.");
 
-    // ── 중복 응답 차단(해시 대조) ──
-    const dup = await db.collection(NAMED_RESP)
-      .where("surveyId", "==", surveyId).where("idHash", "==", idHash).limit(1).get();
-    if (!dup.empty) {
-      throw new HttpsError("already-exists", "이미 응답이 접수된 " + (sv.idLabel || "식별자") + "입니다.");
-    }
+    // ── 중복 응답 차단 ──
+    // 문서 ID를 조사ID+해시로 고정하고 트랜잭션으로 선점한다.
+    // 조회 후 쓰기 방식은 동시 제출·재시도에서 두 건이 들어갈 수 있어 쓰지 않는다.
+    const respRef = db.collection(NAMED_RESP).doc(`${surveyId}__${idHash}`);
 
-    // ── 선택 목적 메일 발송(응답 기록보다 먼저 — 실패 시 접수하지 않음) ──
+    // ── 접수 자리 선점(중복 차단) ──
+    // 메일보다 먼저 선점해야 동시 제출에서 메일이 두 번 나가지 않는다.
+    const mainDays = Math.max(1, Number(sv.purposeMain?.retainDays) || 365);
     const submitCode = (attachments.length || mailTexts.length) ? newReceiptCode() : "";
+    const record = {
+      surveyId,
+      idHash,                                  // 아이디 원문은 저장하지 않음
+      answers,
+      consentMain: true,
+      consentOpt,
+      collectedDate: todayKST(),
+      collectedAt: new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "short" }).format(new Date()),
+      purgeAt: addDays(mainDays),              // 필수 목적 보유기간 만료일
+      createdAtMs: Date.now(),
+    };
+    if (submitCode) {
+      record.submitCode = submitCode;          // 메일↔응답 매칭용 임의값
+      record.optNotes = [
+        ...attachments.map((a, i) => photoLabels[i]),
+        ...mailTexts.map((t) => t.label),
+      ].slice(0, 20).map((label) => ({ label, submitted: true }));
+    }
+    await db.runTransaction(async (tx) => {
+      const cur = await tx.get(respRef);
+      if (cur.exists) {
+        throw new HttpsError("already-exists", "이미 응답이 접수된 " + (sv.idLabel || "식별자") + "입니다.");
+      }
+      tx.create(respRef, record);
+    });
+
+    // ── 선택 목적 메일 발송 ──
+    // 발송에 실패하면 선점한 접수를 되돌려, 응답만 남고 사진·연락처가 유실되는 상태를 막는다.
     if (submitCode) {
       let to = "";
       try {
@@ -585,7 +626,10 @@ exports.submitNamedSurvey = onCall(
         const cfg = s.exists ? s.data() : {};
         to = String((cfg.bySurvey || {})[surveyId] || cfg.default || "").trim();
       } catch { /* */ }
-      if (!to) throw new HttpsError("failed-precondition", "제출물 수신 이메일이 설정되지 않았습니다. 관리자에게 문의하세요.");
+      if (!to) {
+        await respRef.delete().catch(() => { /* */ });
+        throw new HttpsError("failed-precondition", "제출물 수신 이메일이 설정되지 않았습니다. 관리자에게 문의하세요.");
+      }
       const when = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" }).format(new Date());
       try {
         await mailer().sendMail({
@@ -606,30 +650,12 @@ exports.submitNamedSurvey = onCall(
           attachments,
         });
       } catch (e) {
+        await respRef.delete().catch(() => { /* 되돌리기 실패는 무시 — 재시도 시 중복으로 걸린다 */ });
         if (e instanceof HttpsError) throw e;
         throw new HttpsError("internal", "제출물 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.");
       }
     }
 
-    // ── 응답 기록(개인정보파일) ──
-    const mainDays = Math.max(1, Number(sv.purposeMain?.retainDays) || 365);
-    const doc = {
-      surveyId,
-      idHash,                                  // 아이디 원문은 저장하지 않음
-      answers,
-      consentMain: true,
-      consentOpt,
-      collectedDate: todayKST(),
-      collectedAt: new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "short" }).format(new Date()),
-      purgeAt: addDays(mainDays),              // 필수 목적 보유기간 만료일
-      createdAtMs: Date.now(),
-    };
-    if (submitCode) {
-      doc.submitCode = submitCode;             // 메일↔응답 매칭용 임의값
-      doc.optNotes = [...photos.map((p) => String(p.label || "사진")), ...mailTexts.map((t) => t.label)]
-        .slice(0, 20).map((label) => ({ label, submitted: true }));
-    }
-    await db.collection(NAMED_RESP).add(doc);
     return { ok: true, submitCode };
   }
 );
@@ -647,3 +673,157 @@ exports.purgeNamedResponses = onSchedule(
     console.log(`기명 응답 파기: ${snap.size}건`);
   }
 );
+
+/* ================================================================
+ *  기명 조사 취급자 접속기록 (안전성 확보조치 — 법 제29조)
+ *
+ *  개인정보처리시스템(= 기명 조사 응답 화면)의 조회·내보내기·파기를 모두
+ *  이 함수들을 거치게 하고, 호출마다 accessLogs에 기록을 남긴다.
+ *  브라우저에서 namedResponses를 직접 읽지 못하게 규칙으로 막아 두었으므로
+ *  기록되지 않는 열람 경로가 존재하지 않는다.
+ *
+ *  기록 항목: 계정 · 접속일시(KST) · 접속지 IP · 수행업무 · 대상 조사 · 처리 건수
+ *  (취급자는 정보주체가 아닌 직원이므로 IP 기록이 익명 설문의 IP 미저장 원칙과 무관)
+ *  보관: 1년 — 고유식별정보·민감정보를 처리하지 않고 규모도 5만 명 미만이라 2년 요건 밖.
+ *  위·변조 방지: accessLogs는 이 함수만 기록하고 수정·삭제 경로를 두지 않는다.
+ * ================================================================ */
+const ACCESS_LOG = "accessLogs";
+const ACCESS_LOG_KEEP_DAYS = 400; // 1년 + 여유
+
+// 기명 조사 취급자 판정. 마스터이거나 'named' 탭을 명시적으로 받은 계정만.
+// (참관자는 조회도 허용하지 않는다 — 보안규칙의 canTab과 동일 기준)
+async function requireNamedTab(req) {
+  const email = String(req.auth?.token?.email || "").toLowerCase();
+  if (!email) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  // 부트스트랩 마스터는 admins 문서 없이도 규칙상 마스터이므로 동일하게 취급한다
+  // (문서가 없다는 이유로 응답 조회·파기가 막히면 잠금 상태가 된다).
+  if (BOOTSTRAP_ADMINS.includes(email)) return email;
+  const snap = await db.doc(`admins/${email}`).get();
+  if (!snap.exists) throw new HttpsError("permission-denied", "관리자만 사용할 수 있습니다.");
+  const a = snap.data() || {};
+  if (a.role === "observer") throw new HttpsError("permission-denied", "참관자 계정은 기명 조사에 접근할 수 없습니다.");
+  if (a.role === "master") return email;
+  const tabs = Array.isArray(a.tabs) ? a.tabs : null;
+  if (!tabs || !tabs.includes("named")) {
+    throw new HttpsError("permission-denied", "기명 조사 권한이 없는 계정입니다.");
+  }
+  return email;
+}
+
+const kstStamp = () => new Intl.DateTimeFormat("sv-SE", {
+  timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "medium",
+}).format(new Date());
+
+// 접속기록 1건. 기록 실패가 본 작업을 되돌리지는 못하므로, 파기·내보내기처럼
+// 기록이 반드시 남아야 하는 작업은 호출부에서 기록을 먼저 남긴 뒤 수행한다.
+async function writeAccessLog(entry) {
+  await db.collection(ACCESS_LOG).add({
+    ...entry,
+    atMs: Date.now(),
+    atKst: kstStamp(),
+    expireAt: addDays(ACCESS_LOG_KEEP_DAYS),
+  });
+}
+const ipOf = (req) => String(req.rawRequest?.ip || req.rawRequest?.headers?.["x-forwarded-for"] || "").split(",")[0].trim();
+
+const NAMED_OPTS = { region: "asia-northeast3", memory: "256MiB", timeoutSeconds: 60, maxInstances: 5 };
+
+// 응답 목록 조회.
+exports.namedResponsesList = onCall(NAMED_OPTS, async (req) => {
+  const account = await requireNamedTab(req);
+  const surveyId = str(req.data?.surveyId, 100, "조사 ID", true);
+  const snap = await db.collection(NAMED_RESP).where("surveyId", "==", surveyId).get();
+  const rows = snap.docs.map((d) => {
+    const v = d.data();
+    return {
+      id: d.id,
+      collectedDate: v.collectedDate || "",
+      collectedAt: v.collectedAt || "",
+      consentOpt: !!v.consentOpt,
+      submitCode: v.submitCode || "",
+      answers: v.answers || [],
+      optNotes: v.optNotes || [],
+      purgeAtMs: v.purgeAt?.toMillis ? v.purgeAt.toMillis() : 0,
+      createdAtMs: v.createdAtMs || 0,
+    };
+  });
+  await writeAccessLog({ account, ip: ipOf(req), op: "조회", surveyId, count: rows.length });
+  return { rows };
+});
+
+// 내보내기(다운로드). 고시가 다운로드 사유 확인을 따로 요구하므로 사유를 필수로 받는다.
+exports.namedResponsesExport = onCall(NAMED_OPTS, async (req) => {
+  const account = await requireNamedTab(req);
+  const surveyId = str(req.data?.surveyId, 100, "조사 ID", true);
+  const reason = str(req.data?.reason, 300, "내보내기 사유", true);
+  if (reason.length < 5) bad("내보내기 사유를 구체적으로 입력하세요(5자 이상).");
+  const snap = await db.collection(NAMED_RESP).where("surveyId", "==", surveyId).get();
+  const rows = snap.docs.map((d) => {
+    const v = d.data();
+    return {
+      id: d.id,
+      collectedDate: v.collectedDate || "",
+      collectedAt: v.collectedAt || "",
+      consentOpt: !!v.consentOpt,
+      submitCode: v.submitCode || "",
+      answers: v.answers || [],
+    };
+  });
+  await writeAccessLog({ account, ip: ipOf(req), op: "내보내기", surveyId, count: rows.length, reason });
+  return { rows };
+});
+
+// 수동 파기. 되돌릴 수 없는 작업이므로 기록을 먼저 남기고 삭제한다.
+exports.namedResponsesDelete = onCall(NAMED_OPTS, async (req) => {
+  const account = await requireNamedTab(req);
+  const surveyId = str(req.data?.surveyId, 100, "조사 ID", true);
+  const reason = str(req.data?.reason, 300, "파기 사유", true);
+  if (reason.length < 2) bad("파기 사유를 입력하세요.");
+  const ids = Array.isArray(req.data?.ids) ? req.data.ids : [];
+  if (!ids.length) bad("파기할 응답이 없습니다.");
+  if (ids.length > 400) bad("한 번에 400건까지 파기할 수 있습니다.");
+  const refs = ids.map((id) => db.collection(NAMED_RESP).doc(str(id, 200, "응답 ID", true)));
+
+  // 다른 조사의 응답이 섞여 들어오지 않는지 확인(권한 우회 방지).
+  const docs = await db.getAll(...refs);
+  const targets = docs.filter((d) => d.exists && d.data().surveyId === surveyId);
+  if (!targets.length) bad("파기할 응답을 찾을 수 없습니다.");
+
+  await writeAccessLog({ account, ip: ipOf(req), op: "파기", surveyId, count: targets.length, reason });
+  const batch = db.batch();
+  targets.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+  return { deleted: targets.length };
+});
+
+// 월 1회 점검 기록. 점검 자체도 기록으로 남겨 이행 여부를 확인할 수 있게 한다.
+exports.namedAccessReview = onCall(NAMED_OPTS, async (req) => {
+  const account = await requireNamedTab(req);
+  const month = str(req.data?.month, 7, "점검 대상 월", true);
+  if (!/^\d{4}-\d{2}$/.test(month)) bad("점검 대상 월은 YYYY-MM 형식입니다.");
+  const note = str(req.data?.note, 500, "점검 의견", false);
+  await writeAccessLog({ account, ip: ipOf(req), op: "점검", surveyId: "", count: 0, reason: `${month} 점검${note ? ` — ${note}` : ""}` });
+  return { ok: true };
+});
+
+// 보관기간이 지난 접속기록 파기(일 1회).
+exports.purgeAccessLogs = onSchedule(
+  { region: "asia-northeast3", schedule: "20 3 * * *", timeZone: "Asia/Seoul" },
+  async () => {
+    const snap = await db.collection(ACCESS_LOG).where("expireAt", "<=", new Date()).limit(400).get();
+    if (snap.empty) return;
+    const batch = db.batch();
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    console.log(`접속기록 파기: ${snap.size}건`);
+  }
+);
+
+// 응답 건수만 확인(조사 삭제 가능 여부 판단용).
+// 개인정보를 반환하지 않으므로 열람이 아니며, 접속기록에 '조회'로 남기지 않는다.
+exports.namedResponsesCount = onCall(NAMED_OPTS, async (req) => {
+  await requireNamedTab(req);
+  const surveyId = str(req.data?.surveyId, 100, "조사 ID", true);
+  const agg = await db.collection(NAMED_RESP).where("surveyId", "==", surveyId).count().get();
+  return { count: agg.data().count };
+});
