@@ -1,0 +1,417 @@
+// 기명 조사 관리 (개인정보 처리 경로 — 익명 설문 모듈과 완전히 분리)
+//
+// 익명 설문(surveys.js)과 코드·데이터·화면 어디에서도 섞이지 않는다.
+//  · 조사 정의: namedSurveys — 문항·동의 문안·목적별 보유기간을 관리자가 직접 편집한다.
+//    (동의 문안과 보유기간을 코드에 박아두지 않는 이유: 개인정보 보호 담당부서 검토 결과가
+//     바뀌어도 화면에서 고치면 되도록 하기 위함)
+//  · 응답: namedResponses — 접수는 서버 함수만, 화면에서는 조회와 수동 파기만 한다.
+//  · 응답자 식별자는 서버에서 해시로 변환돼 저장되므로 이 화면에서도 원문은 볼 수 없다.
+import { escapeHtml } from "./app.js";
+import { watchCollection, onCollection, addItem, updateItem, removeItem, setDocById, getDocById } from "./store.js";
+import {
+  collection, query, where, getDocs, deleteDoc, doc,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { db } from "./firebase.js";
+
+const COLL = "namedSurveys";
+const RESP = "namedResponses";
+
+// 문항 유형 — 익명 설문과 달리 5점 척도·집계 기능은 두지 않는다(통계 목적 조사가 아님).
+const Q_TYPES = [
+  ["ox", "예/아니오"], ["choice", "선다형(택1)"], ["multi", "복수 응답"],
+  ["text", "주관식"], ["note", "안내 문구"],
+];
+// 선택 목적(이벤트 등) 항목 — 값이 저장되지 않고 담당자 메일로만 전달된다.
+const OPT_TYPES = [["photo", "사진 첨부"], ["mailtext", "입력(연락처 등)"]];
+
+let list = [];
+let editingId = null;   // 편집 중인 조사 ID(null = 새 조사)
+let draft = null;       // 편집 중인 정의
+
+const $ = (id) => document.getElementById(id);
+const esc = escapeHtml;
+
+// 기본 정의 — 실제 문안은 개인정보 보호 담당부서 검토 후 화면에서 확정한다.
+function blankSurvey() {
+  return {
+    title: "",
+    intro: "",
+    idLabel: "훈련 시스템 아이디",
+    idHint: "본인 확인용이 아니라 중복 응답을 막기 위한 항목입니다. 입력값은 되돌릴 수 없는 형태로 변환되어 저장됩니다.",
+    status: "draft",
+    openMs: 0,
+    closeMs: 0,
+    purposeMain: {
+      label: "수료생 취업 실태 통계",
+      items: "아이디(변환 저장), 취업 여부, 회사 구분",
+      retainDays: 365,
+      notice: "",
+    },
+    purposeOpt: {
+      enabled: false,
+      label: "경품 증정 이벤트 운영",
+      items: "인증 사진, 연락처",
+      retainDays: 90,
+      notice: "",
+      declineNote: "동의하지 않으셔도 설문에 응답하실 수 있으며, 경품 이벤트 응모만 제외됩니다.",
+    },
+    questions: [],
+    optItems: [],
+  };
+}
+
+/* ── 목록 ── */
+function paintList() {
+  const box = $("named-list");
+  if (!box) return;
+  if (!list.length) {
+    box.innerHTML = `<p class="empty">등록된 조사가 없습니다. '새 조사'로 시작하세요.</p>`;
+    return;
+  }
+  const now = Date.now();
+  box.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>조사명</th><th>상태</th><th>응답 기간</th><th>선택 목적</th><th>보유기간</th><th></th></tr></thead>
+    <tbody>${list.map((s) => {
+      const open = s.status === "open" && (!s.openMs || s.openMs <= now) && (!s.closeMs || now <= s.closeMs);
+      const state = s.status === "draft" ? `<span class="chip">작성 중</span>`
+        : s.status === "closed" ? `<span class="chip">종료</span>`
+        : open ? `<span class="chip chip-on">응답 접수 중</span>` : `<span class="chip">기간 밖</span>`;
+      return `<tr>
+        <td><b>${esc(s.title || "(제목 없음)")}</b></td>
+        <td>${state}</td>
+        <td>${fmtRange(s.openMs, s.closeMs)}</td>
+        <td>${s.purposeOpt?.enabled ? esc(s.purposeOpt.label || "사용") : "<span class='muted'>미사용</span>"}</td>
+        <td>필수 ${s.purposeMain?.retainDays || "-"}일${s.purposeOpt?.enabled ? ` · 선택 ${s.purposeOpt.retainDays || "-"}일` : ""}</td>
+        <td class="row-actions">
+          <button type="button" data-edit="${s.id}">편집</button>
+          <button type="button" data-resp="${s.id}">응답</button>
+          <button type="button" data-link="${s.id}">주소</button>
+          <button type="button" class="del" data-del="${s.id}">삭제</button>
+        </td>
+      </tr>`;
+    }).join("")}</tbody></table></div>`;
+
+  box.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => openEditor(b.dataset.edit)));
+  box.querySelectorAll("[data-resp]").forEach((b) => b.addEventListener("click", () => showResponses(b.dataset.resp)));
+  box.querySelectorAll("[data-link]").forEach((b) => b.addEventListener("click", () => showLink(b.dataset.link)));
+  box.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => delSurvey(b.dataset.del)));
+}
+
+function fmtRange(a, b) {
+  const f = (ms) => (ms ? new Date(ms).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "short" }) : "제한 없음");
+  return `${f(a)} ~ ${f(b)}`;
+}
+// datetime-local 값 ↔ epoch(ms). 브라우저 로컬 시각 기준.
+const msToLocal = (ms) => {
+  if (!ms) return "";
+  const d = new Date(ms - new Date().getTimezoneOffset() * 60000);
+  return d.toISOString().slice(0, 16);
+};
+const localToMs = (v) => (v ? new Date(v).getTime() : 0);
+
+/* ── 편집기 ── */
+function openEditor(id) {
+  editingId = id || null;
+  const src = id ? list.find((s) => s.id === id) : null;
+  draft = src ? JSON.parse(JSON.stringify({ ...blankSurvey(), ...src })) : blankSurvey();
+  delete draft.id;
+  draft.questions = Array.isArray(draft.questions) ? draft.questions : [];
+  draft.optItems = Array.isArray(draft.optItems) ? draft.optItems : [];
+  $("named-editor").hidden = false;
+  $("named-editor-title").textContent = id ? "조사 편집" : "새 조사";
+  paintEditor();
+  $("named-editor").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function paintEditor() {
+  if (!draft) return;
+  const d = draft;
+  $("nm-title").value = d.title || "";
+  $("nm-intro").value = d.intro || "";
+  $("nm-idlabel").value = d.idLabel || "";
+  $("nm-idhint").value = d.idHint || "";
+  $("nm-status").value = d.status || "draft";
+  $("nm-open").value = msToLocal(d.openMs);
+  $("nm-close").value = msToLocal(d.closeMs);
+
+  $("nm-main-label").value = d.purposeMain.label || "";
+  $("nm-main-items").value = d.purposeMain.items || "";
+  $("nm-main-days").value = d.purposeMain.retainDays || 365;
+  $("nm-main-notice").value = d.purposeMain.notice || "";
+
+  $("nm-opt-on").checked = !!d.purposeOpt.enabled;
+  $("nm-opt-label").value = d.purposeOpt.label || "";
+  $("nm-opt-items").value = d.purposeOpt.items || "";
+  $("nm-opt-days").value = d.purposeOpt.retainDays || 90;
+  $("nm-opt-notice").value = d.purposeOpt.notice || "";
+  $("nm-opt-decline").value = d.purposeOpt.declineNote || "";
+  $("nm-opt-fields").hidden = !d.purposeOpt.enabled;
+
+  paintQuestions();
+}
+
+function paintQuestions() {
+  const box = $("nm-questions");
+  box.innerHTML = draft.questions.map((q, i) => `<div class="load-row">
+      <span>${i + 1}.</span>
+      <select class="nq-type" data-i="${i}">${Q_TYPES.map(([t, lb]) => `<option value="${t}"${q.type === t ? " selected" : ""}>${lb}</option>`).join("")}</select>
+      ${q.type === "note"
+        ? `<textarea class="nq-label" data-i="${i}" rows="2" placeholder="안내 문구" style="min-width:320px">${esc(q.label || "")}</textarea>`
+        : `<input class="nq-label" data-i="${i}" value="${esc(q.label || "")}" placeholder="문항 문구" style="min-width:240px">`}
+      ${(q.type === "choice" || q.type === "multi")
+        ? `<input class="nq-opts" data-i="${i}" value="${esc((q.options || []).join(" / "))}" placeholder="보기 — ' / '로 구분" style="min-width:220px">`
+        : ""}
+      ${q.type === "note" ? "" : `<label class="chk"><input type="checkbox" class="nq-req" data-i="${i}"${q.required ? " checked" : ""}> 필수</label>`}
+      <button type="button" class="chip-move nq-move" data-i="${i}" data-d="-1" title="위로">◀</button>
+      <button type="button" class="chip-move nq-move" data-i="${i}" data-d="1" title="아래로">▶</button>
+      <button type="button" class="chip-del nq-del" data-i="${i}">×</button>
+    </div>`).join("") || `<p class="empty">문항이 없습니다.</p>`;
+
+  const optBox = $("nm-optitems");
+  optBox.innerHTML = draft.optItems.map((q, i) => `<div class="load-row">
+      <span>${i + 1}.</span>
+      <select class="no-type" data-i="${i}">${OPT_TYPES.map(([t, lb]) => `<option value="${t}"${q.type === t ? " selected" : ""}>${lb}</option>`).join("")}</select>
+      <input class="no-label" data-i="${i}" value="${esc(q.label || "")}" placeholder="항목 문구" style="min-width:240px">
+      <button type="button" class="chip-del no-del" data-i="${i}">×</button>
+    </div>`).join("") || `<p class="empty">선택 목적 항목이 없습니다.</p>`;
+
+  box.querySelectorAll(".nq-type").forEach((el) => el.addEventListener("change", (e) => {
+    draft.questions[+e.target.dataset.i].type = e.target.value; paintQuestions();
+  }));
+  box.querySelectorAll(".nq-label").forEach((el) => el.addEventListener("input", (e) => {
+    draft.questions[+e.target.dataset.i].label = e.target.value;
+  }));
+  box.querySelectorAll(".nq-opts").forEach((el) => el.addEventListener("input", (e) => {
+    draft.questions[+e.target.dataset.i].options = e.target.value.split("/").map((t) => t.trim()).filter(Boolean);
+  }));
+  box.querySelectorAll(".nq-req").forEach((el) => el.addEventListener("change", (e) => {
+    draft.questions[+e.target.dataset.i].required = e.target.checked;
+  }));
+  box.querySelectorAll(".nq-move").forEach((b) => b.addEventListener("click", () => {
+    const i = +b.dataset.i; const j = i + Number(b.dataset.d);
+    if (j < 0 || j >= draft.questions.length) return;
+    const a = draft.questions;
+    [a[i], a[j]] = [a[j], a[i]];
+    paintQuestions();
+  }));
+  box.querySelectorAll(".nq-del").forEach((b) => b.addEventListener("click", () => {
+    draft.questions.splice(+b.dataset.i, 1); paintQuestions();
+  }));
+
+  optBox.querySelectorAll(".no-type").forEach((el) => el.addEventListener("change", (e) => {
+    draft.optItems[+e.target.dataset.i].type = e.target.value;
+  }));
+  optBox.querySelectorAll(".no-label").forEach((el) => el.addEventListener("input", (e) => {
+    draft.optItems[+e.target.dataset.i].label = e.target.value;
+  }));
+  optBox.querySelectorAll(".no-del").forEach((b) => b.addEventListener("click", () => {
+    draft.optItems.splice(+b.dataset.i, 1); paintQuestions();
+  }));
+}
+
+function readEditor() {
+  const d = draft;
+  d.title = $("nm-title").value.trim();
+  d.intro = $("nm-intro").value.trim();
+  d.idLabel = $("nm-idlabel").value.trim() || "식별자";
+  d.idHint = $("nm-idhint").value.trim();
+  d.status = $("nm-status").value;
+  d.openMs = localToMs($("nm-open").value);
+  d.closeMs = localToMs($("nm-close").value);
+  d.purposeMain = {
+    label: $("nm-main-label").value.trim(),
+    items: $("nm-main-items").value.trim(),
+    retainDays: Math.max(1, Number($("nm-main-days").value) || 365),
+    notice: $("nm-main-notice").value.trim(),
+  };
+  d.purposeOpt = {
+    enabled: $("nm-opt-on").checked,
+    label: $("nm-opt-label").value.trim(),
+    items: $("nm-opt-items").value.trim(),
+    retainDays: Math.max(1, Number($("nm-opt-days").value) || 90),
+    notice: $("nm-opt-notice").value.trim(),
+    declineNote: $("nm-opt-decline").value.trim(),
+  };
+  d.questions = d.questions
+    .map((q) => ({
+      type: q.type, label: (q.label || "").trim(),
+      options: Array.isArray(q.options) ? q.options : [],
+      required: q.type === "note" ? false : !!q.required,
+    }))
+    .filter((q) => q.label);
+  d.optItems = d.optItems.map((q) => ({ type: q.type, label: (q.label || "").trim() })).filter((q) => q.label);
+  return d;
+}
+
+async function saveSurvey() {
+  const d = readEditor();
+  if (!d.title) return alert("조사명을 입력하세요.");
+  if (!d.purposeMain.label || !d.purposeMain.items) return alert("필수 목적의 목적과 수집 항목을 입력하세요. 동의 고지에 반드시 들어가야 하는 내용입니다.");
+  if (d.purposeOpt.enabled && (!d.purposeOpt.label || !d.purposeOpt.items)) {
+    return alert("선택 목적을 사용하려면 목적과 수집 항목을 입력하세요.");
+  }
+  if (d.status === "open" && !d.questions.length) return alert("문항이 없는 조사는 접수를 시작할 수 없습니다.");
+  if (d.purposeOpt.enabled && !d.optItems.length) {
+    return alert("선택 목적을 사용하려면 선택 목적 항목(사진·입력)을 1개 이상 등록하세요.");
+  }
+  d.updatedAtMs = Date.now();
+  try {
+    if (editingId) await updateItem(COLL, editingId, d);
+    else { d.createdAtMs = Date.now(); await addItem(COLL, d); }
+    $("named-editor").hidden = true;
+    draft = null; editingId = null;
+  } catch (e) { alert("저장 실패: " + e.message); }
+}
+
+async function delSurvey(id) {
+  const s = list.find((x) => x.id === id);
+  const cnt = await countResponses(id);
+  if (cnt > 0) return alert(`응답 ${cnt}건이 남아 있어 삭제할 수 없습니다. 응답 화면에서 먼저 파기하세요.`);
+  if (!confirm(`'${s?.title || id}' 조사를 삭제할까요?`)) return;
+  try { await removeItem(COLL, id); } catch (e) { alert("삭제 실패: " + e.message); }
+}
+
+async function countResponses(surveyId) {
+  const snap = await getDocs(query(collection(db, RESP), where("surveyId", "==", surveyId)));
+  return snap.size;
+}
+
+function showLink(id) {
+  const url = `${location.origin}${location.pathname.replace(/index\.html$/, "")}named.html?s=${id}`;
+  const box = $("named-link-box");
+  box.hidden = false;
+  box.innerHTML = `<label>응답 페이지 주소 <input id="nm-url" readonly value="${esc(url)}" style="min-width:340px"></label>
+    <button type="button" id="nm-copy">복사</button>
+    <p class="hint">이 주소는 대상자에게만 안내하세요. 익명 설문과 달리 개인정보를 수집하는 페이지입니다.</p>`;
+  $("nm-url").select?.();
+  $("nm-copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(url); $("nm-copy").textContent = "복사됨"; } catch { alert("복사에 실패했습니다. 주소를 직접 선택해 복사하세요."); }
+  });
+}
+
+/* ── 응답 조회·파기 ── */
+async function showResponses(surveyId) {
+  const s = list.find((x) => x.id === surveyId);
+  const box = $("named-resp");
+  box.hidden = false;
+  box.innerHTML = `<p class="empty">불러오는 중…</p>`;
+  let rows = [];
+  try {
+    const snap = await getDocs(query(collection(db, RESP), where("surveyId", "==", surveyId)));
+    rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    box.innerHTML = `<p class="empty">응답을 불러오지 못했습니다: ${esc(e.message)}</p>`;
+    return;
+  }
+  rows.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+  const labels = [...new Set(rows.flatMap((r) => (r.answers || []).map((a) => a.label)))];
+  box.innerHTML = `
+    <h3>${esc(s?.title || surveyId)} — 응답 ${rows.length}건</h3>
+    <p class="hint">응답자 식별자는 되돌릴 수 없는 형태로 저장되어 있어 원문을 볼 수 없습니다. 사진·연락처 등 선택 목적 항목은 시스템에 저장되지 않으며, 제출코드로 담당자 메일과 대조합니다.</p>
+    <div class="form-actions">
+      <button type="button" id="nm-resp-csv">CSV 내보내기</button>
+      <button type="button" class="del" id="nm-resp-purge">기간 지정 파기</button>
+    </div>
+    ${rows.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>수집 일시</th><th>선택 동의</th><th>제출코드</th>${labels.map((l) => `<th>${esc(l)}</th>`).join("")}<th>파기 예정</th><th></th></tr></thead>
+      <tbody>${rows.map((r) => `<tr>
+        <td>${esc(r.collectedAt || r.collectedDate || "")}</td>
+        <td>${r.consentOpt ? "동의" : "<span class='muted'>미동의</span>"}</td>
+        <td><code>${esc(r.submitCode || "")}</code></td>
+        ${labels.map((l) => {
+          const a = (r.answers || []).find((x) => x.label === l);
+          const v = a ? (Array.isArray(a.value) ? a.value.join(", ") : a.value) : "";
+          return `<td>${esc(v)}</td>`;
+        }).join("")}
+        <td>${esc(fmtDate(r.purgeAt))}</td>
+        <td><button type="button" class="chip-del" data-rdel="${r.id}" title="이 응답 파기">×</button></td>
+      </tr>`).join("")}</tbody></table></div>` : `<p class="empty">아직 응답이 없습니다.</p>`}`;
+
+  box.querySelectorAll("[data-rdel]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("이 응답을 파기할까요? 되돌릴 수 없습니다.")) return;
+    try { await deleteDoc(doc(db, RESP, b.dataset.rdel)); showResponses(surveyId); }
+    catch (e) { alert("파기 실패: " + e.message); }
+  }));
+  $("nm-resp-csv").addEventListener("click", () => exportCsv(s?.title || surveyId, labels, rows));
+  $("nm-resp-purge").addEventListener("click", () => purgeRange(surveyId, rows));
+}
+
+function fmtDate(ts) {
+  const ms = ts?.seconds ? ts.seconds * 1000 : ts?.toMillis?.() ?? 0;
+  return ms ? new Date(ms).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" }) : "";
+}
+
+function exportCsv(title, labels, rows) {
+  const head = ["수집일시", "선택동의", "제출코드", ...labels];
+  const body = rows.map((r) => [
+    r.collectedAt || r.collectedDate || "",
+    r.consentOpt ? "동의" : "미동의",
+    r.submitCode || "",
+    ...labels.map((l) => {
+      const a = (r.answers || []).find((x) => x.label === l);
+      return a ? (Array.isArray(a.value) ? a.value.join(" / ") : a.value) : "";
+    }),
+  ]);
+  const csv = [head, ...body].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${title}_응답.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function purgeRange(surveyId, rows) {
+  const from = prompt("파기 시작일(YYYY-MM-DD)");
+  if (!from) return;
+  const to = prompt("파기 종료일(YYYY-MM-DD)", from);
+  if (!to) return;
+  const targets = rows.filter((r) => (r.collectedDate || "") >= from && (r.collectedDate || "") <= to);
+  if (!targets.length) return alert("해당 기간의 응답이 없습니다.");
+  if (!confirm(`${from} ~ ${to} 수집분 ${targets.length}건을 파기합니다. 되돌릴 수 없습니다.`)) return;
+  try {
+    for (const r of targets) await deleteDoc(doc(db, RESP, r.id));
+    alert(`${targets.length}건을 파기했습니다.`);
+    showResponses(surveyId);
+  } catch (e) { alert("파기 실패: " + e.message); }
+}
+
+/* ── 제출물 수신 메일 ── */
+async function openMailDialog() {
+  let cfg = {};
+  try { cfg = (await getDocById("settings", "namedSurveyMail")) || {}; } catch { /* */ }
+  const cur = cfg.default || "";
+  const v = prompt("선택 목적 제출물(사진·연락처)을 받을 이메일 주소를 입력하세요. 여러 개는 쉼표로 구분합니다.", cur);
+  if (v == null) return;
+  try {
+    await setDocById("settings", "namedSurveyMail", { ...cfg, default: v.trim() });
+    alert("저장했습니다.");
+  } catch (e) { alert("저장 실패: " + e.message); }
+}
+
+export function initNamedAdmin() {
+  const panel = document.querySelector('[data-tab="named"]');
+  if (!panel) return;
+  watchCollection(COLL);
+  onCollection(COLL, (rows) => {
+    list = [...rows].sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+    paintList();
+  });
+  $("named-new").addEventListener("click", () => openEditor(null));
+  $("named-mail").addEventListener("click", openMailDialog);
+  $("nm-save").addEventListener("click", saveSurvey);
+  $("nm-cancel").addEventListener("click", () => { $("named-editor").hidden = true; draft = null; editingId = null; });
+  $("nm-opt-on").addEventListener("change", (e) => {
+    if (!draft) return;
+    draft.purposeOpt.enabled = e.target.checked;
+    $("nm-opt-fields").hidden = !e.target.checked;
+  });
+  $("nm-q-add").addEventListener("click", () => {
+    draft.questions.push({ type: $("nm-q-type").value, label: "", options: [], required: true });
+    paintQuestions();
+  });
+  $("nm-o-add").addEventListener("click", () => {
+    draft.optItems.push({ type: $("nm-o-type").value, label: "" });
+    paintQuestions();
+  });
+}

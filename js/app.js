@@ -23,6 +23,7 @@ import { initOrgSelectors, initOrgAdmin, tabFeature } from "./orgs.js";
 import { initRentals } from "./rentals.js";
 import { initPadAdmin } from "./pad-admin.js";
 import { initLogiAdmin } from "./logi-admin.js";
+import { initNamedAdmin } from "./named-admin.js";
 import { currentOrg } from "./firebase.js";
 
 // 공용 유틸: HTML 이스케이프 (XSS 방지).
@@ -42,6 +43,8 @@ const TAB_GROUPS = [
   { id: "operate", label: "교육 운영", tabs: [["courses", "차수·시간표"], ["programs", "과정 커리큘럼"], ["rooms", "강의실"], ["instructors", "강사"]] },
   { id: "finance", label: "강사료·경비", tabs: [["payroll", "강사료·집계"], ["expenses", "소요경비"]] },
   { id: "surveys", label: "설문", tabs: [["surveys", "설문 관리"], ["surveyitems", "문항 설정"], ["reports", "설문 집계"], ["freetext", "주관식 원문"]] },
+  // 기명 조사는 개인정보 처리 경로라 익명 설문 그룹과 나란히 두지 않고 별도 그룹으로 분리한다.
+  { id: "named", label: "기명 조사", tabs: [["named", "기명 조사"]] },
   { id: "stats", label: "통계·보고서", tabs: [["stats", "통계 대시보드"], ["reportdoc", "운영 보고서"]] },
   { id: "site", label: "현장·공개", tabs: [["board", "공개 현황 보드"], ["rentals", "현장 안내(DID)"]] },
   { id: "class", label: "수업 지원", tabs: [["pad", "수업 보드"], ["logi", "ICAO 로지보드"]] },
@@ -49,6 +52,9 @@ const TAB_GROUPS = [
 ];
 // 마스터 전용 탭(일반 관리자에게는 숨김 — 실제 차단은 firestore.rules).
 const MASTER_ONLY_TABS = new Set(["data", "orgs"]);
+// 개인정보를 처리하는 탭: '전체 허용' 계정에도 자동으로 열리지 않고,
+// 계정별 사용 가능 탭에 명시적으로 지정된 경우에만 보인다(마스터 제외).
+const RESTRICTED_TABS = new Set(["named"]);
 let masterMode = false;
 export function isMasterMode() { return masterMode; }
 
@@ -56,7 +62,9 @@ export function isMasterMode() { return masterMode; }
 // 마스터는 항상 전체. 실제 차단은 firestore.rules가 담당한다.
 let allowedTabs = null;
 function accountAllows(tab) {
-  return masterMode || allowedTabs === null || allowedTabs.includes(tab);
+  if (masterMode) return true;
+  if (RESTRICTED_TABS.has(tab)) return Array.isArray(allowedTabs) && allowedTabs.includes(tab);
+  return allowedTabs === null || allowedTabs.includes(tab);
 }
 
 // 참관자(조회 전용) 모드. 실제 차단은 firestore.rules가 담당하고,
@@ -186,6 +194,7 @@ function initApp() {
   initRentals();
   initPadAdmin();
   initLogiAdmin();
+  initNamedAdmin();
   initExportButtons();
   initCsvImport();
   initSeed();
