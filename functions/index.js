@@ -479,3 +479,171 @@ exports.submitSurveyPhotos = onCall(
     return { sent: attachments.length };
   }
 );
+
+/* ================================================================
+ *  기명 조사(namedSurveys) — 익명 설문과 완전히 분리된 개인정보 처리 경로
+ *
+ *  익명 설문(surveyResponses)과 달리 이 경로는 개인정보를 처리한다.
+ *  · 응답자 식별자(아이디 등)는 원문을 저장하지 않고 서버에서만 해시로 변환한다.
+ *    해시 비밀값은 Firebase Secret(SURVEY_ID_SALT)에만 두며 저장소에 남기지 않는다.
+ *    비밀값 없이는 응답을 받지 않는다(가명처리 전제가 깨진 상태로 수집 금지).
+ *  · 선택 목적(경품 이벤트 등) 항목인 사진·연락처는 저장하지 않고 담당자 메일로만 전달한다.
+ *  · 응답 문서에는 목적별 파기 예정일(purgeAt)을 함께 기록하고, 일일 배치가 파기한다.
+ *  클라이언트는 namedResponses를 직접 읽거나 쓸 수 없다(보안규칙에서 전면 차단).
+ * ================================================================ */
+const SURVEY_ID_SALT = defineSecret("SURVEY_ID_SALT");
+const NAMED_RESP = "namedResponses";
+
+// 응답자 식별자 → 되돌릴 수 없는 해시.
+// 대상 인원이 적어 단순 해시는 전수 대입으로 복원되므로, 서버 전용 비밀값을 키로 쓴다.
+function hashRespondentId(surveyId, rawId) {
+  const key = String(SURVEY_ID_SALT.value() || "");
+  if (key.length < 16) {
+    throw new HttpsError("failed-precondition",
+      "조사 설정이 완료되지 않았습니다(식별자 보호 키 미설정). 관리자에게 문의하세요.");
+  }
+  const norm = String(rawId).trim().toLowerCase();
+  return crypto.createHmac("sha256", key).update(`${surveyId}|${norm}`).digest("hex");
+}
+
+const addDays = (days) => new Date(Date.now() + days * 86400000);
+
+exports.submitNamedSurvey = onCall(
+  { region: "asia-northeast3", secrets: [MAIL_USER, MAIL_PASS, SURVEY_ID_SALT], memory: "512MiB", timeoutSeconds: 60, maxInstances: 5 },
+  async (req) => {
+    const d = req.data || {};
+    const surveyId = str(d.surveyId, 100, "조사 ID", true);
+    await checkRateLimit(req.rawRequest?.ip || req.rawRequest?.headers?.["x-forwarded-for"] || "");
+
+    const snap = await db.doc(`namedSurveys/${surveyId}`).get();
+    if (!snap.exists) bad("조사를 찾을 수 없습니다.");
+    const sv = snap.data();
+    const now = Date.now();
+    if (sv.status !== "open") throw new HttpsError("failed-precondition", "현재 응답을 받지 않는 조사입니다.");
+    if (sv.openMs && now < sv.openMs) throw new HttpsError("failed-precondition", "아직 시작되지 않은 조사입니다.");
+    if (sv.closeMs && now > sv.closeMs) throw new HttpsError("failed-precondition", "응답 기간이 종료된 조사입니다.");
+
+    // ── 필수 목적 동의 ──
+    if (d.consentMain !== true) bad("필수 항목 수집·이용에 동의해야 응답할 수 있습니다.");
+    const optEnabled = !!(sv.purposeOpt && sv.purposeOpt.enabled);
+    const consentOpt = optEnabled && d.consentOpt === true;
+
+    // ── 응답자 식별자(원문은 저장하지 않음) ──
+    const rawId = str(d.respondentId, 100, sv.idLabel || "식별자", true);
+    const idHash = hashRespondentId(surveyId, rawId);
+
+    // ── 문항 응답 검증(정의 기준) ──
+    const given = Array.isArray(d.answers) ? d.answers : [];
+    const defs = Array.isArray(sv.questions) ? sv.questions : [];
+    const answers = [];
+    for (let i = 0; i < defs.length; i++) {
+      const q = defs[i] || {};
+      const raw = given[i];
+      const v = Array.isArray(raw) ? raw.map((x) => str(x, 200, q.label, false)).filter(Boolean)
+        : str(raw, 1000, q.label || `문항 ${i + 1}`, false);
+      const empty = Array.isArray(v) ? v.length === 0 : v === "";
+      if (empty) {
+        if (q.required) bad(`'${q.label || `문항 ${i + 1}`}' 항목에 응답해 주세요.`);
+        continue;
+      }
+      answers.push({ label: String(q.label || `문항 ${i + 1}`).slice(0, 200), value: v });
+    }
+
+    // ── 선택 목적 항목(사진·연락처): 저장하지 않고 메일로만 ──
+    const photos = consentOpt && Array.isArray(d.photos) ? d.photos : [];
+    const rawTexts = consentOpt && Array.isArray(d.mailTexts) ? d.mailTexts : [];
+    if (photos.length > 5) bad("사진은 최대 5장까지 첨부할 수 있습니다.");
+    if (rawTexts.length > 10) bad("추가 입력 항목이 너무 많습니다.");
+    const mailTexts = rawTexts.map((t) => ({
+      label: str(t && t.label, 200, "항목명", false) || "추가 입력",
+      text: str(t && t.text, 200, "입력값", true),
+    }));
+    let totalBytes = 0;
+    const attachments = photos.map((p, i) => {
+      const label = str(p && p.label, 200, "문항명", false).replace(/[\r\n"]/g, "_") || `사진${i + 1}`;
+      if (!p || typeof p.dataBase64 !== "string" || !p.dataBase64) bad("사진 데이터가 비었습니다.");
+      const bytes = Math.floor(p.dataBase64.length * 3 / 4);
+      if (bytes > MAX_ATTACH_BYTES) bad("사진은 장당 5MB 이하만 가능합니다.");
+      totalBytes += bytes;
+      return { filename: `${label}_${i + 1}.jpg`, content: Buffer.from(p.dataBase64, "base64") };
+    });
+    if (totalBytes > 8 * 1024 * 1024) bad("사진 전체 합계는 8MB 이하만 가능합니다.");
+
+    // ── 중복 응답 차단(해시 대조) ──
+    const dup = await db.collection(NAMED_RESP)
+      .where("surveyId", "==", surveyId).where("idHash", "==", idHash).limit(1).get();
+    if (!dup.empty) {
+      throw new HttpsError("already-exists", "이미 응답이 접수된 " + (sv.idLabel || "식별자") + "입니다.");
+    }
+
+    // ── 선택 목적 메일 발송(응답 기록보다 먼저 — 실패 시 접수하지 않음) ──
+    const submitCode = (attachments.length || mailTexts.length) ? newReceiptCode() : "";
+    if (submitCode) {
+      let to = "";
+      try {
+        const s = await db.doc("settings/namedSurveyMail").get();
+        const cfg = s.exists ? s.data() : {};
+        to = String((cfg.bySurvey || {})[surveyId] || cfg.default || "").trim();
+      } catch { /* */ }
+      if (!to) throw new HttpsError("failed-precondition", "제출물 수신 이메일이 설정되지 않았습니다. 관리자에게 문의하세요.");
+      const when = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" }).format(new Date());
+      try {
+        await mailer().sendMail({
+          from: MAIL_USER.value(),
+          to,
+          subject: `[${sv.title || "기명 조사"}] 선택 항목 제출 — ${when} (제출코드 ${submitCode})`,
+          text: [
+            `조사: ${sv.title || surveyId}`,
+            `제출 일시: ${when}`,
+            `제출코드: ${submitCode}`,
+            "",
+            mailTexts.length ? "─ 추가 입력(시스템 미저장) ─" : "",
+            ...mailTexts.map((t) => `· ${t.label}: ${t.text}`),
+            mailTexts.length ? "" : "",
+            "※ 이 메일의 사진과 입력값은 시스템에 저장되지 않습니다.",
+            `※ 목적: ${(sv.purposeOpt && sv.purposeOpt.label) || "선택 목적"} — 목적 달성 후 이 메일을 삭제해야 파기가 완료됩니다.`,
+          ].filter((x) => x !== "").join("\n"),
+          attachments,
+        });
+      } catch (e) {
+        if (e instanceof HttpsError) throw e;
+        throw new HttpsError("internal", "제출물 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      }
+    }
+
+    // ── 응답 기록(개인정보파일) ──
+    const mainDays = Math.max(1, Number(sv.purposeMain?.retainDays) || 365);
+    const doc = {
+      surveyId,
+      idHash,                                  // 아이디 원문은 저장하지 않음
+      answers,
+      consentMain: true,
+      consentOpt,
+      collectedDate: todayKST(),
+      collectedAt: new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "short" }).format(new Date()),
+      purgeAt: addDays(mainDays),              // 필수 목적 보유기간 만료일
+      createdAtMs: Date.now(),
+    };
+    if (submitCode) {
+      doc.submitCode = submitCode;             // 메일↔응답 매칭용 임의값
+      doc.optNotes = [...photos.map((p) => String(p.label || "사진")), ...mailTexts.map((t) => t.label)]
+        .slice(0, 20).map((label) => ({ label, submitted: true }));
+    }
+    await db.collection(NAMED_RESP).add(doc);
+    return { ok: true, submitCode };
+  }
+);
+
+// 보유기간이 지난 기명 응답 파기(일 1회). 익명 설문의 수동 파기와 달리 자동 실행한다 —
+// 개인정보는 보유기간 경과 시 지체 없이 파기해야 하므로 담당자 조작에 의존하지 않는다.
+exports.purgeNamedResponses = onSchedule(
+  { region: "asia-northeast3", schedule: "10 3 * * *", timeZone: "Asia/Seoul" },
+  async () => {
+    const snap = await db.collection(NAMED_RESP).where("purgeAt", "<=", new Date()).limit(400).get();
+    if (snap.empty) return;
+    const batch = db.batch();
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    console.log(`기명 응답 파기: ${snap.size}건`);
+  }
+);

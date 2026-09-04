@@ -122,6 +122,7 @@ service cloud.firestore {
         : docId == 'surveyCategories' ? canTab('freetext')
         : docId == 'logiPush' ? canTab('logi')
         : docId == 'surveyPhotoMail' ? (canTab('surveys') || canTab('surveyitems'))
+        : docId == 'namedSurveyMail' ? canTab('named')
         : docId == 'surveyItems' ? (canTab('surveyitems') || canTab('settings'))
         : canTab('settings');
       // 로지보드 푸시 공개키(VAPID public key — 원래 공개값): 참가자 페이지가 읽는다.
@@ -164,6 +165,21 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow update: if canTab('freetext');
       allow delete: if isMaster();
+    }
+
+    // ── 기명 조사(개인정보 처리 경로 — 익명 설문과 완전히 분리) ──
+    // 조사 정의: 응답 페이지가 문항·동의 문안을 읽어야 하므로 공개 읽기(개인정보 없음).
+    // 쓰기는 '기명 조사' 탭 권한을 명시적으로 받은 계정만.
+    match /namedSurveys/{surveyId} {
+      allow read: if true;
+      allow write: if canTab('named');
+    }
+    // 기명 응답: 개인정보파일. 접수(생성)는 submitNamedSurvey 함수만 —
+    // 클라이언트 생성·수정을 막아 동의 확인·식별자 해시를 우회할 수 없게 한다.
+    // 조회·수동 파기는 '기명 조사' 탭 권한을 받은 계정만(보유기간 자동 파기는 배치).
+    match /namedResponses/{responseId} {
+      allow read, delete: if canTab('named');
+      allow create, update: if false;
     }
 
     // 집계 데이터(영구 보관): 읽기는 관리자 공통(집계·통계·보고서 탭에서 조회),

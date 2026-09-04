@@ -22,6 +22,7 @@ export const ORG_FEATURES = [
   ["board", "공개 현황 보드"],
   ["pad", "수업 보드(협업)"],
   ["logi", "ICAO 로지보드(국제과정)"],
+  ["named", "기명 조사(개인정보 수집)"],
   // 상단바 바로가기(퀴즈·히어로 미션은 기본 기관 백엔드로 연결되는 링크).
   ["quiz", "퀴즈 바로가기"],
   ["scfe", "히어로 미션 바로가기"],
@@ -40,6 +41,7 @@ const TAB_FEATURE = {
   board: "board",
   pad: "pad",
   logi: "logi",
+  named: "named",
   vault: "vault", // 탭이 아닌 상단바 링크지만 기관 기능 판정(orgAllows)에 사용.
 };
 export function tabFeature(tab) { return TAB_FEATURE[tab] || null; }
