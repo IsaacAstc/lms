@@ -6,6 +6,7 @@
 //  · 응답은 클라이언트가 직접 저장하지 않고 submitNamedSurvey 함수로만 접수된다
 //    (동의 확인·식별자 해시·중복 판정을 서버에서 수행하기 위함).
 //  · 선택 목적 항목(사진·연락처)은 어디에도 저장되지 않고 담당자 메일로만 전달된다.
+//  · 식별자는 서버에서 해시로 바뀐 뒤 응답과 분리 보관된다(중복 방지 표시 전용).
 import { getDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 import { db, app } from "./firebase.js";

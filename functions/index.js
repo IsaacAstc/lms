@@ -493,7 +493,8 @@ exports.submitSurveyPhotos = onCall(
  *  클라이언트는 namedResponses를 직접 읽거나 쓸 수 없다(보안규칙에서 전면 차단).
  * ================================================================ */
 const SURVEY_ID_SALT = defineSecret("SURVEY_ID_SALT");
-const NAMED_RESP = "namedResponses";
+const NAMED_RESP = "namedResponses";      // 응답 본문 — 식별자를 붙이지 않는다
+const NAMED_MARK = "namedRespondents";    // 중복 방지 표시 — 식별자 해시만, 응답과 연결선 없음
 
 // 응답자 식별자 → 되돌릴 수 없는 해시.
 // 대상 인원이 적어 단순 해시는 전수 대입으로 복원되므로, 서버 전용 비밀값을 키로 쓴다.
@@ -508,6 +509,11 @@ function hashRespondentId(surveyId, rawId) {
 }
 
 const addDays = (days) => new Date(Date.now() + days * 86400000);
+// 수집일(KST) 자정 기준 + N일. 중복 방지 표시의 파기 예정일을 일 단위로 맞춰,
+// 응답 문서의 파기 예정일(밀리초 정밀)과 대조해 두 문서를 잇지 못하게 한다.
+function dayAlignedPurge(collectedDate, days) {
+  return new Date(new Date(`${collectedDate}T00:00:00+09:00`).getTime() + (days + 1) * 86400000);
+}
 
 exports.submitNamedSurvey = onCall(
   { region: "asia-northeast3", secrets: [MAIL_USER, MAIL_PASS, SURVEY_ID_SALT], memory: "512MiB", timeoutSeconds: 60, maxInstances: 5 },
@@ -583,23 +589,26 @@ exports.submitNamedSurvey = onCall(
     if (totalBytes > 8 * 1024 * 1024) bad("사진 전체 합계는 8MB 이하만 가능합니다.");
 
     // ── 중복 응답 차단 ──
-    // 문서 ID를 조사ID+해시로 고정하고 트랜잭션으로 선점한다.
-    // 조회 후 쓰기 방식은 동시 제출·재시도에서 두 건이 들어갈 수 있어 쓰지 않는다.
-    const respRef = db.collection(NAMED_RESP).doc(`${surveyId}__${idHash}`);
+    // 식별자 해시는 '응답을 마쳤다'는 표시로만 별도 컬렉션에 두고 응답 본문에는 붙이지 않는다.
+    // 두 문서 사이에 연결선이 없으므로, 해시를 되돌리더라도 누가 응답했는지까지만 알 수 있고
+    // 무엇이라고 답했는지는 알 수 없다(응답 본문은 그 자체로 특정 개인을 알아볼 수 없는 정보).
+    // 문서 ID를 조사ID+해시로 고정해 트랜잭션으로 선점한다 — 조회 후 쓰기는 동시 제출에서 새어나간다.
+    const markRef = db.collection(NAMED_MARK).doc(`${surveyId}__${idHash}`);
 
     // ── 접수 자리 선점(중복 차단) ──
     // 메일보다 먼저 선점해야 동시 제출에서 메일이 두 번 나가지 않는다.
     const mainDays = Math.max(1, Number(sv.purposeMain?.retainDays) || 365);
     const submitCode = (attachments.length || mailTexts.length) ? newReceiptCode() : "";
+    const collectedDate = todayKST();
+    const purgeAt = addDays(mainDays);
     const record = {
       surveyId,
-      idHash,                                  // 아이디 원문은 저장하지 않음
       answers,
       consentMain: true,
       consentOpt,
-      collectedDate: todayKST(),
+      collectedDate,
       collectedAt: new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "short" }).format(new Date()),
-      purgeAt: addDays(mainDays),              // 필수 목적 보유기간 만료일
+      purgeAt,                                 // 필수 목적 보유기간 만료일
       createdAtMs: Date.now(),
     };
     if (submitCode) {
@@ -610,15 +619,30 @@ exports.submitNamedSurvey = onCall(
       ].slice(0, 20).map((label) => ({ label, submitted: true }));
     }
     await db.runTransaction(async (tx) => {
-      const cur = await tx.get(respRef);
+      const cur = await tx.get(markRef);
       if (cur.exists) {
         throw new HttpsError("already-exists", "이미 응답이 접수된 " + (sv.idLabel || "식별자") + "입니다.");
       }
-      tx.create(respRef, record);
+      // 표시에는 조사·수집일·파기예정일만 둔다. 응답 문서 ID를 적지 않는다 —
+      // 적는 순간 응답과 개인이 다시 이어져 분리 저장의 의미가 사라진다.
+      // 시각도 일(日) 단위로 뭉갠다. 밀리초까지 남기면 같은 시각의 응답과 짝지어
+      // 연결선을 복원할 수 있어(타임스탬프 대조) 분리가 무의미해진다.
+      tx.create(markRef, { surveyId, collectedDate, purgeAt: dayAlignedPurge(collectedDate, mainDays) });
     });
+    const respRef = db.collection(NAMED_RESP).doc();
+    try {
+      await respRef.create(record);
+    } catch (e) {
+      await markRef.delete().catch(() => { /* */ });
+      throw new HttpsError("internal", "응답 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+    }
 
     // ── 선택 목적 메일 발송 ──
-    // 발송에 실패하면 선점한 접수를 되돌려, 응답만 남고 사진·연락처가 유실되는 상태를 막는다.
+    // 발송에 실패하면 접수를 통째로 되돌려, 응답만 남고 사진·연락처가 유실되는 상태를 막는다.
+    const rollback = async () => {
+      await respRef.delete().catch(() => { /* */ });
+      await markRef.delete().catch(() => { /* 되돌리기 실패 시 재시도가 중복으로 걸린다 */ });
+    };
     if (submitCode) {
       let to = "";
       try {
@@ -627,7 +651,7 @@ exports.submitNamedSurvey = onCall(
         to = String((cfg.bySurvey || {})[surveyId] || cfg.default || "").trim();
       } catch { /* */ }
       if (!to) {
-        await respRef.delete().catch(() => { /* */ });
+        await rollback();
         throw new HttpsError("failed-precondition", "제출물 수신 이메일이 설정되지 않았습니다. 관리자에게 문의하세요.");
       }
       const when = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" }).format(new Date());
@@ -650,7 +674,7 @@ exports.submitNamedSurvey = onCall(
           attachments,
         });
       } catch (e) {
-        await respRef.delete().catch(() => { /* 되돌리기 실패는 무시 — 재시도 시 중복으로 걸린다 */ });
+        await rollback();
         if (e instanceof HttpsError) throw e;
         throw new HttpsError("internal", "제출물 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.");
       }
@@ -665,12 +689,15 @@ exports.submitNamedSurvey = onCall(
 exports.purgeNamedResponses = onSchedule(
   { region: "asia-northeast3", schedule: "10 3 * * *", timeZone: "Asia/Seoul" },
   async () => {
-    const snap = await db.collection(NAMED_RESP).where("purgeAt", "<=", new Date()).limit(400).get();
-    if (snap.empty) return;
-    const batch = db.batch();
-    snap.docs.forEach((d) => batch.delete(d.ref));
-    await batch.commit();
-    console.log(`기명 응답 파기: ${snap.size}건`);
+    // 응답 본문과 중복 방지 표시는 같은 보유기간을 가지므로 함께 파기한다.
+    for (const coll of [NAMED_RESP, NAMED_MARK]) {
+      const snap = await db.collection(coll).where("purgeAt", "<=", new Date()).limit(400).get();
+      if (snap.empty) continue;
+      const batch = db.batch();
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+      console.log(`${coll} 파기: ${snap.size}건`);
+    }
   }
 );
 
@@ -774,11 +801,15 @@ exports.namedResponsesExport = onCall(NAMED_OPTS, async (req) => {
 });
 
 // 수동 파기. 되돌릴 수 없는 작업이므로 기록을 먼저 남기고 삭제한다.
+// 응답 본문과 중복 방지 표시는 서로 연결되어 있지 않으므로 개별 응답만 지우면 표시가 남는다.
+// 그래서 수집일 범위 파기(range)에서는 같은 기간의 표시도 함께 지운다.
 exports.namedResponsesDelete = onCall(NAMED_OPTS, async (req) => {
   const account = await requireNamedTab(req);
   const surveyId = str(req.data?.surveyId, 100, "조사 ID", true);
   const reason = str(req.data?.reason, 300, "파기 사유", true);
   if (reason.length < 2) bad("파기 사유를 입력하세요.");
+  const from = str(req.data?.from, 10, "시작일", false);
+  const to = str(req.data?.to, 10, "종료일", false);
   const ids = Array.isArray(req.data?.ids) ? req.data.ids : [];
   if (!ids.length) bad("파기할 응답이 없습니다.");
   if (ids.length > 400) bad("한 번에 400건까지 파기할 수 있습니다.");
@@ -789,11 +820,25 @@ exports.namedResponsesDelete = onCall(NAMED_OPTS, async (req) => {
   const targets = docs.filter((d) => d.exists && d.data().surveyId === surveyId);
   if (!targets.length) bad("파기할 응답을 찾을 수 없습니다.");
 
-  await writeAccessLog({ account, ip: ipOf(req), op: "파기", surveyId, count: targets.length, reason });
+  // 기간 파기일 때만 중복 방지 표시도 함께 지운다(같은 조사·같은 수집일 범위).
+  let marks = [];
+  if (from && to) {
+    const ms = await db.collection(NAMED_MARK)
+      .where("surveyId", "==", surveyId)
+      .where("collectedDate", ">=", from).where("collectedDate", "<=", to)
+      .limit(400).get();
+    marks = ms.docs;
+  }
+
+  await writeAccessLog({
+    account, ip: ipOf(req), op: "파기", surveyId,
+    count: targets.length, reason: `${reason}${marks.length ? ` (중복 방지 표시 ${marks.length}건 포함)` : ""}`,
+  });
   const batch = db.batch();
   targets.forEach((d) => batch.delete(d.ref));
+  marks.forEach((d) => batch.delete(d.ref));
   await batch.commit();
-  return { deleted: targets.length };
+  return { deleted: targets.length, marks: marks.length };
 });
 
 // 월 1회 점검 기록. 점검 자체도 기록으로 남겨 이행 여부를 확인할 수 있게 한다.
