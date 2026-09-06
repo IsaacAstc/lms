@@ -230,6 +230,23 @@ function wirePhotoPreview() {
   });
 }
 
+// 제출 오류를 응답자가 이해할 수 있는 문장으로 바꾼다.
+// 서버가 보낸 안내 문구는 그대로 쓰고, 코드만 오는 경우(internal 등)는 일반 안내로 대체한다.
+function submitErrorText(e) {
+  const code = String(e?.code || "").replace(/^functions\//, "");
+  const msg = String(e?.message || "").trim();
+  // 함수가 배포되지 않았거나 서버 내부 오류 — 응답자가 할 수 있는 일이 없다.
+  if (code === "internal" || code === "not-found" || code === "unavailable") {
+    return "제출 처리가 준비되지 않아 접수하지 못했습니다. 조사 담당자에게 문의해 주세요.";
+  }
+  if (code === "unauthenticated" || code === "permission-denied") {
+    return "제출 권한을 확인하지 못했습니다. 조사 담당자에게 문의해 주세요.";
+  }
+  // HttpsError로 보낸 한국어 안내(중복 응답·기간 종료·필수 항목 등)는 그대로 노출한다.
+  if (msg && msg !== code && !/^[a-z-]+$/.test(msg)) return msg;
+  return "제출에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+}
+
 async function submit(consentOpt, optItems) {
   const form = document.getElementById("n-form");
   const err = document.getElementById("n-error");
@@ -305,7 +322,7 @@ async function submit(consentOpt, optItems) {
   } catch (e) {
     btn.disabled = false;
     btn.textContent = "제출";
-    err.textContent = e?.message || "제출에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+    err.textContent = submitErrorText(e);
   }
 }
 
