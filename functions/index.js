@@ -552,9 +552,20 @@ exports.submitNamedSurvey = onCall(
       throw new HttpsError("failed-precondition",
         "설문 문항이 변경되었습니다. 페이지를 새로고침한 뒤 다시 제출해 주세요.");
     }
+    // 조건부 후속이 실제로 노출됐는지 서버에서도 판정한다 —
+    // 숨겨진 문항을 필수라는 이유로 거부하면 정상 응답이 막힌다.
+    const shown = (i) => {
+      const q = defs[i] || {};
+      if (q.type !== "fu") return true;
+      const pi = defs.findIndex((p, j) => j < i && p && p.type === "ox" && p.label === q.q);
+      if (pi < 0) return false;                       // 대상 문항이 없으면 노출되지 않았다
+      const pv = String(given[pi] ?? "").trim();
+      return q.cond === "no" ? pv === "아니오" : pv === "예";
+    };
     const answers = [];
     for (let i = 0; i < defs.length; i++) {
       const q = defs[i] || {};
+      if (!shown(i)) continue;                        // 노출되지 않은 후속은 수집·검증 대상이 아니다
       const raw = given[i];
       const v = Array.isArray(raw) ? raw.map((x) => str(x, 200, q.label, false)).filter(Boolean)
         : str(raw, 1000, q.label || `문항 ${i + 1}`, false);

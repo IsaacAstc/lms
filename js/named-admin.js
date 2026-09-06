@@ -25,8 +25,10 @@ const COLL = "namedSurveys";
 // 문항 유형 — 익명 설문과 달리 5점 척도·집계 기능은 두지 않는다(통계 목적 조사가 아님).
 const Q_TYPES = [
   ["ox", "예/아니오"], ["choice", "선다형(택1)"], ["multi", "복수 응답"],
-  ["text", "주관식"], ["note", "안내 문구"],
+  ["text", "주관식"], ["note", "안내 문구"], ["fu", "조건부 후속"],
 ];
+// 조건부 후속의 답변 유형. 앞선 예/아니오 문항의 답에 따라 그 아래에 노출된다.
+const FU_TYPES = [["text", "주관식"], ["choice", "선다형(택1)"], ["ox", "예/아니오"]];
 // 선택 목적(이벤트 등) 항목 — 값이 저장되지 않고 담당자 메일로만 전달된다.
 const OPT_TYPES = [["photo", "사진 첨부"], ["mailtext", "입력(연락처 등)"]];
 
@@ -158,16 +160,37 @@ function paintEditor() {
 
 function paintQuestions() {
   const box = $("nm-questions");
+  // 조건부 후속이 가리킬 수 있는 대상: 앞선 예/아니오 문항.
+  const oxTargets = draft.questions.filter((q) => q.type === "ox" && (q.label || "").trim()).map((q) => q.label.trim());
+  const fuRow = (q, i) => `
+    <select class="nf-q" data-i="${i}">
+      <option value="">대상 문항 선택</option>
+      ${oxTargets.map((t) => `<option${t === q.q ? " selected" : ""}>${esc(t)}</option>`).join("")}
+    </select>
+    <select class="nf-cond" data-i="${i}">
+      <option value="yes"${q.cond === "yes" ? " selected" : ""}>'예' 선택 시</option>
+      <option value="no"${q.cond === "no" ? " selected" : ""}>'아니오' 선택 시</option>
+    </select>
+    <select class="nf-type" data-i="${i}">
+      ${FU_TYPES.map(([t, lb]) => `<option value="${t}"${q.futype === t ? " selected" : ""}>후속: ${lb}</option>`).join("")}
+    </select>
+    <input class="nq-label" data-i="${i}" value="${esc(q.label || "")}" placeholder="후속 문항 문구" style="min-width:220px">
+    ${q.futype === "choice"
+      ? `<input class="nq-opts" data-i="${i}" value="${esc((q.options || []).join(" / "))}" placeholder="보기 — ' / '로 구분" style="min-width:200px">`
+      : ""}
+    <label class="chk" title="노출됐을 때만 적용됩니다"><input type="checkbox" class="nq-req" data-i="${i}"${q.required ? " checked" : ""}> 필수</label>`;
+
   box.innerHTML = draft.questions.map((q, i) => `<div class="load-row">
       <span>${i + 1}.</span>
       <select class="nq-type" data-i="${i}">${Q_TYPES.map(([t, lb]) => `<option value="${t}"${q.type === t ? " selected" : ""}>${lb}</option>`).join("")}</select>
+      ${q.type === "fu" ? fuRow(q, i) : `
       ${q.type === "note"
         ? `<textarea class="nq-label" data-i="${i}" rows="2" placeholder="안내 문구" style="min-width:320px">${esc(q.label || "")}</textarea>`
         : `<input class="nq-label" data-i="${i}" value="${esc(q.label || "")}" placeholder="문항 문구" style="min-width:240px">`}
       ${(q.type === "choice" || q.type === "multi")
         ? `<input class="nq-opts" data-i="${i}" value="${esc((q.options || []).join(" / "))}" placeholder="보기 — ' / '로 구분" style="min-width:220px">`
         : ""}
-      ${q.type === "note" ? "" : `<label class="chk"><input type="checkbox" class="nq-req" data-i="${i}"${q.required ? " checked" : ""}> 필수</label>`}
+      ${q.type === "note" ? "" : `<label class="chk"><input type="checkbox" class="nq-req" data-i="${i}"${q.required ? " checked" : ""}> 필수</label>`}`}
       <button type="button" class="chip-move nq-move" data-i="${i}" data-d="-1" title="위로">◀</button>
       <button type="button" class="chip-move nq-move" data-i="${i}" data-d="1" title="아래로">▶</button>
       <button type="button" class="chip-del nq-del" data-i="${i}">×</button>
@@ -192,6 +215,15 @@ function paintQuestions() {
   }));
   box.querySelectorAll(".nq-req").forEach((el) => el.addEventListener("change", (e) => {
     draft.questions[+e.target.dataset.i].required = e.target.checked;
+  }));
+  box.querySelectorAll(".nf-q").forEach((el) => el.addEventListener("change", (e) => {
+    draft.questions[+e.target.dataset.i].q = e.target.value;
+  }));
+  box.querySelectorAll(".nf-cond").forEach((el) => el.addEventListener("change", (e) => {
+    draft.questions[+e.target.dataset.i].cond = e.target.value;
+  }));
+  box.querySelectorAll(".nf-type").forEach((el) => el.addEventListener("change", (e) => {
+    draft.questions[+e.target.dataset.i].futype = e.target.value; paintQuestions();
   }));
   box.querySelectorAll(".nq-move").forEach((b) => b.addEventListener("click", () => {
     const i = +b.dataset.i; const j = i + Number(b.dataset.d);
@@ -242,12 +274,22 @@ function readEditor() {
       notice: $("nm-opt-notice").value.trim(),
       declineNote: $("nm-opt-decline").value.trim(),
     },
-    questions: d.questions.map((q) => ({
-      type: q.type,
-      label: (q.label || "").trim(),
-      options: Array.isArray(q.options) ? q.options : [],
-      required: q.type === "note" ? false : !!q.required,
-    })),
+    questions: d.questions.map((q) => (q.type === "fu"
+      ? {
+          type: "fu",
+          label: (q.label || "").trim(),
+          q: (q.q || "").trim(),
+          cond: q.cond === "no" ? "no" : "yes",
+          futype: ["text", "choice", "ox"].includes(q.futype) ? q.futype : "text",
+          options: Array.isArray(q.options) ? q.options : [],
+          required: !!q.required,
+        }
+      : {
+          type: q.type,
+          label: (q.label || "").trim(),
+          options: Array.isArray(q.options) ? q.options : [],
+          required: q.type === "note" ? false : !!q.required,
+        })),
     optItems: d.optItems.map((q) => ({ type: q.type, label: (q.label || "").trim() })),
   };
 }
@@ -259,6 +301,11 @@ async function saveSurvey() {
   if (d.purposeOpt.enabled && (!d.purposeOpt.label || !d.purposeOpt.items)) {
     return alert("선택 목적을 사용하려면 목적과 수집 항목을 입력하세요.");
   }
+  const noTarget = d.questions.findIndex((q) => q.type === "fu" && !q.q);
+  if (noTarget >= 0) return alert(`${noTarget + 1}번 조건부 문항의 대상 문항을 선택하세요.`);
+  const badOrder = d.questions.findIndex((q, i) =>
+    q.type === "fu" && !d.questions.slice(0, i).some((p) => p.type === "ox" && p.label === q.q));
+  if (badOrder >= 0) return alert(`${badOrder + 1}번 조건부 문항의 대상 문항이 그 앞에 없습니다. 대상 문항을 앞으로 옮기세요.`);
   const blank = d.questions.findIndex((q) => !q.label);
   if (blank >= 0) return alert(`${blank + 1}번 문항의 문구가 비어 있습니다. 입력하거나 삭제하세요.`);
   const blankOpt = d.optItems.findIndex((q) => !q.label);
@@ -507,7 +554,10 @@ export function initNamedAdmin() {
     $("nm-opt-fields").hidden = !e.target.checked;
   });
   $("nm-q-add").addEventListener("click", () => {
-    draft.questions.push({ type: $("nm-q-type").value, label: "", options: [], required: true });
+    const type = $("nm-q-type").value;
+    draft.questions.push(type === "fu"
+      ? { type: "fu", label: "", q: "", cond: "yes", futype: "text", options: [], required: true }
+      : { type, label: "", options: [], required: true });
     paintQuestions();
   });
   $("nm-o-add").addEventListener("click", () => {
