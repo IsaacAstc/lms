@@ -386,6 +386,7 @@ async function showResponses(surveyId) {
     <h3>${esc(s?.title || surveyId)} — 응답 ${rows.length}건</h3>
     <p class="hint">응답에는 <b>응답자 식별자가 붙어 있지 않습니다.</b> 중복 응답 표시만 별도로 보관하며 응답 내용과 연결되지 않으므로, 어떤 응답이 누구의 것인지는 시스템에서도 알 수 없습니다. 사진·연락처 등 선택 목적 항목은 저장되지 않으며 제출코드로 담당자 메일과 대조합니다.</p>
     <p class="hint">이 화면의 <b>조회·내보내기·파기는 모두 접속기록으로 남습니다</b>(계정·일시·접속지·건수). 내보내기는 사유 입력이 필요합니다.</p>
+    <p class="hint">기간 지정 파기는 Firebase 콘솔에 <code>namedRespondents</code> 복합 인덱스(<code>surveyId</code> + <code>collectedDate</code>)가 있어야 동작합니다(기관·프로젝트별로 1회). 없으면 파기 시 오류가 나며, 나머지 기능에는 영향이 없습니다.</p>
     <div class="form-actions">
       <button type="button" id="nm-resp-csv">CSV 내보내기</button>
       <button type="button" class="del" id="nm-resp-purge">기간 지정 파기</button>
