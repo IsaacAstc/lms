@@ -83,18 +83,23 @@ python3 -m http.server 8000
    - `main` 에 병합하면 자동 배포, 또는
    - **Actions 탭 → Deploy to GitHub Pages → Run workflow** 로 수동 실행(브랜치 지정 가능).
 4. 배포된 URL로 접속해 로그인.
-   - 커스텀 도메인: `https://kac-astc.edu.eu.org/`
+   - 커스텀 도메인: `https://kac-astc.is-a.dev/`
    - 기본 주소: `https://isaacastc.github.io/lms/` (계속 동작)
 
 > Firebase 콘솔 **Authentication → Settings → 승인된 도메인**에 접속에 사용하는 도메인을
-> 모두 추가해야 로그인이 동작한다(`kac-astc.edu.eu.org`, `isaacastc.github.io`).
+> 모두 추가해야 로그인이 동작한다(`kac-astc.is-a.dev`, `isaacastc.github.io`).
 
-### 커스텀 도메인 (`kac-astc.edu.eu.org`)
+### 커스텀 도메인 (`kac-astc.is-a.dev`)
 
 - **`CNAME` 파일(저장소 루트)이 도메인 설정의 실체다.** Actions로 Pages를 배포하면
   업로드 아티팩트에 `CNAME`이 없을 때 Settings의 커스텀 도메인이 배포마다 풀릴 수 있다.
   도메인을 바꾸려면 이 파일 내용을 바꾸고, 쓰지 않으려면 파일을 지운다.
-- DNS는 도메인 등록처에서 GitHub Pages를 가리키도록 설정한다(A 레코드 4개 또는 CNAME).
+- 이 도메인은 [is-a.dev](https://is-a.dev) 무료 서브도메인이다. 발급·변경은
+  `is-a-dev/register` 저장소의 `domains/kac-astc.json`에 PR을 올려 머지되어야 반영된다
+  (레코드: `CNAME` → `isaacastc.github.io`). DNS는 그쪽에서 관리하므로 별도 설정이 없다.
+- **`CNAME` 파일은 도메인이 실제로 발급된 뒤에 바꿀 것.** DNS가 아직 이 저장소를
+  가리키지 않는 상태에서 파일만 바꾸면 github.io 주소가 커스텀 도메인으로 리다이렉트되어
+  사이트 전체가 접속 불가가 된다.
 - **소스코드는 도메인에 의존하지 않는다.** 공개 링크·QR은 모두 접속한 주소(`location.origin`)
   기준으로 생성되므로 도메인이 바뀌어도 코드 수정이 필요 없다.
 
@@ -279,7 +284,7 @@ Daily Schedule(강사명 미표시 스냅샷)·Bulletins·Polls·Ask Staff(1:1 Q
    - Authentication → 이메일/비밀번호 활성화, 가입(신규 생성) 차단, 관리자 계정 생성
    - Firestore 규칙 탭에 이 저장소의 `firestore.rules` 게시
    - Authentication → Settings → 승인된 도메인에 접속 도메인 추가
-     (`kac-astc.edu.eu.org`, `isaacastc.github.io`)
+     (`kac-astc.is-a.dev`, `isaacastc.github.io`)
    - (선택) 퀴즈를 기관별로 쓰려면 Realtime Database + `rtdb.rules.json` — 현재
      동거 앱(퀴즈·히어로 미션)은 기본 기관 전용이다.
 2. **기관 등록**: 기본 기관에 마스터로 로그인 → 설정 → **기관 관리** →
