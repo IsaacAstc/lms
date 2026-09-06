@@ -113,6 +113,8 @@ function renderForm(consentOpt) {
   const qs = Array.isArray(survey.questions) ? survey.questions : [];
   let no = 0;
   const body = qs.map((q, i) => {
+    // 조건부 후속은 여기서 자리만 만들고, 대상 문항 아래로 옮겨 붙인다(wireFollowUps).
+    if (q.type === "fu") return `<div class="q-item fu-item" id="fu-${i}" hidden></div>`;
     if (q.type !== "note") no++;
     return questionHtml(q, `q_${i}`, no);
   }).join("");
@@ -143,10 +145,53 @@ function renderForm(consentOpt) {
       <p id="n-error" class="error"></p>
     </form>`;
 
+  wireFollowUps(qs);
   wirePhotoPreview();
   document.getElementById("n-form").addEventListener("submit", (e) => {
     e.preventDefault();
     submit(consentOpt, optItems);
+  });
+}
+
+/* ── 조건부 후속 ──
+ * 대상 예/아니오 문항의 답이 조건과 맞을 때만 노출한다.
+ * 숨겨지면 입력값을 비워 잘못 제출되지 않게 한다. */
+function wireFollowUps(qs) {
+  const form = document.getElementById("n-form");
+  qs.forEach((f, i) => {
+    if (f.type !== "fu") return;
+    const box = document.getElementById(`fu-${i}`);
+    if (!box) return;
+    const pi = qs.findIndex((p, j) => j < i && p.type === "ox" && p.label === f.q);
+    if (pi < 0) return; // 대상 문항이 없다(정의 변경 등) — 노출하지 않는다.
+
+    const name = `q_${i}`;
+    const head = `<div class="q-label">↳ ${esc(f.label)}${f.required ? "" : ` <span class="q-opt">(선택)</span>`}</div>`;
+    box.innerHTML = f.type === "fu" && f.futype === "ox"
+      ? `${head}<div class="scale-row">
+           <label class="scale-opt"><input type="radio" name="${name}" value="예"><span>예</span></label>
+           <label class="scale-opt"><input type="radio" name="${name}" value="아니오"><span>아니오</span></label>
+         </div>`
+      : f.futype === "choice"
+        ? `${head}<div class="scale-row">${(f.options || []).map((op) =>
+             `<label class="scale-opt"><input type="radio" name="${name}" value="${esc(op)}"><span>${esc(op)}</span></label>`).join("")}</div>`
+        : `${head}<textarea name="${name}" rows="3"></textarea>`;
+
+    // 대상 문항 바로 아래로 옮긴다.
+    const parent = form.querySelector(`input[name="q_${pi}"]`)?.closest(".q-item");
+    if (parent) parent.after(box);
+
+    const update = () => {
+      const v = form[`q_${pi}`]?.value;
+      const show = f.cond === "no" ? v === "아니오" : v === "예";
+      box.hidden = !show;
+      if (!show) {
+        box.querySelectorAll("input[type=radio]").forEach((r) => { r.checked = false; });
+        box.querySelectorAll("textarea").forEach((t) => { t.value = ""; });
+      }
+    };
+    form.querySelectorAll(`input[name="q_${pi}"]`).forEach((r) => r.addEventListener("change", update));
+    update();
   });
 }
 
@@ -201,6 +246,8 @@ async function submit(consentOpt, optItems) {
   for (let i = 0; i < qs.length; i++) {
     const q = qs[i];
     if (q.type === "note") { answers.push(""); continue; }
+    // 조건부 후속: 숨겨져 있으면 응답 대상이 아니다(필수여도 건너뛴다).
+    if (q.type === "fu" && document.getElementById(`fu-${i}`)?.hidden !== false) { answers.push(""); continue; }
     let v;
     if (q.type === "multi") v = [...form.querySelectorAll(`input[name="q_${i}"]:checked`)].map((el) => el.value);
     else v = (form[`q_${i}`]?.value || "").trim();

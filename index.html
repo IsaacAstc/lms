@@ -545,6 +545,7 @@
 
             <h4>문항</h4>
             <p class="hint">개인을 특정할 수 있는 항목(이름·연락처 등)은 여기에 두지 마세요. 저장되는 문항입니다.</p>
+            <p class="hint"><b>조건부 후속</b>은 앞선 <b>예/아니오</b> 문항의 답에 따라 그 문항 바로 아래에 노출됩니다(예: 취업 여부 → '예'일 때만 회사 문항). 대상 문항이 후속보다 <b>앞에</b> 있어야 하며, 숨겨진 상태에서는 필수로 지정해도 응답 없이 제출됩니다.</p>
             <div class="load-row">
               <select id="nm-q-type">
                 <option value="ox">예/아니오</option>
@@ -552,6 +553,7 @@
                 <option value="multi">복수 응답</option>
                 <option value="text">주관식</option>
                 <option value="note">안내 문구</option>
+                <option value="fu">조건부 후속</option>
               </select>
               <button type="button" id="nm-q-add">문항 추가</button>
             </div>

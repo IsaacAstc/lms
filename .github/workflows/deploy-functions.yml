@@ -1,10 +1,13 @@
 name: Deploy Functions & RTDB Rules
 
-# functions/ 또는 RTDB 규칙이 바뀐 채로 main에 머지되면 자동 배포한다.
-# ⚠️ Firestore 규칙은 여기서 배포하지 않는다 — astc-lms 프로젝트의 Firestore 규칙은
-#   Video Vault와 공유되어, 이 저장소의 firestore.rules 단독 배포 시 vault 규칙이
-#   삭제된다. Firestore 규칙 배포는 astc-video-vault 저장소의 병합본으로만 수행한다.
-#   (이 저장소의 firestore.rules 변경은 vault의 sync-lms-rules 워크플로가 PR로 반영)
+# functions/ 또는 RTDB 규칙이 바뀐 채로 main에 머지되면 기본 기관에 자동 배포한다.
+# 추가 기관(별도 Firebase 프로젝트)은 자동 배포 대상이 아니며, 아래 workflow_dispatch에서
+# 대상을 골라 수동 실행한다 — 기관마다 요금제·시크릿 준비 상태가 다르기 때문이다.
+#
+# ⚠️ 기본 기관(astc-lms)의 Firestore 규칙은 여기서 배포하지 않는다 — 이 프로젝트의 규칙은
+#   Video Vault와 공유되어, 이 저장소의 firestore.rules 단독 배포 시 vault 규칙이 삭제된다.
+#   해당 배포는 astc-video-vault 저장소의 병합본으로만 수행한다.
+#   추가 기관 프로젝트는 vault와 무관하므로 Firestore 규칙까지 함께 배포한다.
 on:
   push:
     branches: [main]
@@ -14,6 +17,14 @@ on:
       - "firebase.json"
       - ".github/workflows/deploy-functions.yml"
   workflow_dispatch:
+    inputs:
+      target:
+        description: "배포 대상"
+        type: choice
+        default: default
+        options:
+          - default   # 기본 기관(astc-lms) — 함수·RTDB 규칙만
+          - atc       # 항공훈련센터 — 함수·RTDB 규칙 + Firestore 규칙
 
 # 배포 1건만 실행(동시 배포 충돌 방지).
 concurrency:
@@ -23,8 +34,6 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # 서비스 계정 시크릿이 등록된 경우에만 동작(미설정 시 조용히 건너뜀).
-    if: github.repository_owner != ''
     steps:
       - uses: actions/checkout@v4
 
@@ -36,8 +45,15 @@ jobs:
         working-directory: functions
         run: npm ci
 
-      - name: Check secrets
+      # push 트리거에는 inputs가 없으므로 기본 기관으로 본다.
+      - name: 배포 대상 확인
+        id: t
+        run: echo "target=${{ github.event.inputs.target || 'default' }}" >> $GITHUB_OUTPUT
+
+      # ──────────────── 기본 기관 (astc-lms) ────────────────
+      - name: Check secrets (기본 기관)
         id: check
+        if: steps.t.outputs.target == 'default'
         run: |
           if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" ]; then
             echo "::warning::FIREBASE_SERVICE_ACCOUNT secret이 없어 배포를 건너뜁니다. README의 '함수 자동 배포' 절차를 참고하세요."
@@ -46,15 +62,39 @@ jobs:
             echo "ok=true" >> $GITHUB_OUTPUT
           fi
 
-      # 서비스 계정으로 인증(GOOGLE_APPLICATION_CREDENTIALS 자동 설정).
       - uses: google-github-actions/auth@v2
-        if: steps.check.outputs.ok == 'true'
+        if: steps.t.outputs.target == 'default' && steps.check.outputs.ok == 'true'
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
-      - name: Deploy functions & RTDB rules
-        if: steps.check.outputs.ok == 'true'
+      # Firestore 규칙 제외 — vault와 공유되는 프로젝트라 단독 배포 시 vault 규칙이 지워진다.
+      - name: Deploy functions & RTDB rules (기본 기관)
+        if: steps.t.outputs.target == 'default' && steps.check.outputs.ok == 'true'
         run: npx --yes firebase-tools@latest deploy
           --only functions,database
           --project "${{ secrets.FIREBASE_PROJECT_ID }}"
+          --non-interactive --force
+
+      # ──────────────── 항공훈련센터 (별도 프로젝트) ────────────────
+      - name: Check secrets (항공훈련센터)
+        id: check_atc
+        if: steps.t.outputs.target == 'atc'
+        run: |
+          if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT_ATC }}" ] || [ -z "${{ secrets.FIREBASE_PROJECT_ID_ATC }}" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT_ATC / FIREBASE_PROJECT_ID_ATC secret이 필요합니다. README의 '추가 기관 배포' 절차를 참고하세요."
+            exit 1
+          fi
+          echo "ok=true" >> $GITHUB_OUTPUT
+
+      - uses: google-github-actions/auth@v2
+        if: steps.t.outputs.target == 'atc'
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ATC }}
+
+      # 이 프로젝트는 vault와 규칙을 공유하지 않으므로 Firestore 규칙까지 함께 배포한다.
+      - name: Deploy functions, RTDB & Firestore rules (항공훈련센터)
+        if: steps.t.outputs.target == 'atc'
+        run: npx --yes firebase-tools@latest deploy
+          --only functions,database,firestore:rules
+          --project "${{ secrets.FIREBASE_PROJECT_ID_ATC }}"
           --non-interactive --force
