@@ -235,15 +235,16 @@ function wirePhotoPreview() {
 function submitErrorText(e) {
   const code = String(e?.code || "").replace(/^functions\//, "");
   const msg = String(e?.message || "").trim();
-  // 함수가 배포되지 않았거나 서버 내부 오류 — 응답자가 할 수 있는 일이 없다.
+  // 서버가 보낸 안내 문구가 있으면 그대로 쓴다 — 코드보다 먼저 본다.
+  // (메일 발송 실패처럼 우리 함수가 internal 코드로 던지는 경우에도 문구는 한국어다)
+  if (msg && msg !== code && !/^[a-z-]+$/.test(msg)) return msg;
+  // 문구 없이 코드만 온 경우 — 함수 미배포·호출 불가 등 응답자가 할 수 있는 일이 없다.
   if (code === "internal" || code === "not-found" || code === "unavailable") {
     return "제출 처리가 준비되지 않아 접수하지 못했습니다. 조사 담당자에게 문의해 주세요.";
   }
   if (code === "unauthenticated" || code === "permission-denied") {
     return "제출 권한을 확인하지 못했습니다. 조사 담당자에게 문의해 주세요.";
   }
-  // HttpsError로 보낸 한국어 안내(중복 응답·기간 종료·필수 항목 등)는 그대로 노출한다.
-  if (msg && msg !== code && !/^[a-z-]+$/.test(msg)) return msg;
   return "제출에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
