@@ -185,6 +185,7 @@ exports.submitApplication = onCall(
           attachments,
         });
       } catch (e) {
+        console.error("교육 신청 접수 메일 발송 실패:", e?.response || e?.message || e);
         // 메일 실패 → 선점한 잔여석 원복 + 접수 문서 제거.
         await db.runTransaction(async (tx) => {
           const cSnap = await tx.get(courseRef);
@@ -475,6 +476,7 @@ exports.submitSurveyPhotos = onCall(
         attachments,
       });
     } catch (e) {
+      console.error("설문 사진 메일 발송 실패:", e?.response || e?.message || e);
       throw new HttpsError("internal", "사진 메일 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     }
     return { sent: attachments.length };
@@ -685,6 +687,9 @@ exports.submitNamedSurvey = onCall(
           attachments,
         });
       } catch (e) {
+        // 원인을 로그에 남긴다 — 남기지 않으면 어떤 이유로 실패했는지 확인할 방법이 없다.
+        // (SMTP 인증 실패·수신 주소 오류 등은 nodemailer 메시지에만 담긴다)
+        console.error("기명 조사 제출물 메일 발송 실패:", e?.response || e?.message || e);
         await rollback();
         if (e instanceof HttpsError) throw e;
         throw new HttpsError("internal", "제출물 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.");
