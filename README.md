@@ -202,7 +202,10 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
 5. 관리자 화면 → 공개 현황 보드 탭 → **접수 이메일 입력 + 신청 버튼 노출 체크 → 저장**.
    저장해야 보드에 신청/취소 버튼이 나타난다(체크 해제로 즉시 비활성화 가능).
 
-기관(테넌트) 분리 운영 시 함수는 프로젝트별로 각각 배포해야 한다.
+기관(테넌트) 분리 운영 시 함수·보안규칙·인덱스는 **프로젝트별로 각각 배포**해야 한다.
+기본 기관에 배포해도 추가 기관 프로젝트에는 반영되지 않는다(규칙이 없는 컬렉션은
+기본값이 전면 거부라 화면에서 `Missing or insufficient permissions`로 보인다).
+아래 '추가 기관 배포' 절 참고.
 
 ### 함수 자동 배포 (GitHub Actions — PC 없이 배포)
 `.github/workflows/deploy-functions.yml`이 **main 머지 시 `functions/`·`firestore.rules`
@@ -221,6 +224,37 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
    - `FIREBASE_PROJECT_ID` : Firebase 프로젝트 ID
 5. 이후 Actions 탭에서 `Deploy Functions & Rules` 워크플로를 수동 실행(`Run workflow`)해
    한 번 검증한다. 시크릿이 없으면 워크플로는 경고만 남기고 건너뛴다.
+
+### 추가 기관 배포 (항공훈련센터 등 — 별도 Firebase 프로젝트)
+
+기본 기관과 코드는 같지만 프로젝트가 다르므로 배포도 따로 한다. 워크플로의
+**Run workflow → 배포 대상**에서 `atc`를 고르면 해당 프로젝트로 배포된다
+(기본값 `default`는 기본 기관). push 자동 배포는 기본 기관만 대상이다.
+
+1회 준비:
+
+1. **Blaze 요금제 전환** — Cloud Functions는 종량제에서만 배포된다.
+2. **시크릿 3개 등록** (해당 프로젝트에서):
+   ```bash
+   firebase functions:secrets:set MAIL_USER --project <프로젝트ID>
+   firebase functions:secrets:set MAIL_PASS --project <프로젝트ID>
+   firebase functions:secrets:set SURVEY_ID_SALT --project <프로젝트ID>
+   ```
+   `SURVEY_ID_SALT`는 **기관마다 다른 값**을 쓴다. 프로젝트가 격리돼 있으므로
+   식별자 해시 키도 분리하는 것이 맞다.
+3. **서비스 계정 생성 + GitHub 시크릿 등록** — 기본 기관과 같은 역할을 부여한 뒤,
+   저장소 Settings → Secrets → Actions 에
+   `FIREBASE_SERVICE_ACCOUNT_ATC`(JSON 전체), `FIREBASE_PROJECT_ID_ATC` 등록.
+4. **복합 인덱스**: `namedRespondents` — `surveyId`(asc) + `collectedDate`(asc).
+   기명 조사의 기간 지정 파기에 필요하다(`firestore-indexes.md` 참고).
+5. **승인된 도메인**: Authentication → Settings 에 `kacastc.mooo.com`,
+   `isaacastc.github.io` 추가.
+
+Firestore 규칙은 이 워크플로가 함께 배포한다 — 추가 기관 프로젝트는 Video Vault와
+규칙을 공유하지 않으므로 이 저장소의 `firestore.rules`를 그대로 올려도 안전하다.
+
+> ⚠️ 기명 조사(개인정보 처리)를 추가 기관에서 운영하면 개인정보파일의 관리 주체와
+> 등록 단위가 달라진다. 어느 기관 명의로 운영할지 개인정보 보호 담당부서 확인이 필요하다.
 
 > 비상 수단: 브라우저만으로 배포하려면 [Google Cloud Shell](https://shell.cloud.google.com)
 > 에서 `git clone` 후 `firebase deploy --only functions` 를 실행하면 된다(도구 사전 설치됨).
