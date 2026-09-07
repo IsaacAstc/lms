@@ -366,7 +366,8 @@ async function submit(e, survey) {
         // 날짜·연월 응답은 값 하나짜리 선다형과 같은 형태로 저장한다(집계·조회 경로 공용).
         const v = (form[name]?.value || "").trim();
         if (!v) { if (q.required) { err.textContent = `'${q.label}' 문항에 응답해 주세요.`; return; } }
-        else choiceAnswers.push({ cat: sec.title, label: q.label, options: [v], multi: false });
+        // kind로 날짜·연월을 구분한다 — 집계에서 날짜는 월별 요약, 연월은 분포표로 나뉜다.
+        else choiceAnswers.push({ cat: sec.title, label: q.label, options: [v], multi: false, kind: q.type });
       } else if (q.type === "photo") {
         mailDefined.photo++;
         const f = form[name]?.files?.[0];
@@ -408,7 +409,7 @@ async function submit(e, survey) {
     } else if (f.type === "date" || f.type === "month") { // 조건부 날짜·연월.
       const v = (form[`fu_${fi}`]?.value || "").trim();
       if (!v) { if (f.required) { err.textContent = `'${f.label}' 문항에 응답해 주세요.`; return; } }
-      else choiceAnswers.push({ cat: "조건부", label: f.label, options: [v], multi: false });
+      else choiceAnswers.push({ cat: "조건부", label: f.label, options: [v], multi: false, kind: f.type });
     } else if (f.type === "photo") { // 조건부 사진 — 첨부한 경우에만 메일로 전달.
       mailDefined.photo++;
       const file = form[`fu_${fi}`]?.files?.[0];
