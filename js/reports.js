@@ -143,13 +143,35 @@ function renderOptional(agg) {
   document.getElementById("rep-choice").innerHTML = choiceHtml;
 }
 
-// 설문 원응답(raw) — 개별 익명 응답.
+/* ── 설문 원응답(raw) — 개별 익명 응답 ──
+ * 교육·강사·기본 주관식 2종은 고정 열, 그 밖의 문항(추가 카테고리 5점·O/X·선다형·
+ * 복수 응답·날짜·연월·자유 주관식·조건부 후속)은 응답에 실제로 있는 라벨에서
+ * 열을 만들어 붙인다. 문항 구성이 세트·개정에 따라 달라져도 CSV에 빠지지 않는다. */
+
+// 한 응답의 부가 문항 값들: 라벨 → 표시 문자열.
+function extraCellsOf(r) {
+  const m = new Map();
+  const put = (label, v) => { if (label && v !== "" && v != null) m.set(label, String(v)); };
+  for (const x of r.extraAnswers || []) put(x?.label, Number.isFinite(x?.v) ? `${x.v}점` : "");
+  for (const o of r.oxAnswers || []) put(o?.label, o?.yes ? "예" : "아니오");
+  // 선다형·복수 응답과 날짜·연월(값 1개짜리 선다형으로 저장) 공용.
+  for (const c of r.choiceAnswers || []) put(c?.label, (c?.options || []).join(" / "));
+  for (const t of r.freeExtra || []) put(t?.label, t?.text);
+  for (const t of r.fuTexts || []) put(t?.label, t?.text);
+  return m;
+}
+
 function renderRaw(responses) {
   const box = document.getElementById("rep-raw");
   // 문항 수는 응답 스냅샷 기준(문항 개정 시 과거 응답이 어긋나지 않도록).
   const items = responses.find((r) => Array.isArray(r.eduItems) && r.eduItems.length)?.eduItems || EDU_ITEMS;
   const eduHead = items.map((_, i) => `<th>교${i + 1}</th>`).join("");
   const when = (r) => r.collectedAt || r.collectedDate || "";
+  // 부가 문항 열: 응답에 나온 순서대로(문항 순서를 대체로 따라간다).
+  const cells = new Map(responses.map((r) => [r, extraCellsOf(r)]));
+  const extraLabels = [];
+  for (const m of cells.values()) for (const lb of m.keys()) if (!extraLabels.includes(lb)) extraLabels.push(lb);
+  const extraHead = extraLabels.map((lb) => `<th>${escapeHtml(lb)}</th>`).join("");
   const rows = responses
     .slice().sort((a, b) => when(b).localeCompare(when(a)))
     .map((r) => {
@@ -157,6 +179,8 @@ function renderRaw(responses) {
       const inst = (r.instructors || [])
         .map((it) => `${escapeHtml(it.subject)}/${escapeHtml(it.instructorName)}: ${[0, 1, 2].map((i) => it[`q${i}`] ?? "-").join("·")}`)
         .join("<br>");
+      const m = cells.get(r);
+      const extra = extraLabels.map((lb) => `<td>${escapeHtml(m.get(lb) || "")}</td>`).join("");
       return `<tr>
         <td>${escapeHtml(fmtDot(when(r)))}</td>
         <td>${escapeHtml(r.courseType || "")}</td>
@@ -164,7 +188,8 @@ function renderRaw(responses) {
         <td class="raw-inst">${inst || "-"}</td>
         <td class="raw-free">${escapeHtml(r.freeDissatisfied || "")}</td>
         <td class="raw-free">${escapeHtml(r.freeSuggestion || "")}</td>
+        ${extra}
       </tr>`;
     }).join("");
-  box.innerHTML = `<table><thead><tr><th>수집일시</th><th>과정유형</th>${eduHead}<th>강사평가(준비·질의·전반)</th><th>불만족</th><th>제안·개선</th></tr></thead><tbody>${rows}</tbody></table>`;
+  box.innerHTML = `<table><thead><tr><th>수집일시</th><th>과정유형</th>${eduHead}<th>강사평가(준비·질의·전반)</th><th>불만족</th><th>제안·개선</th>${extraHead}</tr></thead><tbody>${rows}</tbody></table>`;
 }

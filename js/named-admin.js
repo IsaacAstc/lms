@@ -25,10 +25,15 @@ const COLL = "namedSurveys";
 // 문항 유형 — 익명 설문과 달리 5점 척도·집계 기능은 두지 않는다(통계 목적 조사가 아님).
 const Q_TYPES = [
   ["ox", "예/아니오"], ["choice", "선다형(택1)"], ["multi", "복수 응답"],
-  ["text", "주관식"], ["note", "안내 문구"], ["fu", "조건부 후속"],
+  ["text", "주관식"], ["date", "날짜 지정"], ["month", "연/월 지정"],
+  ["note", "안내 문구"], ["fu", "조건부 후속"],
 ];
 // 조건부 후속의 답변 유형. 앞선 예/아니오 문항의 답에 따라 그 아래에 노출된다.
-const FU_TYPES = [["text", "주관식"], ["choice", "선다형(택1)"], ["ox", "예/아니오"]];
+const FU_TYPES = [
+  ["text", "주관식"], ["choice", "선다형(택1)"], ["ox", "예/아니오"],
+  ["date", "날짜 지정"], ["month", "연/월 지정"],
+];
+const FU_TYPE_IDS = FU_TYPES.map(([t]) => t);
 // 선택 목적(이벤트 등) 항목 — 값이 저장되지 않고 담당자 메일로만 전달된다.
 const OPT_TYPES = [["photo", "사진 첨부"], ["mailtext", "입력(연락처 등)"]];
 
@@ -280,7 +285,8 @@ function readEditor() {
           label: (q.label || "").trim(),
           q: (q.q || "").trim(),
           cond: q.cond === "no" ? "no" : "yes",
-          futype: ["text", "choice", "ox"].includes(q.futype) ? q.futype : "text",
+          // 유형 목록(FU_TYPES)을 그대로 쓴다 — 유형을 늘렸을 때 저장에서 조용히 빠지지 않도록.
+          futype: FU_TYPE_IDS.includes(q.futype) ? q.futype : "text",
           options: Array.isArray(q.options) ? q.options : [],
           required: !!q.required,
         }
