@@ -72,17 +72,19 @@ export function getSurveySets() {
 // 발효일자 이력 없이 현재값만 유지(세트별 별도 저장). 구버전 필드(freeItems 등)는 읽을 때 변환.
 export const Q_TYPES = [
   ["scale", "5점 척도"], ["ox", "예/아니오"], ["text", "주관식"],
-  ["choice", "선다형(택1)"], ["multi", "복수 응답"], ["photo", "사진 첨부"],
+  ["choice", "선다형(택1)"], ["multi", "복수 응답"],
+  ["date", "날짜 지정"], ["month", "연/월 지정"], ["photo", "사진 첨부"],
   ["mailtext", "메일 전용 입력"], ["note", "안내 문구"], ["fu", "조건부 후속"],
 ];
 const Q_TYPE_IDS = Q_TYPES.map(([t]) => t);
 export const FU_TYPES = [
   ["text", "후속: 주관식"], ["ox", "후속: 예/아니오"],
+  ["date", "후속: 날짜 지정"], ["month", "후속: 연/월 지정"],
   ["photo", "후속: 사진 첨부"], ["mailtext", "후속: 메일 전용 입력"],
 ];
 const FU_TYPE_IDS = FU_TYPES.map(([t]) => t);
 // 필수 여부를 저장하지 않던 구버전 문서의 기본값 — 당시 동작(객관식은 필수, 주관식·첨부는 선택)을 유지한다.
-const REQUIRED_LEGACY = { scale: true, ox: true, choice: true, multi: true, text: false, photo: false, mailtext: false, note: false };
+const REQUIRED_LEGACY = { scale: true, ox: true, choice: true, multi: true, text: false, date: false, month: false, photo: false, mailtext: false, note: false };
 function requiredOf(q, fallback) {
   return q.required === undefined || q.required === null ? !!fallback : !!q.required;
 }
