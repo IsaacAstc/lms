@@ -7,7 +7,7 @@ import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import { coursesCache } from "./courses.js";
 import { getProgramById } from "./programs.js";
-import { deserializeAgg, computeAgg, mergeAgg, emptyAgg, renderExtraHTML, renderOxHTML, renderChoiceHTML } from "./agg.js";
+import { deserializeAgg, computeAgg, mergeAgg, emptyAgg, renderExtraHTML, renderOxHTML, renderChoiceHTML, renderDatesHTML } from "./agg.js";
 import { fmtDot } from "./time.js";
 
 function courseTypeOf(c) {
@@ -140,7 +140,7 @@ async function renderTrend() {
   }
   box.innerHTML = `<table><thead><tr><th>월</th><th>응답수</th><th>교육만족도(100)</th><th>강사만족도(100)</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
   // 커스텀 문항(빌더 카테고리) 기간 합산 — 있을 때만 표시.
-  const customHtml = renderExtraHTML(total) + renderOxHTML(total) + renderChoiceHTML(total);
+  const customHtml = renderExtraHTML(total) + renderOxHTML(total) + renderChoiceHTML(total) + renderDatesHTML(total);
   document.getElementById("stat-custom").innerHTML = customHtml
     ? `<h3>커스텀 문항 (기간 합산: ${start} ~ ${end})</h3>${customHtml}` : "";
 }

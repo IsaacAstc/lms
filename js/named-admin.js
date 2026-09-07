@@ -560,6 +560,10 @@ export function initNamedAdmin() {
     draft.purposeOpt.enabled = e.target.checked;
     $("nm-opt-fields").hidden = !e.target.checked;
   });
+  // 문항 추가 드롭다운은 유형 목록(Q_TYPES)에서 만든다 —
+  // HTML에 유형을 따로 적어두면 유형을 늘렸을 때 여기서 조용히 빠진다.
+  $("nm-q-type").innerHTML = Q_TYPES.map(([t, lb]) => `<option value="${t}">${lb}</option>`).join("");
+  $("nm-o-type").innerHTML = OPT_TYPES.map(([t, lb]) => `<option value="${t}">${lb}</option>`).join("");
   $("nm-q-add").addEventListener("click", () => {
     const type = $("nm-q-type").value;
     draft.questions.push(type === "fu"

@@ -37,6 +37,7 @@ export function emptyAgg() {
     extra: {},  // 카테고리 5점 문항: catTitle → {label → {sum, count}}
     choice: {}, // 선다형·복수 응답: label → {n(응답자), multi, opts: {보기 → count}}
     ftx: {},    // 자유·조건부 주관식 응답 건수: label → n (원문 파기 후 건수만 보존)
+    dates: {},  // 날짜(일 단위) 문항: label → {n, min, max, months: {YYYY-MM → n}}
   };
 }
 
@@ -93,8 +94,21 @@ export function computeAgg(responses) {
       const s = cat[x.label] = cat[x.label] || sc();
       s.sum += x.v; s.count++;
     }
+    // 날짜(일 단위) 문항은 값마다 보기 행이 생기면 표가 무의미해지므로
+    // 최소·최대·응답수 + 월별 건수로 요약한다(연/월 문항은 분포표 그대로).
     for (const c of r.choiceAnswers || []) {
-      if (!c || !c.label || !Array.isArray(c.options)) continue;
+      if (!c || c.kind !== "date" || !c.label) continue;
+      const v = (c.options || [])[0];
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v || "")) continue;
+      const t = a.dates[c.label] = a.dates[c.label] || { n: 0, min: "", max: "", months: {} };
+      t.n++;
+      if (!t.min || v < t.min) t.min = v;
+      if (!t.max || v > t.max) t.max = v;
+      const ym = v.slice(0, 7);
+      t.months[ym] = (t.months[ym] || 0) + 1;
+    }
+    for (const c of r.choiceAnswers || []) {
+      if (!c || c.kind === "date" || !c.label || !Array.isArray(c.options)) continue;
       const t = a.choice[c.label] = a.choice[c.label] || { n: 0, multi: !!c.multi, opts: {} };
       t.n++;
       for (const o of c.options) if (o) t.opts[o] = (t.opts[o] || 0) + 1;
@@ -138,6 +152,14 @@ export function mergeAgg(a, b) {
     for (const o in bt.opts || {}) t.opts[o] = (t.opts[o] || 0) + bt.opts[o];
   }
   for (const lb in b.ftx || {}) a.ftx[lb] = (a.ftx[lb] || 0) + b.ftx[lb];
+  for (const lb in b.dates || {}) {
+    const bt = b.dates[lb];
+    const t = a.dates[lb] = a.dates[lb] || { n: 0, min: "", max: "", months: {} };
+    t.n += bt.n || 0;
+    if (bt.min && (!t.min || bt.min < t.min)) t.min = bt.min;
+    if (bt.max && (!t.max || bt.max > t.max)) t.max = bt.max;
+    for (const ym in bt.months || {}) t.months[ym] = (t.months[ym] || 0) + bt.months[ym];
+  }
   return a;
 }
 
@@ -165,6 +187,10 @@ export function serializeAgg(a) {
       label, n: t.n, multi: !!t.multi, opts: Object.entries(t.opts).map(([option, count]) => ({ option, count })),
     })),
     ftx: Object.entries(a.ftx).map(([label, n]) => ({ label, n })),
+    dates: Object.entries(a.dates).map(([label, t]) => ({
+      label, n: t.n, min: t.min, max: t.max,
+      months: Object.entries(t.months).map(([ym, n]) => ({ ym, n })),
+    })),
   };
 }
 export function deserializeAgg(d) {
@@ -180,6 +206,12 @@ export function deserializeAgg(d) {
   for (const c of d.extra || []) { a.extra[c.cat] = {}; for (const it of c.items || []) a.extra[c.cat][it.label] = { sum: it.sum, count: it.count }; }
   for (const c of d.choice || []) a.choice[c.label] = { n: c.n || 0, multi: !!c.multi, opts: Object.fromEntries((c.opts || []).map((o) => [o.option, o.count || 0])) };
   for (const f of d.ftx || []) a.ftx[f.label] = f.n || 0;
+  for (const t of d.dates || []) {
+    a.dates[t.label] = {
+      n: t.n || 0, min: t.min || "", max: t.max || "",
+      months: Object.fromEntries((t.months || []).map((m) => [m.ym, m.n || 0])),
+    };
+  }
   return a;
 }
 
@@ -233,6 +265,33 @@ export function renderChoiceHTML(a) {
     }).join("");
     return `<p class="hint" style="margin-bottom:0.2rem"><b>${escapeHtml(lb)}</b> — ${t.multi ? "복수 응답" : "택1"} · 응답 ${t.n}건${t.multi ? " (비율은 응답자 대비)" : ""}</p>
       <table><thead><tr><th>보기</th><th>선택</th><th>비율</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }).join("");
+}
+
+// 날짜(일 단위) 문항: 최소·최대·응답수 요약 + 월별 건수 분포. 없으면 빈 문자열.
+// 값마다 보기 행이 생기는 선다형 표와 달리, 응답이 많아도 표 길이가 개월 수로 제한된다.
+export function renderDatesHTML(a) {
+  const labels = Object.keys(a?.dates || {});
+  if (!labels.length) return "";
+  return labels.map((lb) => {
+    const t = a.dates[lb];
+    // 월 목록은 최소~최대 사이를 빠짐없이 채운다(응답이 없는 달은 0건으로 표시).
+    const months = [];
+    if (t.min && t.max) {
+      let [y, m] = t.min.slice(0, 7).split("-").map(Number);
+      const [ey, em] = t.max.slice(0, 7).split("-").map(Number);
+      while (y < ey || (y === ey && m <= em)) {
+        months.push(`${y}-${String(m).padStart(2, "0")}`);
+        if (++m > 12) { m = 1; y++; }
+      }
+    }
+    const rows = months.map((ym) => {
+      const n = t.months[ym] || 0;
+      const pct = t.n ? ((n / t.n) * 100).toFixed(2) + "%" : "-";
+      return `<tr><td>${escapeHtml(ym)}</td><td style="text-align:right">${n}</td><td style="text-align:right">${pct}</td></tr>`;
+    }).join("");
+    return `<p class="hint" style="margin-bottom:0.2rem"><b>${escapeHtml(lb)}</b> — 날짜 · 응답 ${t.n}건 · 최초 ${escapeHtml(t.min || "-")} · 최종 ${escapeHtml(t.max || "-")}</p>
+      <table><thead><tr><th>월</th><th>응답</th><th>비율</th></tr></thead><tbody>${rows}</tbody></table>`;
   }).join("");
 }
 
