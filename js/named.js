@@ -106,6 +106,10 @@ function questionHtml(q, name, no) {
     <div class="scale-row">${(q.options || []).map((op) =>
       `<label class="scale-opt"><input type="checkbox" name="${name}" value="${esc(op)}"><span>${esc(op)}</span></label>`).join("")}
     </div><small class="hint">해당하는 항목을 모두 선택</small></div>`;
+  // 날짜·연월 지정: 값은 문자열(YYYY-MM-DD / YYYY-MM)로 수집한다.
+  if (q.type === "date") return `<div class="q-item">${head}<input type="date" name="${name}" /></div>`;
+  if (q.type === "month") return `<div class="q-item">${head}<input type="month" name="${name}" />
+    <small class="hint">연도와 월만 선택합니다.</small></div>`;
   return `<div class="q-item">${head}<textarea name="${name}" rows="3"></textarea></div>`;
 }
 
@@ -175,7 +179,9 @@ function wireFollowUps(qs) {
       : f.futype === "choice"
         ? `${head}<div class="scale-row">${(f.options || []).map((op) =>
              `<label class="scale-opt"><input type="radio" name="${name}" value="${esc(op)}"><span>${esc(op)}</span></label>`).join("")}</div>`
-        : `${head}<textarea name="${name}" rows="3"></textarea>`;
+        : (f.futype === "date" || f.futype === "month")
+          ? `${head}<input type="${f.futype}" name="${name}" />`
+          : `${head}<textarea name="${name}" rows="3"></textarea>`;
 
     // 대상 문항 바로 아래로 옮긴다.
     const parent = form.querySelector(`input[name="q_${pi}"]`)?.closest(".q-item");
@@ -187,6 +193,7 @@ function wireFollowUps(qs) {
       box.hidden = !show;
       if (!show) {
         box.querySelectorAll("input[type=radio]").forEach((r) => { r.checked = false; });
+        box.querySelectorAll("input[type=date], input[type=month]").forEach((t) => { t.value = ""; });
         box.querySelectorAll("textarea").forEach((t) => { t.value = ""; });
       }
     };

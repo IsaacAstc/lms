@@ -165,7 +165,7 @@ function newSubmitCode() {
 
 const FREE_DEFAULTS = ["교육 불만족 의견", "교육 관련 제안·개선요구 의견"];
 // 문항별 필수 여부를 저장하기 전에 발행된 설문의 기본값 — 당시 동작(객관식 필수, 주관식·첨부 선택)을 유지한다.
-const REQUIRED_LEGACY = { scale: true, ox: true, choice: true, multi: true, text: false, photo: false, mailtext: false, note: false };
+const REQUIRED_LEGACY = { scale: true, ox: true, choice: true, multi: true, text: false, date: false, month: false, photo: false, mailtext: false, note: false };
 function withRequired(q) {
   return { ...q, required: q.required === undefined || q.required === null ? !!REQUIRED_LEGACY[q.type] : !!q.required };
 }
@@ -216,6 +216,12 @@ function questionHtml(q, name, i) {
     <div class="scale-row">${(q.options || []).map((o, oi) =>
       `<label class="scale-opt"><input type="checkbox" name="${name}" value="${oi}"><span>${esc(o)}</span></label>`).join("")}
     </div><small class="hint">해당하는 항목을 모두 선택</small></div>`;
+  // 날짜·연월 지정: 브라우저 기본 입력기를 쓰고, 값은 문자열(YYYY-MM-DD / YYYY-MM)로 수집한다.
+  if (q.type === "date") return `<div class="q-item">${head}
+    <input type="date" name="${name}" /></div>`;
+  if (q.type === "month") return `<div class="q-item">${head}
+    <input type="month" name="${name}" />
+    <small class="hint">연도와 월만 선택합니다.</small></div>`;
   // 메일 전용 입력(연락처 등): 값이 시스템에 저장되지 않고 사진과 함께 메일로만 전달된다.
   if (q.type === "mailtext") return `<div class="q-item">${head}
     <input type="text" name="${name}" maxlength="100" autocomplete="off" />
@@ -264,6 +270,8 @@ function wireFollowUps(survey) {
            <label class="scale-opt"><input type="radio" name="fu_${fi}" value="1"><span>예</span></label>
            <label class="scale-opt"><input type="radio" name="fu_${fi}" value="0"><span>아니오</span></label>
          </div>`
+      : (f.type === "date" || f.type === "month")
+        ? `${fuHead}<input type="${f.type}" name="fu_${fi}" />`
       : f.type === "photo"
         ? `${fuHead}
            <input type="file" name="fu_${fi}" accept="image/*" capture="environment" />
@@ -289,8 +297,8 @@ function wireFollowUps(survey) {
           if (fi2) fi2.value = "";
           const pv = div.querySelector(".photo-preview");
           if (pv) pv.innerHTML = "";
-        } else if (f.type === "mailtext") {
-          const ti = div.querySelector('input[type="text"]');
+        } else if (f.type === "mailtext" || f.type === "date" || f.type === "month") {
+          const ti = div.querySelector("input");
           if (ti) ti.value = "";
         } else div.querySelector("textarea").value = "";
       }
@@ -354,6 +362,11 @@ async function submit(e, survey) {
         const sel = [...document.querySelectorAll(`input[name="${name}"]:checked`)].map((el) => q.options[Number(el.value)]).filter(Boolean);
         if (!sel.length) { if (q.required) { err.textContent = `'${q.label}' 문항에서 하나 이상 선택해 주세요.`; return; } }
         else choiceAnswers.push({ cat: sec.title, label: q.label, options: sel, multi: true });
+      } else if (q.type === "date" || q.type === "month") {
+        // 날짜·연월 응답은 값 하나짜리 선다형과 같은 형태로 저장한다(집계·조회 경로 공용).
+        const v = (form[name]?.value || "").trim();
+        if (!v) { if (q.required) { err.textContent = `'${q.label}' 문항에 응답해 주세요.`; return; } }
+        else choiceAnswers.push({ cat: sec.title, label: q.label, options: [v], multi: false });
       } else if (q.type === "photo") {
         mailDefined.photo++;
         const f = form[name]?.files?.[0];
@@ -392,6 +405,10 @@ async function submit(e, survey) {
       const v = form[`fu_${fi}`]?.value;
       if (v !== "0" && v !== "1") { if (f.required) { err.textContent = `'${f.label}' 문항에 응답해 주세요.`; return; } }
       else oxAnswers.push({ label: f.label, yes: v === "1" });
+    } else if (f.type === "date" || f.type === "month") { // 조건부 날짜·연월.
+      const v = (form[`fu_${fi}`]?.value || "").trim();
+      if (!v) { if (f.required) { err.textContent = `'${f.label}' 문항에 응답해 주세요.`; return; } }
+      else choiceAnswers.push({ cat: "조건부", label: f.label, options: [v], multi: false });
     } else if (f.type === "photo") { // 조건부 사진 — 첨부한 경우에만 메일로 전달.
       mailDefined.photo++;
       const file = form[`fu_${fi}`]?.files?.[0];
