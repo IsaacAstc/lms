@@ -184,6 +184,9 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 }
 .load-row label { display: flex; flex-direction: column; font-size: 0.8rem; gap: 0.2rem; }
 .hint { font-size: 0.8rem; color: var(--muted); margin: 0.4rem 0 0; }
+/* small은 인라인이라 좁은 입력칸 옆 여백으로 흘러 들어간다 — 안내 문구는 늘 다음 줄에.
+   (p.hint는 원래 블록이라 영향 없음. 인라인일 때는 위 margin도 먹지 않는다) */
+small.hint { display: block; }
 .notice { font-size: 0.82rem; color: #7a5; background: #f2f8f0; border: 1px solid #cfe6c8; padding: 0.5rem 0.75rem; border-radius: 6px; }
 .warn { color: var(--danger); font-size: 0.8rem; }
 .total-line { text-align: right; font-size: 0.95rem; font-weight: 600; margin-top: 0.75rem; }
