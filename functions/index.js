@@ -495,6 +495,17 @@ exports.submitSurveyPhotos = onCall(
  *  이전 방식으로 저장된 응답(namedResponses)은 조회·파기 함수로만 다루고,
  *  클라이언트는 직접 읽거나 쓸 수 없다(보안규칙에서 전면 차단).
  * ================================================================ */
+/* 휴대전화 번호: 하이픈·공백을 걷어낸 숫자만 본다.
+ * 010 외에 011·016·017·018·019(구 번호)도 받는다 — 응답자를 형식으로 막을 이유가 없다. */
+const phoneDigits = (v) => String(v ?? "").replace(/[^0-9]/g, "");
+const isMobile = (v) => /^01[016789][0-9]{7,8}$/.test(phoneDigits(v));
+// 010-1234-5678 형태로 통일해 메일에서 읽기 쉽게 한다.
+function fmtPhone(v) {
+  const d = phoneDigits(v);
+  return d.length === 11 ? `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`
+    : d.length === 10 ? `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}` : d;
+}
+
 const NAMED_RESP = "namedResponses";      // 이전 방식으로 저장된 응답(신규 저장 없음)
 const NAMED_MARK = "namedRespondents";    // 이전 방식의 중복 방지 표시(신규 생성 없음)
 
@@ -607,10 +618,18 @@ exports.submitNamedSurvey = onCall(
     const rawTexts = consentOpt && Array.isArray(d.mailTexts) ? d.mailTexts : [];
     if (photos.length > 5) bad("사진은 최대 5장까지 첨부할 수 있습니다.");
     if (rawTexts.length > 10) bad("추가 입력 항목이 너무 많습니다.");
-    const mailTexts = rawTexts.map((t) => ({
-      label: str(t && t.label, 200, "항목명", false) || "추가 입력",
-      text: str(t && t.text, 200, "입력값", true),
-    }));
+    const optDefs = Array.isArray(sv.optItems) ? sv.optItems : [];
+    const mailTexts = rawTexts.map((t) => {
+      const label = str(t && t.label, 200, "항목명", false) || "추가 입력";
+      let text = str(t && t.text, 200, "입력값", true);
+      // 정의에서 같은 문구의 항목을 찾아 유형을 본다(위치는 조건부 노출로 어긋날 수 있다).
+      const def = optDefs.find((o) => o && String(o.label || "") === label);
+      if (def && def.type === "phone") {
+        if (!isMobile(text)) bad(`'${label}'을(를) 휴대전화 번호 형식으로 입력해 주세요.`);
+        text = fmtPhone(text);
+      }
+      return { label, text };
+    });
     let totalBytes = 0;
     const photoLabels = [];
     const attachments = photos.map((p, i) => {

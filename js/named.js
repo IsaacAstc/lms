@@ -14,6 +14,10 @@ import { db, app } from "./firebase.js";
 const root = document.getElementById("named-root");
 const PHOTO_MAX_DIM = 1600;
 
+// 휴대전화 번호 검증 — 하이픈·공백은 무시한다. 서버(functions/index.js)와 같은 규칙.
+// 010 외에 011·016·017·018·019도 받는다.
+const isMobile = (v) => /^01[016789][0-9]{7,8}$/.test(String(v ?? "").replace(/[^0-9]/g, ""));
+
 function esc(v) {
   return String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -133,7 +137,12 @@ function renderForm(consentOpt) {
            <input type="file" name="o_${i}" accept="image/*" />
            <div class="photo-preview" id="pv-o_${i}"></div>
            <small class="hint">사진을 찍거나 저장된 사진·파일에서 고를 수 있습니다. 타인의 얼굴·개인정보가 담기지 않게 해 주세요.</small></div>`
-      : `<div class="q-item"><div class="q-label">${esc(q.label)}</div>
+      : q.type === "phone"
+        ? `<div class="q-item"><div class="q-label">${esc(q.label)}</div>
+           <input type="tel" name="o_${i}" maxlength="13" inputmode="numeric" autocomplete="tel"
+                  placeholder="010-1234-5678" style="max-width:12rem" />
+           <small class="hint">숫자만 입력하셔도 됩니다.</small></div>`
+        : `<div class="q-item"><div class="q-label">${esc(q.label)}</div>
            <input type="text" name="o_${i}" maxlength="100" autocomplete="off" /></div>`).join("")}` : "";
 
   root.innerHTML = `
@@ -303,6 +312,10 @@ async function submit(consentOpt, optItems) {
     } else {
       const t = (form[`o_${i}`]?.value || "").trim();
       if (!t) { missing++; continue; }
+      if (it.type === "phone" && !isMobile(t)) {
+        err.textContent = `'${it.label}'을(를) 휴대전화 번호 형식으로 입력해 주세요.`;
+        return;
+      }
       mailTexts.push({ label: it.label, text: t.slice(0, 100) });
     }
   }

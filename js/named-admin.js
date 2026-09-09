@@ -36,7 +36,9 @@ const FU_TYPES = [
 ];
 const FU_TYPE_IDS = FU_TYPES.map(([t]) => t);
 // 선택 목적(이벤트 등) 항목 — 값이 저장되지 않고 담당자 메일로만 전달된다.
-const OPT_TYPES = [["photo", "사진 첨부"], ["mailtext", "입력(연락처 등)"]];
+const OPT_TYPES = [
+  ["photo", "사진 첨부"], ["mailtext", "입력(자유 형식)"], ["phone", "휴대전화 번호"],
+];
 
 let list = [];
 let editingId = null;   // 편집 중인 조사 ID(null = 새 조사)
