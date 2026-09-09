@@ -4,9 +4,10 @@
 //  · 조사 정의: namedSurveys — 문항·동의 문안·목적별 보유기간을 관리자가 직접 편집한다.
 //    (동의 문안과 보유기간을 코드에 박아두지 않는 이유: 개인정보 보호 담당부서 검토 결과가
 //     바뀌어도 화면에서 고치면 되도록 하기 위함)
-//  · 응답: namedResponses — 브라우저에서 직접 읽지 못한다. 조회·내보내기·파기를 모두
-//    서버 함수로만 수행하고, 그 호출이 취급자 접속기록(accessLogs)으로 남는다.
-//  · 응답자 식별자는 서버에서 해시로 변환돼 저장되므로 이 화면에서도 원문은 볼 수 없다.
+//  · 응답: 원문을 저장하지 않고 담당자 메일로만 전달한다. 시스템에는 집계 수치만 남는다.
+//    이전 방식으로 저장된 응답(namedResponses)은 브라우저에서 직접 읽지 못하며,
+//    조회·내보내기·파기를 서버 함수로만 수행해 취급자 접속기록(accessLogs)으로 남긴다.
+//  · 식별자 원문은 메일에만 있다. 시스템에는 해시만 남아 중복 응답 판정에 쓴다.
 import { escapeHtml } from "./app.js";
 import { orgQuery } from "./orgs.js";
 import { watchCollection, onCollection, addItem, updateItem, removeItem, setDocById, getDocById } from "./store.js";
@@ -50,13 +51,13 @@ function blankSurvey() {
     title: "",
     intro: "",
     idLabel: "훈련 시스템 아이디",
-    idHint: "본인 확인용이 아니라 중복 응답을 막기 위한 항목입니다. 입력값은 되돌릴 수 없는 형태로 변환되어 저장됩니다.",
+    idHint: "본인 확인용이 아니라 중복 응답을 막기 위한 항목입니다. 조사 시스템에는 되돌릴 수 없는 형태로만 남으며, 중복 응답 확인에만 사용합니다.",
     status: "draft",
     openMs: 0,
     closeMs: 0,
     purposeMain: {
       label: "수료생 취업 실태 통계",
-      items: "아이디(변환 저장), 취업 여부, 회사 구분",
+      items: "아이디, 취업 여부, 취업 시기, 회사명",
       retainDays: 365,
       notice: "",
     },

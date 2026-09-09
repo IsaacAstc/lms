@@ -228,9 +228,9 @@ function questionHtml(q, name, i) {
     <small class="hint">${q.required ? "필수 · " : "선택 · "}입력한 내용은 시스템에 저장되지 않고 담당자 이메일로만 전달됩니다.</small></div>`;
   // 사진 첨부: 브라우저에서 축소 후 담당자 메일로만 전송되며 시스템에는 저장되지 않는다.
   if (q.type === "photo") return `<div class="q-item">${head}
-    <input type="file" name="${name}" accept="image/*" capture="environment" />
+    <input type="file" name="${name}" accept="image/*" />
     <div class="photo-preview" id="pv-${name}"></div>
-    <small class="hint">${q.required ? "필수 · " : "선택 · "}사진은 담당자 이메일로만 전달되고 시스템에는 저장되지 않습니다. 타인의 얼굴·개인정보가 담기지 않게 촬영해 주세요.</small></div>`;
+    <small class="hint">${q.required ? "필수 · " : "선택 · "}사진은 담당자 이메일로만 전달되고 시스템에는 저장되지 않습니다. 사진을 찍거나 저장된 사진·파일에서 고를 수 있습니다. 타인의 얼굴·개인정보가 담기지 않게 해 주세요.</small></div>`;
   return `<div class="q-item">${head}<textarea name="${name}" rows="3"></textarea></div>`; // text
 }
 
@@ -274,7 +274,7 @@ function wireFollowUps(survey) {
         ? `${fuHead}<input type="${f.type}" name="fu_${fi}" />`
       : f.type === "photo"
         ? `${fuHead}
-           <input type="file" name="fu_${fi}" accept="image/*" capture="environment" />
+           <input type="file" name="fu_${fi}" accept="image/*" />
            <div class="photo-preview" id="pv-fu_${fi}"></div>
            <small class="hint">${fuMark}사진은 담당자 이메일로만 전달되고 시스템에는 저장되지 않습니다.</small>`
         : f.type === "mailtext"
