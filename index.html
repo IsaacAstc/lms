@@ -523,8 +523,12 @@
             <div class="grid">
               <label>수집·이용 목적 <input id="nm-main-label" maxlength="100" /></label>
               <label>수집 항목 <input id="nm-main-items" maxlength="200" /></label>
+              <label>보유기간(일) <input id="nm-main-days" type="number" min="1" max="3650" title="아래 '보유기간 안내 문구'를 비워 두었을 때 '수집일부터 N일 보관 후 지체 없이 파기합니다'로 표시됩니다." /></label>
             </div>
-            <p class="hint"><b>보유기간</b>은 동의 화면에 <b>"내부 규정에 따라 취업률 모니터링 목적으로 기한 없이 보관합니다"</b>로 고정 표시됩니다. 기한 없는 보관은 근거가 필요하니, <b>운영 시작 전에 해당 규정 조항을 위 '추가 안내'에 적어</b> 주세요.</p>
+            <label class="wide">보유기간 안내 문구(비우면 위 일수로 자동 작성)
+              <input id="nm-main-retainnote" maxlength="200" placeholder="예: 내부 규정에 따라 취업률 모니터링 목적으로 기한 없이 보관합니다." />
+            </label>
+            <p class="hint">기간을 정하지 않고 보관하는 조사에서는 이 칸에 <b>근거와 목적</b>을 직접 적으세요. 적은 문구가 동의 화면의 <b>보유·이용 기간</b>에 그대로 표시되며, 비워 두면 위 일수로 문장이 만들어집니다.</p>
             <label class="wide">추가 안내(선택) <textarea id="nm-main-notice" rows="2"></textarea></label>
 
             <h4>[선택] 별도 목적 동의</h4>
