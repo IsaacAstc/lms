@@ -625,7 +625,7 @@ exports.submitNamedSurvey = onCall(
       optApplies = optWhen.cond === "no" ? v === "아니오" : v === "예";
     }
     const takeOpt = consentOpt && optApplies;
-    const mainDays = Math.max(1, Number(sv.purposeMain?.retainDays) || 365);
+    const mainDays = Math.max(0, Math.floor(Number(sv.purposeMain?.retainDays ?? 365)) || 0);
     const retainNote = String(sv.purposeMain?.retainNote || "").replace(/[\r\n]+/g, " ").trim();
     const photos = takeOpt && Array.isArray(d.photos) ? d.photos : [];
     const rawTexts = takeOpt && Array.isArray(d.mailTexts) ? d.mailTexts : [];
@@ -705,7 +705,9 @@ exports.submitNamedSurvey = onCall(
       // 응답자에게 고지한 보유기간을 그대로 적는다 — 담당자가 받는 안내와 어긋나면 안 된다.
       retainNote
         ? `※ 성명·연락처가 담긴 개인정보입니다. 보유기간 고지: ${retainNote} (파기는 이 메일 삭제로 완료됩니다)`
-        : `※ 성명·연락처가 담긴 이 메일은 보유기간 ${mainDays}일이 지나면 삭제해야 파기가 완료됩니다.`,
+        : mainDays === 0
+          ? "※ 성명·연락처가 담긴 개인정보입니다. 기한 없이 보관하도록 고지했으며, 파기는 이 메일 삭제로 완료됩니다."
+          : `※ 성명·연락처가 담긴 이 메일은 보유기간 ${mainDays}일이 지나면 삭제해야 파기가 완료됩니다.`,
     );
     if (consentOpt && sv.purposeOpt?.label) {
       lines.push(optApplies

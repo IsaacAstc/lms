@@ -95,7 +95,9 @@ function paintList() {
         <td>${state}</td>
         <td>${fmtRange(s.openMs, s.closeMs)}</td>
         <td>${s.purposeOpt?.enabled ? esc(s.purposeOpt.label || "사용") : "<span class='muted'>미사용</span>"}</td>
-        <td>${s.purposeMain?.retainNote ? "필수 별도 안내" : `필수 ${s.purposeMain?.retainDays || "-"}일`}${s.purposeOpt?.enabled ? ` · 선택 ${s.purposeOpt.retainDays || "-"}일` : ""}</td>
+        <td>${s.purposeMain?.retainNote ? "필수 별도 안내"
+          : s.purposeMain?.retainDays === 0 ? "필수 기한 없음"
+          : `필수 ${s.purposeMain?.retainDays || "-"}일`}${s.purposeOpt?.enabled ? ` · 선택 ${s.purposeOpt.retainDays || "-"}일` : ""}</td>
         <td class="row-actions">
           <button type="button" data-edit="${s.id}">편집</button>
           <button type="button" data-copy="${s.id}" title="문항·동의 문안을 그대로 복제해 새 조사로 시작">복제</button>
@@ -174,7 +176,7 @@ function paintEditor() {
 
   $("nm-main-label").value = d.purposeMain.label || "";
   $("nm-main-items").value = d.purposeMain.items || "";
-  $("nm-main-days").value = d.purposeMain.retainDays || 365;
+  $("nm-main-days").value = d.purposeMain.retainDays ?? 365;   // 0(기한 없음)도 그대로 보인다
   $("nm-main-retainnote").value = d.purposeMain.retainNote || "";
   $("nm-main-notice").value = d.purposeMain.notice || "";
 
@@ -324,7 +326,14 @@ function readEditor() {
     purposeMain: {
       label: $("nm-main-label").value.trim(),
       items: $("nm-main-items").value.trim(),
-      retainDays: Math.max(1, Number($("nm-main-days").value) || 365),
+      // 0 = 기한 없음. 비워 두거나 숫자가 아니면 종전 기본값(365일)으로 본다 —
+      // 빈칸을 무기한으로 해석하면 실수로 기한이 사라진다.
+      retainDays: (() => {
+        const raw = $("nm-main-days").value.trim();
+        if (raw === "") return 365;
+        const n = Number(raw);
+        return Number.isFinite(n) && n >= 0 ? Math.min(3650, Math.floor(n)) : 365;
+      })(),
       // 비우면 위 일수로 문장을 만들고, 적으면 그 문구를 동의 화면에 그대로 쓴다
       // (기간을 정하지 않고 보관하는 조사에서 근거·목적을 직접 적기 위한 칸).
       retainNote: $("nm-main-retainnote").value.trim(),
