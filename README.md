@@ -208,8 +208,9 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
 아래 '추가 기관 배포' 절 참고.
 
 ### 함수 자동 배포 (GitHub Actions — PC 없이 배포)
-`.github/workflows/deploy-functions.yml`이 **main 머지 시 `functions/`·`firestore.rules`
-변경분을 자동 배포**한다. 아래 시크릿을 한 번만 등록하면 이후 PC 작업이 필요 없다.
+`.github/workflows/deploy-functions.yml`이 **main 머지 시 `functions/`·RTDB 규칙
+변경분을 모든 기관에 자동 배포**한다(기관별 job이 함께 실행된다). 아래 시크릿을
+한 번만 등록하면 이후 PC 작업이 필요 없다.
 
 1. [Google Cloud 콘솔 → IAM 및 관리자 → 서비스 계정](https://console.cloud.google.com/iam-admin/serviceaccounts)
    에서 해당 프로젝트에 서비스 계정 생성(예: `github-deploy`).
@@ -227,9 +228,13 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
 
 ### 추가 기관 배포 (항공훈련센터 등 — 별도 Firebase 프로젝트)
 
-기본 기관과 코드는 같지만 프로젝트가 다르므로 배포도 따로 한다. 워크플로의
-**Run workflow → 배포 대상**에서 `atc`를 고르면 해당 프로젝트로 배포된다
-(기본값 `default`는 기본 기관). push 자동 배포는 기본 기관만 대상이다.
+기본 기관과 코드는 같지만 프로젝트가 다르므로 배포도 프로젝트별로 따로 이뤄진다.
+**main 머지 시에는 모든 기관에 함께 배포**된다 — 한쪽만 반영되면 같은 화면이 기관마다
+다르게 동작하기 때문이다(옛 함수가 그대로 떠 있는 상태). 특정 기관만 배포하려면
+**Run workflow → 배포 대상**에서 `default`나 `atc`를 고른다(기본값 `all`).
+
+시크릿이 없는 기관은 전체 배포에서 경고만 남기고 건너뛰므로 다른 기관 배포는 막히지
+않는다. 다만 그 기관을 콕 집어 실행한 경우에는 요청이 조용히 무시되지 않도록 실패한다.
 
 1회 준비:
 
