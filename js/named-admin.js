@@ -180,6 +180,7 @@ function paintQuestions() {
       ${FU_TYPES.map(([t, lb]) => `<option value="${t}"${q.futype === t ? " selected" : ""}>후속: ${lb}</option>`).join("")}
     </select>
     <input class="nq-label" data-i="${i}" value="${esc(q.label || "")}" placeholder="후속 문항 문구" style="min-width:220px">
+    <input class="nq-slabel" data-i="${i}" value="${esc(q.slabel || "")}" placeholder="제목용 짧은 이름" title="메일 제목에 이 이름으로 표시됩니다(예: 취업). 비우면 제목에서 빠집니다." style="min-width:110px;max-width:130px">
     ${q.futype === "choice"
       ? `<input class="nq-opts" data-i="${i}" value="${esc((q.options || []).join(" / "))}" placeholder="보기 — ' / '로 구분" style="min-width:200px">`
       : ""}
@@ -192,6 +193,7 @@ function paintQuestions() {
       ${q.type === "note"
         ? `<textarea class="nq-label" data-i="${i}" rows="2" placeholder="안내 문구" style="min-width:320px">${esc(q.label || "")}</textarea>`
         : `<input class="nq-label" data-i="${i}" value="${esc(q.label || "")}" placeholder="문항 문구" style="min-width:240px">`}
+      ${q.type === "note" ? "" : `<input class="nq-slabel" data-i="${i}" value="${esc(q.slabel || "")}" placeholder="제목용 짧은 이름" title="메일 제목에 이 이름으로 표시됩니다(예: 취업). 비우면 제목에서 빠집니다." style="min-width:110px;max-width:130px">`}
       ${(q.type === "choice" || q.type === "multi")
         ? `<input class="nq-opts" data-i="${i}" value="${esc((q.options || []).join(" / "))}" placeholder="보기 — ' / '로 구분" style="min-width:220px">`
         : ""}
@@ -214,6 +216,9 @@ function paintQuestions() {
   }));
   box.querySelectorAll(".nq-label").forEach((el) => el.addEventListener("input", (e) => {
     draft.questions[+e.target.dataset.i].label = e.target.value;
+  }));
+  box.querySelectorAll(".nq-slabel").forEach((el) => el.addEventListener("input", (e) => {
+    draft.questions[+e.target.dataset.i].slabel = e.target.value;
   }));
   box.querySelectorAll(".nq-opts").forEach((el) => el.addEventListener("input", (e) => {
     draft.questions[+e.target.dataset.i].options = e.target.value.split("/").map((t) => t.trim()).filter(Boolean);
@@ -287,12 +292,15 @@ function readEditor() {
           cond: q.cond === "no" ? "no" : "yes",
           // 유형 목록(FU_TYPES)을 그대로 쓴다 — 유형을 늘렸을 때 저장에서 조용히 빠지지 않도록.
           futype: FU_TYPE_IDS.includes(q.futype) ? q.futype : "text",
+          // 메일 제목에 쓰는 짧은 이름. 비어 있으면 제목에서 제외된다.
+          slabel: (q.slabel || "").trim().slice(0, 40),
           options: Array.isArray(q.options) ? q.options : [],
           required: !!q.required,
         }
       : {
           type: q.type,
           label: (q.label || "").trim(),
+          slabel: q.type === "note" ? "" : (q.slabel || "").trim().slice(0, 40),
           options: Array.isArray(q.options) ? q.options : [],
           required: q.type === "note" ? false : !!q.required,
         })),
@@ -388,9 +396,18 @@ async function showResponses(surveyId) {
   const labels = [...new Set(rows.flatMap((r) => (r.answers || []).map((a) => a.label)))];
   respCache = { surveyId, rows, labels };
 
+  // 집계는 응답 원문과 별개로 서버에서 누적된다(개인정보 아님 — 합계 수치만).
+  let stats = null;
+  try {
+    stats = (await callFn("namedSurveyStats")({ surveyId }))?.data || null;
+  } catch { /* 집계 조회 실패는 화면 나머지를 막지 않는다 */ }
+
   box.innerHTML = `
-    <h3>${esc(s?.title || surveyId)} — 응답 ${rows.length}건</h3>
-    <p class="hint">응답에는 <b>응답자 식별자가 붙어 있지 않습니다.</b> 중복 응답 표시만 별도로 보관하며 응답 내용과 연결되지 않으므로, 어떤 응답이 누구의 것인지는 시스템에서도 알 수 없습니다. 사진·연락처 등 선택 목적 항목은 저장되지 않으며 제출코드로 담당자 메일과 대조합니다.</p>
+    <h3>${esc(s?.title || surveyId)} — 집계</h3>
+    <p class="hint">응답 원문은 <b>시스템에 저장하지 않고 담당자 이메일로만</b> 전달합니다. 시스템에는 아래 <b>합계 수치만</b> 남으며, 개인을 특정할 수 없으므로 파기 대상이 아닙니다.</p>
+    ${statsHtml(stats)}
+    <h3>보관 중인 과거 응답 ${rows.length}건</h3>
+    <p class="hint">아래는 <b>이전 방식으로 저장된 응답</b>입니다. 지금은 새 응답이 저장되지 않으므로 늘어나지 않으며, 파기하면 목록이 비워집니다. 응답에는 응답자 식별자가 붙어 있지 않습니다.</p>
     <p class="hint">이 화면의 <b>조회·내보내기·파기는 모두 접속기록으로 남습니다</b>(계정·일시·접속지·건수). 내보내기는 사유 입력이 필요합니다.</p>
     <p class="hint">기간 지정 파기는 Firebase 콘솔에 <code>namedRespondents</code> 복합 인덱스(<code>surveyId</code> + <code>collectedDate</code>)가 있어야 동작합니다(기관·프로젝트별로 1회). 없으면 파기 시 오류가 나며, 나머지 기능에는 영향이 없습니다.</p>
     <div class="form-actions">
@@ -423,6 +440,44 @@ async function showResponses(surveyId) {
 }
 
 const fmtMs = (ms) => (ms ? new Date(ms).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" }) : "");
+
+/* 집계 표시 — 예/아니오 문항의 응답 비율과, 날짜·연월 문항의 월별 분포.
+ * 문항 라벨을 키로 서버에서 누적한 값을 그대로 보여준다. */
+function statsHtml(st) {
+  if (!st) return `<p class="empty">집계를 불러오지 못했습니다.</p>`;
+  const n = st.count || 0;
+  if (!n) return `<p class="empty">아직 접수된 응답이 없습니다.</p>`;
+  const pct = (v) => (n ? ((v / n) * 100).toFixed(1) + "%" : "-");
+  const out = [`<p><b>총 응답 ${n}건</b>${st.updatedAtMs ? ` <span class="muted">(최종 갱신 ${esc(fmtMs(st.updatedAtMs))})</span>` : ""}</p>`];
+  for (const [label, v] of Object.entries(st.ox || {})) {
+    const yes = v.yes || 0;
+    const no = v.no || 0;
+    const sum = yes + no;
+    out.push(`<p class="hint" style="margin-bottom:0.2rem"><b>${esc(label)}</b> — 응답 ${sum}건</p>
+      <table><thead><tr><th>답변</th><th>건수</th><th>비율</th></tr></thead><tbody>
+        <tr><td>예</td><td style="text-align:right">${yes}</td><td style="text-align:right">${sum ? ((yes / sum) * 100).toFixed(1) + "%" : "-"}</td></tr>
+        <tr><td>아니오</td><td style="text-align:right">${no}</td><td style="text-align:right">${sum ? ((no / sum) * 100).toFixed(1) + "%" : "-"}</td></tr>
+      </tbody></table>`);
+  }
+  for (const [label, months] of Object.entries(st.months || {})) {
+    const keys = Object.keys(months).sort();
+    if (!keys.length) continue;
+    // 최초~최종 사이 빈 달도 0건으로 채워, 응답이 없던 달이 표에서 드러나게 한다.
+    const all = [];
+    let [y, m] = keys[0].split("-").map(Number);
+    const [ey, em] = keys[keys.length - 1].split("-").map(Number);
+    while (y < ey || (y === ey && m <= em)) {
+      all.push(`${y}-${String(m).padStart(2, "0")}`);
+      if (++m > 12) { m = 1; y++; }
+    }
+    const sum = keys.reduce((t, k) => t + (months[k] || 0), 0);
+    out.push(`<p class="hint" style="margin-bottom:0.2rem"><b>${esc(label)}</b> — 응답 ${sum}건 (월별)</p>
+      <table><thead><tr><th>월</th><th>건수</th><th>전체 대비</th></tr></thead><tbody>${
+        all.map((k) => `<tr><td>${esc(k)}</td><td style="text-align:right">${months[k] || 0}</td><td style="text-align:right">${pct(months[k] || 0)}</td></tr>`).join("")
+      }</tbody></table>`);
+  }
+  return out.join("");
+}
 
 // 내보내기: 사유를 받아 함수로 다시 조회한다(내려받은 내용과 기록이 일치하도록).
 async function exportCsv() {

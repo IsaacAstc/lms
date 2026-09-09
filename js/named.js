@@ -324,9 +324,8 @@ async function submit(consentOpt, optItems) {
       photos: payloadPhotos,
       mailTexts,
     });
-    const code = res?.data?.submitCode || "";
-    msg(`<p class="empty">응답이 접수되었습니다. 감사합니다.
-      ${code ? `<br><br>선택 항목 제출코드: <b>${esc(code)}</b><br><small>문의 시 이 코드를 알려주시면 확인이 빠릅니다.</small>` : ""}</p>`);
+    // 응답은 담당자 메일로 전달되고 시스템에는 집계 수치만 남는다 — 대조할 제출코드가 없다.
+    msg(`<p class="empty">응답이 접수되었습니다. 감사합니다.</p>`);
   } catch (e) {
     btn.disabled = false;
     btn.textContent = "제출";

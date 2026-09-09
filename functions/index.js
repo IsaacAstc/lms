@@ -510,6 +510,36 @@ function hashRespondentId(surveyId, rawId) {
   return crypto.createHmac("sha256", key).update(`${surveyId}|${norm}`).digest("hex");
 }
 
+const NAMED_AGG = "namedAggregates";      // 집계 수치만 — 개인정보 아님, 파기 대상 아님
+
+/* ── 메일 제목·본문 구성 ──
+ * 응답 원문은 저장하지 않고 담당자 메일로만 전달한다(운영 결정).
+ * 제목에는 '제목용 짧은 이름'이 지정된 문항의 답을 순서대로 붙인다. */
+
+// 헤더에 들어가는 값은 개행·따옴표를 제거한다 — 남겨두면 응답 입력으로
+// 메일 헤더를 덧붙일 수 있다(헤더 인젝션).
+const headerSafe = (v) => String(v ?? "").replace(/[\r\n"]+/g, " ").trim();
+
+// 제목에 넣을 값 표기: 예/아니오 → Y/N, 날짜·연월 → 점 표기(2026.3.14 / 2026.3).
+function subjectValue(a) {
+  const v = Array.isArray(a.value) ? a.value.join(",") : String(a.value ?? "");
+  if (a.qtype === "ox") return v === "예" ? "Y" : v === "아니오" ? "N" : v;
+  if (a.qtype === "month" && /^\d{4}-\d{2}$/.test(v)) return `${v.slice(0, 4)}.${Number(v.slice(5, 7))}`;
+  if (a.qtype === "date" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    return `${v.slice(0, 4)}.${Number(v.slice(5, 7))}.${Number(v.slice(8, 10))}`;
+  }
+  return v;
+}
+const SUBJECT_MAX = 200; // 메일 제목 상한(초과분은 잘라낸다 — 클라이언트가 앞부분만 표시)
+
+// 집계용 연월 추출. 날짜 문항은 일 단위를 월로 뭉갠다.
+function ymOf(a) {
+  const v = Array.isArray(a.value) ? a.value[0] : String(a.value ?? "");
+  if (a.qtype === "month" && /^\d{4}-\d{2}$/.test(v)) return v;
+  if (a.qtype === "date" && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v.slice(0, 7);
+  return "";
+}
+
 const addDays = (days) => new Date(Date.now() + days * 86400000);
 // 수집일(KST) 자정 기준 + N일. 중복 방지 표시의 파기 예정일을 일 단위로 맞춰,
 // 응답 문서의 파기 예정일(밀리초 정밀)과 대조해 두 문서를 잇지 못하게 한다.
@@ -576,7 +606,14 @@ exports.submitNamedSurvey = onCall(
         if (q.required) bad(`'${q.label || `문항 ${i + 1}`}' 항목에 응답해 주세요.`);
         continue;
       }
-      answers.push({ label: String(q.label || `문항 ${i + 1}`).slice(0, 200), value: v });
+      answers.push({
+        label: String(q.label || `문항 ${i + 1}`).slice(0, 200),
+        // 제목용 짧은 이름(빌더에서 지정). 비어 있으면 제목에 넣지 않는다.
+        slabel: String(q.slabel || "").slice(0, 40),
+        // 집계 대상 판정을 위해 문항 유형을 함께 둔다(조건부 후속은 futype).
+        qtype: String(q.type === "fu" ? (q.futype || "text") : (q.type || "")),
+        value: v,
+      });
     }
 
     // ── 선택 목적 항목(사진·연락처): 저장하지 않고 메일로만 ──
@@ -602,101 +639,121 @@ exports.submitNamedSurvey = onCall(
     if (totalBytes > 8 * 1024 * 1024) bad("사진 전체 합계는 8MB 이하만 가능합니다.");
 
     // ── 중복 응답 차단 ──
-    // 식별자 해시는 '응답을 마쳤다'는 표시로만 별도 컬렉션에 두고 응답 본문에는 붙이지 않는다.
-    // 두 문서 사이에 연결선이 없으므로, 해시를 되돌리더라도 누가 응답했는지까지만 알 수 있고
-    // 무엇이라고 답했는지는 알 수 없다(응답 본문은 그 자체로 특정 개인을 알아볼 수 없는 정보).
+    // 식별자 해시는 '응답을 마쳤다'는 표시로만 남긴다. 응답 원문은 시스템에 저장하지 않으므로
+    // 이 표시에서 응답 내용으로 이어지는 경로 자체가 없다(집계는 개인 단위가 아닌 합계).
     // 문서 ID를 조사ID+해시로 고정해 트랜잭션으로 선점한다 — 조회 후 쓰기는 동시 제출에서 새어나간다.
     const markRef = db.collection(NAMED_MARK).doc(`${surveyId}__${idHash}`);
 
     // ── 접수 자리 선점(중복 차단) ──
     // 메일보다 먼저 선점해야 동시 제출에서 메일이 두 번 나가지 않는다.
     const mainDays = Math.max(1, Number(sv.purposeMain?.retainDays) || 365);
-    const submitCode = (attachments.length || mailTexts.length) ? newReceiptCode() : "";
     const collectedDate = todayKST();
-    const purgeAt = addDays(mainDays);
-    const record = {
-      surveyId,
-      answers,
-      consentMain: true,
-      consentOpt,
-      collectedDate,
-      collectedAt: new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "short" }).format(new Date()),
-      purgeAt,                                 // 필수 목적 보유기간 만료일
-      createdAtMs: Date.now(),
-    };
-    if (submitCode) {
-      record.submitCode = submitCode;          // 메일↔응답 매칭용 임의값
-      record.optNotes = [
-        ...attachments.map((a, i) => photoLabels[i]),
-        ...mailTexts.map((t) => t.label),
-      ].slice(0, 20).map((label) => ({ label, submitted: true }));
-    }
     await db.runTransaction(async (tx) => {
       const cur = await tx.get(markRef);
       if (cur.exists) {
         throw new HttpsError("already-exists", "이미 응답이 접수된 " + (sv.idLabel || "식별자") + "입니다.");
       }
-      // 표시에는 조사·수집일·파기예정일만 둔다. 응답 문서 ID를 적지 않는다 —
-      // 적는 순간 응답과 개인이 다시 이어져 분리 저장의 의미가 사라진다.
-      // 시각도 일(日) 단위로 뭉갠다. 밀리초까지 남기면 같은 시각의 응답과 짝지어
-      // 연결선을 복원할 수 있어(타임스탬프 대조) 분리가 무의미해진다.
+      // 표시에는 조사·수집일·파기예정일만 둔다. 응답 내용은 적지 않는다.
       tx.create(markRef, { surveyId, collectedDate, purgeAt: dayAlignedPurge(collectedDate, mainDays) });
     });
-    const respRef = db.collection(NAMED_RESP).doc();
-    try {
-      await respRef.create(record);
-    } catch (e) {
-      await markRef.delete().catch(() => { /* */ });
-      throw new HttpsError("internal", "응답 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
-    }
-
-    // ── 선택 목적 메일 발송 ──
-    // 발송에 실패하면 접수를 통째로 되돌려, 응답만 남고 사진·연락처가 유실되는 상태를 막는다.
+    // 되돌리기: 메일이 나가지 못하면 접수가 없던 일이 되어야 재제출할 수 있다.
     const rollback = async () => {
-      await respRef.delete().catch(() => { /* */ });
-      await markRef.delete().catch(() => { /* 되돌리기 실패 시 재시도가 중복으로 걸린다 */ });
+      await markRef.delete().catch(() => { /* 실패 시 재시도가 중복으로 막힌다 */ });
     };
-    if (submitCode) {
-      let to = "";
-      try {
-        const s = await db.doc("settings/namedSurveyMail").get();
-        const cfg = s.exists ? s.data() : {};
-        to = String((cfg.bySurvey || {})[surveyId] || cfg.default || "").trim();
-      } catch { /* */ }
-      if (!to) {
-        await rollback();
-        throw new HttpsError("failed-precondition", "제출물 수신 이메일이 설정되지 않았습니다. 관리자에게 문의하세요.");
-      }
-      const when = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" }).format(new Date());
-      try {
-        await mailer().sendMail({
-          from: MAIL_USER.value(),
-          to,
-          subject: `[${sv.title || "기명 조사"}] 선택 항목 제출 — ${when} (제출코드 ${submitCode})`,
-          text: [
-            `조사: ${sv.title || surveyId}`,
-            `제출 일시: ${when}`,
-            `제출코드: ${submitCode}`,
-            "",
-            mailTexts.length ? "─ 추가 입력(시스템 미저장) ─" : "",
-            ...mailTexts.map((t) => `· ${t.label}: ${t.text}`),
-            mailTexts.length ? "" : "",
-            "※ 이 메일의 사진과 입력값은 시스템에 저장되지 않습니다.",
-            `※ 목적: ${(sv.purposeOpt && sv.purposeOpt.label) || "선택 목적"} — 목적 달성 후 이 메일을 삭제해야 파기가 완료됩니다.`,
-          ].filter((x) => x !== "").join("\n"),
-          attachments,
-        });
-      } catch (e) {
-        // 원인을 로그에 남긴다 — 남기지 않으면 어떤 이유로 실패했는지 확인할 방법이 없다.
-        // (SMTP 인증 실패·수신 주소 오류 등은 nodemailer 메시지에만 담긴다)
-        console.error("기명 조사 제출물 메일 발송 실패:", e?.response || e?.message || e);
-        await rollback();
-        if (e instanceof HttpsError) throw e;
-        throw new HttpsError("internal", "제출물 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.");
-      }
+
+    /* ── 응답 전달(메일) ──
+     * 응답 원문은 시스템에 저장하지 않는다. 이 메일이 유일한 보관본이므로
+     * 발송에 실패하면 접수를 되돌려, 응답이 어디에도 남지 않은 채 접수만
+     * 성립하는 상태를 막는다. */
+    let to = "";
+    try {
+      const s2 = await db.doc("settings/namedSurveyMail").get();
+      const cfg = s2.exists ? s2.data() : {};
+      to = String((cfg.bySurvey || {})[surveyId] || cfg.default || "").trim();
+    } catch { /* */ }
+    if (!to) {
+      await rollback();
+      throw new HttpsError("failed-precondition", "응답 수신 이메일이 설정되지 않았습니다. 관리자에게 문의하세요.");
+    }
+    const when = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" }).format(new Date());
+
+    // 제목: [조사명] ID: <식별자> / <짧은 이름>: <값> …
+    const subjectParts = [`ID: ${headerSafe(rawId)}`];
+    for (const a of answers) {
+      if (!a.slabel) continue;                        // 짧은 이름이 없는 문항은 제목에서 제외
+      subjectParts.push(`${headerSafe(a.slabel)}: ${headerSafe(subjectValue(a))}`);
+    }
+    let subject = `[${headerSafe(sv.title || "기명 조사")}] ${subjectParts.join(" / ")}`;
+    if (subject.length > SUBJECT_MAX) subject = subject.slice(0, SUBJECT_MAX - 1) + "…";
+
+    // 본문: 전체 응답 항목(제목에 넣지 않은 문항까지 모두).
+    const lines = [
+      `조사: ${sv.title || surveyId}`,
+      `${sv.idLabel || "식별자"}: ${rawId}`,
+      `제출 일시: ${when}`,
+      "",
+      "─ 응답 ─",
+      ...answers.map((a) => `· ${a.label}: ${Array.isArray(a.value) ? a.value.join(", ") : a.value}`),
+    ];
+    if (mailTexts.length) {
+      lines.push("", "─ 추가 입력 ─", ...mailTexts.map((t) => `· ${t.label}: ${t.text}`));
+    }
+    if (attachments.length) {
+      lines.push("", `─ 첨부 사진 ${attachments.length}장 ─`, ...photoLabels.map((l) => `· ${l}`));
+    }
+    lines.push(
+      "",
+      "※ 이 메일이 응답의 유일한 보관본입니다. 시스템에는 집계 수치만 남습니다.",
+      `※ 보유기간 ${mainDays}일이 지난 메일은 삭제해야 파기가 완료됩니다.`,
+    );
+    if (consentOpt && sv.purposeOpt?.label) {
+      lines.push(`※ 선택 목적(${sv.purposeOpt.label}) 동의 건입니다.`);
     }
 
-    return { ok: true, submitCode };
+    try {
+      await mailer().sendMail({
+        from: MAIL_USER.value(),
+        to,
+        subject,
+        text: lines.join("\n"),
+        attachments,
+      });
+    } catch (e) {
+      // 원인을 로그에 남긴다 — 남기지 않으면 어떤 이유로 실패했는지 확인할 방법이 없다.
+      console.error("기명 조사 응답 메일 발송 실패:", e?.response || e?.message || e);
+      await rollback();
+      if (e instanceof HttpsError) throw e;
+      throw new HttpsError("internal", "응답 전달에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+    }
+
+    /* ── 집계 갱신 ──
+     * 개별 응답 대신 수치만 남긴다: 총 응답수 · 예/아니오 문항의 답변 건수 ·
+     * 날짜/연월 문항의 월별 건수. 개인을 특정할 수 없고 파기 대상이 아니다.
+     * 라벨에 점·슬래시가 들어갈 수 있어 필드 경로는 FieldPath로 만든다.
+     * 집계 실패가 접수를 되돌리지는 않는다 — 응답은 이미 메일로 전달됐다. */
+    try {
+      const { FieldPath, FieldValue } = admin.firestore;
+      const inc = FieldValue.increment(1);
+      const updates = [new FieldPath("count"), inc, new FieldPath("updatedAtMs"), Date.now()];
+      for (const a of answers) {
+        const label = String(a.label).slice(0, 200);
+        if (a.qtype === "ox") {
+          const v = Array.isArray(a.value) ? a.value[0] : a.value;
+          if (v === "예" || v === "아니오") {
+            updates.push(new FieldPath("ox", label, v === "예" ? "yes" : "no"), inc);
+          }
+        }
+        const ym = ymOf(a);
+        if (ym) updates.push(new FieldPath("months", label, ym), inc);
+      }
+      const aggRef = db.collection(NAMED_AGG).doc(surveyId);
+      await aggRef.set({ surveyId }, { merge: true });
+      await aggRef.update(...updates);
+    } catch (e) {
+      console.error("기명 조사 집계 갱신 실패:", e?.message || e);
+    }
+
+    return { ok: true };
   }
 );
 
@@ -855,6 +912,22 @@ exports.namedResponsesDelete = onCall(NAMED_OPTS, async (req) => {
   marks.forEach((d) => batch.delete(d.ref));
   await batch.commit();
   return { deleted: targets.length, marks: marks.length };
+});
+
+/* 집계 조회. 개인 응답이 아니라 합계 수치만 돌려주므로 접속기록 대상이 아니다
+ * (기록은 '개인정보를 열람한 사실'을 남기기 위한 것이고, 여기엔 개인정보가 없다).
+ * 그래도 조사 운영 정보이므로 기명 조사 권한이 있는 계정으로 제한한다. */
+exports.namedSurveyStats = onCall(NAMED_OPTS, async (req) => {
+  await requireNamedTab(req);
+  const surveyId = str(req.data?.surveyId, 100, "조사 ID", true);
+  const snap = await db.collection(NAMED_AGG).doc(surveyId).get();
+  const v = snap.exists ? snap.data() : {};
+  return {
+    count: v.count || 0,
+    ox: v.ox || {},          // { 문항 라벨: { yes, no } }
+    months: v.months || {},  // { 문항 라벨: { "YYYY-MM": n } }
+    updatedAtMs: v.updatedAtMs || 0,
+  };
 });
 
 // 월 1회 점검 기록. 점검 자체도 기록으로 남겨 이행 여부를 확인할 수 있게 한다.
