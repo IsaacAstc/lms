@@ -613,9 +613,20 @@ exports.submitNamedSurvey = onCall(
       });
     }
 
-    // ── 선택 목적 항목(사진·연락처): 저장하지 않고 메일로만 ──
-    const photos = consentOpt && Array.isArray(d.photos) ? d.photos : [];
-    const rawTexts = consentOpt && Array.isArray(d.mailTexts) ? d.mailTexts : [];
+    /* ── 선택 목적 항목(사진·연락처): 저장하지 않고 메일로만 ──
+     * 노출 조건이 걸려 있으면 그 조건을 서버에서도 판정한다. 조건에 맞지 않는데 값이
+     * 오면(오래된 화면·직접 호출) 거절하지 않고 버린다 — 응답 자체는 정상이고,
+     * 받을 이유가 없는 개인정보만 들어오지 않게 하면 된다. */
+    const optWhen = sv.purposeOpt && sv.purposeOpt.showWhen;
+    let optApplies = true;
+    if (consentOpt && optWhen && optWhen.q) {
+      const target = answers.find((a) => a.label === String(optWhen.q));
+      const v = target ? (Array.isArray(target.value) ? target.value[0] : target.value) : "";
+      optApplies = optWhen.cond === "no" ? v === "아니오" : v === "예";
+    }
+    const takeOpt = consentOpt && optApplies;
+    const photos = takeOpt && Array.isArray(d.photos) ? d.photos : [];
+    const rawTexts = takeOpt && Array.isArray(d.mailTexts) ? d.mailTexts : [];
     if (photos.length > 5) bad("사진은 최대 5장까지 첨부할 수 있습니다.");
     if (rawTexts.length > 10) bad("추가 입력 항목이 너무 많습니다.");
     const optDefs = Array.isArray(sv.optItems) ? sv.optItems : [];
@@ -693,7 +704,9 @@ exports.submitNamedSurvey = onCall(
       `※ 성명·연락처가 담긴 이 메일은 보유기간 ${mainDays}일이 지나면 삭제해야 파기가 완료됩니다.`,
     );
     if (consentOpt && sv.purposeOpt?.label) {
-      lines.push(`※ 선택 목적(${sv.purposeOpt.label}) 동의 건입니다.`);
+      lines.push(optApplies
+        ? `※ 선택 목적(${sv.purposeOpt.label}) 동의 건입니다.`
+        : `※ 선택 목적(${sv.purposeOpt.label})에 동의했으나 노출 조건에 해당하지 않아 항목을 받지 않았습니다.`);
     }
 
     try {
