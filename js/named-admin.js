@@ -228,6 +228,33 @@ function paintQuestions() {
       <button type="button" class="chip-del nq-del" data-i="${i}">×</button>
     </div>`).join("") || `<p class="empty">문항이 없습니다.</p>`;
 
+  // 선택 목적 블록의 노출 조건 — 조건부 후속과 같은 방식으로 예/아니오 문항을 가리킨다.
+  const condBox = $("nm-opt-cond");
+  if (condBox) {
+    const w = draft.purposeOpt?.showWhen || {};
+    condBox.innerHTML = oxTargets.length
+      ? `<select id="nm-opt-cond-q">
+           <option value="">항상 표시</option>
+           ${oxTargets.map((t) => `<option${t === w.q ? " selected" : ""}>${esc(t)}</option>`).join("")}
+         </select>
+         <select id="nm-opt-cond-v"${w.q ? "" : " disabled"}>
+           <option value="yes"${w.cond === "no" ? "" : " selected"}>'예' 선택 시 표시</option>
+           <option value="no"${w.cond === "no" ? " selected" : ""}>'아니오' 선택 시 표시</option>
+         </select>`
+      : `<span class="hint">예/아니오 문항을 먼저 만들어야 조건을 지정할 수 있습니다.</span>`;
+    const qSel = $("nm-opt-cond-q");
+    if (qSel) {
+      qSel.addEventListener("change", (e) => {
+        const q = e.target.value;
+        draft.purposeOpt.showWhen = q ? { q, cond: $("nm-opt-cond-v").value } : null;
+        paintQuestions();
+      });
+      $("nm-opt-cond-v").addEventListener("change", (e) => {
+        if (draft.purposeOpt.showWhen) draft.purposeOpt.showWhen.cond = e.target.value;
+      });
+    }
+  }
+
   const optBox = $("nm-optitems");
   optBox.innerHTML = draft.optItems.map((q, i) => `<div class="load-row">
       <span>${i + 1}.</span>
@@ -306,6 +333,14 @@ function readEditor() {
       retainDays: Math.max(1, Number($("nm-opt-days").value) || 90),
       notice: $("nm-opt-notice").value.trim(),
       declineNote: $("nm-opt-decline").value.trim(),
+      // 노출 조건: 대상 문항이 예/아니오로 남아 있을 때만 보존한다.
+      // 문항을 지우거나 유형을 바꾼 뒤 조건만 남으면 블록이 영영 숨는다.
+      showWhen: (() => {
+        const w = d.purposeOpt?.showWhen;
+        if (!w || !w.q) return null;
+        const ok = d.questions.some((q) => q.type === "ox" && (q.label || "").trim() === w.q);
+        return ok ? { q: w.q, cond: w.cond === "no" ? "no" : "yes" } : null;
+      })(),
     },
     questions: d.questions.map((q) => (q.type === "fu"
       ? {

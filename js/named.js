@@ -129,7 +129,10 @@ function renderForm(consentOpt) {
   }).join("");
 
   const optItems = consentOpt && survey.purposeOpt?.enabled ? (survey.optItems || []) : [];
+  // 노출 조건이 있으면 대상 문항의 답에 따라 보이고 숨는다(wireOptBlock).
+  const optWhen = survey.purposeOpt?.showWhen || null;
   const optHtml = optItems.length ? `
+    <div id="opt-block"${optWhen ? " hidden" : ""}>
     <h2>${esc(survey.purposeOpt.label || "선택 항목")}</h2>
     <p class="hint">아래 항목은 <b>시스템에 저장되지 않고</b> 담당자 이메일로만 전달됩니다. 모두 채우셔야 접수됩니다.</p>
     ${optItems.map((q, i) => q.type === "photo"
@@ -143,7 +146,8 @@ function renderForm(consentOpt) {
                   placeholder="010-1234-5678" style="max-width:12rem" />
            <small class="hint">숫자만 입력하셔도 됩니다.</small></div>`
         : `<div class="q-item"><div class="q-label">${esc(q.label)}</div>
-           <input type="text" name="o_${i}" maxlength="100" autocomplete="off" /></div>`).join("")}` : "";
+           <input type="text" name="o_${i}" maxlength="100" autocomplete="off" /></div>`).join("")}
+    </div>` : "";
 
   root.innerHTML = `
     <h1>${esc(survey.title || "조사 참여")}</h1>
@@ -165,11 +169,39 @@ function renderForm(consentOpt) {
     </form>`;
 
   wireFollowUps(qs);
+  wireOptBlock(qs, optWhen, optItems);
   wirePhotoPreview();
   document.getElementById("n-form").addEventListener("submit", (e) => {
     e.preventDefault();
     submit(consentOpt, optItems);
   });
+}
+
+/* ── 선택 목적 블록의 조건부 노출 ──
+ * 예: '취업하셨습니까'에 아니오면 취업 인증샷·연락처를 물을 이유가 없다.
+ * 숨겨지면 입력값을 비워, 답을 바꿔 숨긴 뒤 제출해도 남아 있던 값이 가지 않게 한다. */
+function wireOptBlock(qs, when, optItems) {
+  const box = document.getElementById("opt-block");
+  if (!box || !when || !when.q) return;
+  const form = document.getElementById("n-form");
+  const pi = qs.findIndex((q) => q.type === "ox" && (q.label || "").trim() === when.q);
+  if (pi < 0) return;   // 대상 문항이 없다(정의 변경 등) — 조건 없이 그대로 보인다.
+  box.hidden = true;
+  const update = () => {
+    const v = form[`q_${pi}`]?.value;
+    const show = when.cond === "no" ? v === "아니오" : v === "예";
+    box.hidden = !show;
+    if (show) return;
+    optItems.forEach((_, i) => {
+      const el = form[`o_${i}`];
+      if (!el) return;
+      el.value = "";
+      const pv = document.getElementById(`pv-o_${i}`);
+      if (pv) pv.innerHTML = "";
+    });
+  };
+  form.querySelectorAll(`input[name="q_${pi}"]`).forEach((r) => r.addEventListener("change", update));
+  update();
 }
 
 /* ── 조건부 후속 ──
@@ -302,7 +334,9 @@ async function submit(consentOpt, optItems) {
   const photos = [];
   const mailTexts = [];
   let missing = 0;
-  for (let i = 0; i < optItems.length; i++) {
+  // 조건에 맞지 않아 숨겨진 블록은 응답 대상이 아니다 — '모두 채워야' 판정에서도 빠진다.
+  const optShown = !document.getElementById("opt-block")?.hidden;
+  for (let i = 0; optShown && i < optItems.length; i++) {
     const it = optItems[i];
     if (it.type === "photo") {
       const f = form[`o_${i}`]?.files?.[0];
@@ -319,7 +353,7 @@ async function submit(consentOpt, optItems) {
       mailTexts.push({ label: it.label, text: t.slice(0, 100) });
     }
   }
-  if (optItems.length && missing) {
+  if (optShown && optItems.length && missing) {
     const ok = confirm(`${survey.purposeOpt?.label || "선택 항목"}의 항목 ${missing}개가 비어 있습니다.\n이대로 제출하면 조사 응답만 접수되고 선택 항목은 접수되지 않습니다.\n계속하시겠습니까?`);
     if (!ok) return;
     photos.length = 0;
