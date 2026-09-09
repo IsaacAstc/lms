@@ -190,10 +190,6 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
    firebase use <프로젝트ID>
    firebase functions:secrets:set MAIL_USER   # 발신 Gmail 주소 입력
    firebase functions:secrets:set MAIL_PASS   # 앱 비밀번호 입력
-   # 응답자 식별자 해시 키(기명 조사용). 무작위 32자 이상, 한 번 정하면 바꾸지 말 것 —
-   # 바꾸면 기존 응답과 해시가 달라져 중복 판정이 어긋난다.
-   # 기명 조사를 쓰지 않더라도 함수 배포에는 이 시크릿이 존재해야 하므로 반드시 등록한다.
-   firebase functions:secrets:set SURVEY_ID_SALT
    cd functions && npm install && cd ..
    firebase deploy --only functions
    ```
@@ -239,14 +235,14 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
 1회 준비:
 
 1. **Blaze 요금제 전환** — Cloud Functions는 종량제에서만 배포된다.
-2. **시크릿 3개 등록** (해당 프로젝트에서):
+2. **시크릿 2개 등록** (해당 프로젝트에서):
    ```bash
    firebase functions:secrets:set MAIL_USER --project <프로젝트ID>
    firebase functions:secrets:set MAIL_PASS --project <프로젝트ID>
-   firebase functions:secrets:set SURVEY_ID_SALT --project <프로젝트ID>
    ```
-   `SURVEY_ID_SALT`는 **기관마다 다른 값**을 쓴다. 프로젝트가 격리돼 있으므로
-   식별자 해시 키도 분리하는 것이 맞다.
+   기명 조사가 응답자 식별자를 해시로 저장하던 때 쓰던 `SURVEY_ID_SALT`는 더 이상
+   필요하지 않다(중복 응답 허용으로 해시 자체를 만들지 않는다). 이미 등록해 둔
+   프로젝트는 그대로 두어도 무방하다 — 함수가 참조하지 않는다.
 3. **서비스 계정 생성 + GitHub 시크릿 등록** — 기본 기관과 같은 역할을 부여한 뒤,
    저장소 Settings → Secrets → Actions 에
    `FIREBASE_SERVICE_ACCOUNT_ATC`(JSON 전체), `FIREBASE_PROJECT_ID_ATC` 등록.

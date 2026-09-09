@@ -6,13 +6,17 @@
 //  · 응답은 클라이언트가 직접 저장하지 않고 submitNamedSurvey 함수로만 접수된다
 //    (동의 확인·식별자 해시·중복 판정을 서버에서 수행하기 위함).
 //  · 응답 원문은 저장하지 않고 담당자 메일로만 전달한다. 시스템에는 집계 수치만 남는다.
-//  · 식별자 원문도 메일에 포함된다. 시스템에는 해시만 남으며 중복 응답 판정에만 쓴다.
+//  · 응답자 정보(성명·휴대전화 뒷 4자리)도 메일에만 담긴다. 중복 응답은 허용한다.
 import { getDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 import { db, app } from "./firebase.js";
 
 const root = document.getElementById("named-root");
 const PHOTO_MAX_DIM = 1600;
+
+// 휴대전화 번호 검증 — 하이픈·공백은 무시한다. 서버(functions/index.js)와 같은 규칙.
+// 010 외에 011·016·017·018·019도 받는다.
+const isMobile = (v) => /^01[016789][0-9]{7,8}$/.test(String(v ?? "").replace(/[^0-9]/g, ""));
 
 function esc(v) {
   return String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -58,8 +62,8 @@ function renderConsent() {
       <dl class="consent-dl">
         <div><dt>수집·이용 목적</dt><dd>${esc(m.label || "")}</dd></div>
         <div><dt>수집 항목</dt><dd>${esc(m.items || "")}</dd></div>
-        <div><dt>처리 방법</dt><dd>입력하신 <b>${esc(survey.idLabel || "식별자")}와 응답 내용은 담당 부서의 이메일로 전달</b>되어 그 메일함에 보관됩니다. 조사 시스템에는 응답 건수·비율 같은 <b>합계 수치만</b> 남고 개별 응답은 저장되지 않습니다.</dd></div>
-        <div><dt>보유·이용 기간</dt><dd>수집일부터 ${days(m.retainDays)} (기간 경과 시 지체 없이 파기)</dd></div>
+        <div><dt>처리 방법</dt><dd>입력하신 <b>성명·휴대전화 뒷 4자리와 응답 내용은 담당 부서의 이메일로 전달</b>되어 그 메일함에 보관됩니다. 조사 시스템에는 응답 건수·비율 같은 <b>합계 수치만</b> 남고 개별 응답은 저장되지 않습니다.</dd></div>
+        <div><dt>보유·이용 기간</dt><dd>성명·연락처와 응답 내용은 <b>수집일부터 ${days(m.retainDays)}</b> 보관 후 지체 없이 파기합니다. 개인을 알아볼 수 없는 통계 수치는 기한 없이 보관합니다.</dd></div>
         <div><dt>동의 거부권</dt><dd>동의를 거부하실 수 있으나, 거부하시면 이 조사에 참여하실 수 없습니다.</dd></div>
       </dl>
       ${m.notice ? `<p class="hint">${nl2br(m.notice)}</p>` : ""}
@@ -133,17 +137,26 @@ function renderForm(consentOpt) {
            <input type="file" name="o_${i}" accept="image/*" />
            <div class="photo-preview" id="pv-o_${i}"></div>
            <small class="hint">사진을 찍거나 저장된 사진·파일에서 고를 수 있습니다. 타인의 얼굴·개인정보가 담기지 않게 해 주세요.</small></div>`
-      : `<div class="q-item"><div class="q-label">${esc(q.label)}</div>
+      : q.type === "phone"
+        ? `<div class="q-item"><div class="q-label">${esc(q.label)}</div>
+           <input type="tel" name="o_${i}" maxlength="13" inputmode="numeric" autocomplete="tel"
+                  placeholder="010-1234-5678" style="max-width:12rem" />
+           <small class="hint">숫자만 입력하셔도 됩니다.</small></div>`
+        : `<div class="q-item"><div class="q-label">${esc(q.label)}</div>
            <input type="text" name="o_${i}" maxlength="100" autocomplete="off" /></div>`).join("")}` : "";
 
   root.innerHTML = `
     <h1>${esc(survey.title || "조사 참여")}</h1>
     <form id="n-form">
       <div class="q-item">
-        <div class="q-label">${esc(survey.idLabel || "식별자")}</div>
-        <input type="text" name="rid" maxlength="100" autocomplete="off" required />
-        ${survey.idHint ? `<small class="hint">${nl2br(survey.idHint)}</small>` : ""}
-        <small class="hint">입력하신 값은 응답과 함께 담당 부서 이메일로 전달됩니다.</small>
+        <div class="q-label">성명</div>
+        <input type="text" name="rname" maxlength="50" autocomplete="name" required />
+      </div>
+      <div class="q-item">
+        <div class="q-label">휴대전화 뒷 4자리</div>
+        <input type="text" name="rphone4" maxlength="4" inputmode="numeric" pattern="[0-9]{4}"
+               autocomplete="off" required placeholder="0000" style="max-width:8rem" />
+        <small class="hint">동명이인을 구분하기 위한 항목입니다. 성명과 함께 응답 내용에 붙어 담당 부서 이메일로 전달됩니다.</small>
       </div>
       ${body}
       ${optHtml}
@@ -263,8 +276,10 @@ async function submit(consentOpt, optItems) {
   const btn = document.getElementById("n-submit");
   err.textContent = "";
 
-  const rid = (form.rid.value || "").trim();
-  if (!rid) { err.textContent = `${survey.idLabel || "식별자"}을(를) 입력해 주세요.`; return; }
+  const rname = (form.rname.value || "").trim();
+  if (!rname) { err.textContent = "성명을 입력해 주세요."; return; }
+  const rphone4 = (form.rphone4.value || "").trim();
+  if (!/^[0-9]{4}$/.test(rphone4)) { err.textContent = "휴대전화 뒷 4자리를 숫자 4자리로 입력해 주세요."; return; }
 
   // 문항 응답 수집(검증은 서버에서도 다시 수행한다).
   const qs = Array.isArray(survey.questions) ? survey.questions : [];
@@ -297,6 +312,10 @@ async function submit(consentOpt, optItems) {
     } else {
       const t = (form[`o_${i}`]?.value || "").trim();
       if (!t) { missing++; continue; }
+      if (it.type === "phone" && !isMobile(t)) {
+        err.textContent = `'${it.label}'을(를) 휴대전화 번호 형식으로 입력해 주세요.`;
+        return;
+      }
       mailTexts.push({ label: it.label, text: t.slice(0, 100) });
     }
   }
@@ -318,7 +337,8 @@ async function submit(consentOpt, optItems) {
     const fn = httpsCallable(getFunctions(app, "asia-northeast3"), "submitNamedSurvey");
     const res = await fn({
       surveyId,
-      respondentId: rid,
+      name: rname,
+      phone4: rphone4,
       consentMain: true,
       consentOpt: !!consentOpt,
       answers,
