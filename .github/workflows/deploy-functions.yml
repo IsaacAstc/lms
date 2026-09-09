@@ -92,9 +92,12 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ATC }}
 
       # 이 프로젝트는 vault와 규칙을 공유하지 않으므로 Firestore 규칙까지 함께 배포한다.
-      - name: Deploy functions, RTDB & Firestore rules (항공훈련센터)
+      # RTDB(database)는 대상에서 뺀다 — 실시간 DB를 쓰는 기능은 퀴즈·히어로 미션뿐이고
+      # 이들은 추가 기관에서도 기본 기관 백엔드로 연결되는 링크라(orgs.js) 인스턴스가 없다.
+      # 넣어두면 "haven't created a Realtime Database instance"로 배포 전체가 멈춘다.
+      - name: Deploy functions & Firestore rules (항공훈련센터)
         if: steps.t.outputs.target == 'atc'
         run: npx --yes firebase-tools@latest deploy
-          --only functions,database,firestore:rules
+          --only functions,firestore:rules
           --project "${{ secrets.FIREBASE_PROJECT_ID_ATC }}"
           --non-interactive --force
