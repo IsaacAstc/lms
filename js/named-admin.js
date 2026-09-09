@@ -95,7 +95,7 @@ function paintList() {
         <td>${state}</td>
         <td>${fmtRange(s.openMs, s.closeMs)}</td>
         <td>${s.purposeOpt?.enabled ? esc(s.purposeOpt.label || "사용") : "<span class='muted'>미사용</span>"}</td>
-        <td>필수 ${s.purposeMain?.retainDays || "-"}일${s.purposeOpt?.enabled ? ` · 선택 ${s.purposeOpt.retainDays || "-"}일` : ""}</td>
+        <td>필수 기한 없음${s.purposeOpt?.enabled ? ` · 선택 ${s.purposeOpt.retainDays || "-"}일` : ""}</td>
         <td class="row-actions">
           <button type="button" data-edit="${s.id}">편집</button>
           <button type="button" data-copy="${s.id}" title="문항·동의 문안을 그대로 복제해 새 조사로 시작">복제</button>
@@ -174,7 +174,6 @@ function paintEditor() {
 
   $("nm-main-label").value = d.purposeMain.label || "";
   $("nm-main-items").value = d.purposeMain.items || "";
-  $("nm-main-days").value = d.purposeMain.retainDays || 365;
   $("nm-main-notice").value = d.purposeMain.notice || "";
 
   $("nm-opt-on").checked = !!d.purposeOpt.enabled;
@@ -323,7 +322,9 @@ function readEditor() {
     purposeMain: {
       label: $("nm-main-label").value.trim(),
       items: $("nm-main-items").value.trim(),
-      retainDays: Math.max(1, Number($("nm-main-days").value) || 365),
+      // 필수 목적은 기한 없이 보관한다(동의 화면 고정 문구). 저장된 값은 건드리지 않고
+      // 그대로 옮겨 둔다 — 이전 방식으로 수집된 응답의 파기 기준으로 남아 있다.
+      retainDays: Math.max(1, Number(d.purposeMain?.retainDays) || 365),
       notice: $("nm-main-notice").value.trim(),
     },
     purposeOpt: {
