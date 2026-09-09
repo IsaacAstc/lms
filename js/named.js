@@ -5,8 +5,8 @@
 //  · 필수 목적 동의 없이는 진행 불가, 선택 목적은 동의하지 않아도 응답 가능(법 제16조 제3항).
 //  · 응답은 클라이언트가 직접 저장하지 않고 submitNamedSurvey 함수로만 접수된다
 //    (동의 확인·식별자 해시·중복 판정을 서버에서 수행하기 위함).
-//  · 선택 목적 항목(사진·연락처)은 어디에도 저장되지 않고 담당자 메일로만 전달된다.
-//  · 식별자는 서버에서 해시로 바뀐 뒤 응답과 분리 보관된다(중복 방지 표시 전용).
+//  · 응답 원문은 저장하지 않고 담당자 메일로만 전달한다. 시스템에는 집계 수치만 남는다.
+//  · 식별자 원문도 메일에 포함된다. 시스템에는 해시만 남으며 중복 응답 판정에만 쓴다.
 import { getDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 import { db, app } from "./firebase.js";
@@ -58,6 +58,7 @@ function renderConsent() {
       <dl class="consent-dl">
         <div><dt>수집·이용 목적</dt><dd>${esc(m.label || "")}</dd></div>
         <div><dt>수집 항목</dt><dd>${esc(m.items || "")}</dd></div>
+        <div><dt>처리 방법</dt><dd>입력하신 <b>${esc(survey.idLabel || "식별자")}와 응답 내용은 담당 부서의 이메일로 전달</b>되어 그 메일함에 보관됩니다. 조사 시스템에는 응답 건수·비율 같은 <b>합계 수치만</b> 남고 개별 응답은 저장되지 않습니다.</dd></div>
         <div><dt>보유·이용 기간</dt><dd>수집일부터 ${days(m.retainDays)} (기간 경과 시 지체 없이 파기)</dd></div>
         <div><dt>동의 거부권</dt><dd>동의를 거부하실 수 있으나, 거부하시면 이 조사에 참여하실 수 없습니다.</dd></div>
       </dl>
@@ -129,9 +130,9 @@ function renderForm(consentOpt) {
     <p class="hint">아래 항목은 <b>시스템에 저장되지 않고</b> 담당자 이메일로만 전달됩니다. 모두 채우셔야 접수됩니다.</p>
     ${optItems.map((q, i) => q.type === "photo"
       ? `<div class="q-item"><div class="q-label">${esc(q.label)}</div>
-           <input type="file" name="o_${i}" accept="image/*" capture="environment" />
+           <input type="file" name="o_${i}" accept="image/*" />
            <div class="photo-preview" id="pv-o_${i}"></div>
-           <small class="hint">타인의 얼굴·개인정보가 담기지 않게 촬영해 주세요.</small></div>`
+           <small class="hint">사진을 찍거나 저장된 사진·파일에서 고를 수 있습니다. 타인의 얼굴·개인정보가 담기지 않게 해 주세요.</small></div>`
       : `<div class="q-item"><div class="q-label">${esc(q.label)}</div>
            <input type="text" name="o_${i}" maxlength="100" autocomplete="off" /></div>`).join("")}` : "";
 
@@ -142,6 +143,7 @@ function renderForm(consentOpt) {
         <div class="q-label">${esc(survey.idLabel || "식별자")}</div>
         <input type="text" name="rid" maxlength="100" autocomplete="off" required />
         ${survey.idHint ? `<small class="hint">${nl2br(survey.idHint)}</small>` : ""}
+        <small class="hint">입력하신 값은 응답과 함께 담당 부서 이메일로 전달됩니다.</small>
       </div>
       ${body}
       ${optHtml}
