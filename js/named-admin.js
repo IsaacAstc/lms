@@ -7,7 +7,7 @@
 //  · 응답: 원문을 저장하지 않고 담당자 메일로만 전달한다. 시스템에는 집계 수치만 남는다.
 //    이전 방식으로 저장된 응답(namedResponses)은 브라우저에서 직접 읽지 못하며,
 //    조회·내보내기·파기를 서버 함수로만 수행해 취급자 접속기록(accessLogs)으로 남긴다.
-//  · 식별자 원문은 메일에만 있다. 시스템에는 해시만 남아 중복 응답 판정에 쓴다.
+//  · 응답자 정보(성명·휴대전화 뒷 4자리)도 메일에만 있다. 중복 응답은 허용한다.
 import { escapeHtml } from "./app.js";
 import { orgQuery } from "./orgs.js";
 import { watchCollection, onCollection, addItem, updateItem, removeItem, setDocById, getDocById } from "./store.js";
@@ -50,14 +50,12 @@ function blankSurvey() {
   return {
     title: "",
     intro: "",
-    idLabel: "훈련 시스템 아이디",
-    idHint: "본인 확인용이 아니라 중복 응답을 막기 위한 항목입니다. 조사 시스템에는 되돌릴 수 없는 형태로만 남으며, 중복 응답 확인에만 사용합니다.",
     status: "draft",
     openMs: 0,
     closeMs: 0,
     purposeMain: {
       label: "수료생 취업 실태 통계",
-      items: "아이디, 취업 여부, 취업 시기, 회사명",
+      items: "성명, 휴대전화 뒷 4자리, 취업 여부, 취업 시기, 회사명",
       retainDays: 365,
       notice: "",
     },
@@ -98,6 +96,7 @@ function paintList() {
         <td>필수 ${s.purposeMain?.retainDays || "-"}일${s.purposeOpt?.enabled ? ` · 선택 ${s.purposeOpt.retainDays || "-"}일` : ""}</td>
         <td class="row-actions">
           <button type="button" data-edit="${s.id}">편집</button>
+          <button type="button" data-copy="${s.id}" title="문항·동의 문안을 그대로 복제해 새 조사로 시작">복제</button>
           <button type="button" data-resp="${s.id}">응답</button>
           <button type="button" data-link="${s.id}">주소</button>
           <button type="button" class="del" data-del="${s.id}">삭제</button>
@@ -106,6 +105,7 @@ function paintList() {
     }).join("")}</tbody></table></div>`;
 
   box.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => openEditor(b.dataset.edit)));
+  box.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => copySurvey(b.dataset.copy)));
   box.querySelectorAll("[data-resp]").forEach((b) => b.addEventListener("click", () => showResponses(b.dataset.resp)));
   box.querySelectorAll("[data-link]").forEach((b) => b.addEventListener("click", () => showLink(b.dataset.link)));
   box.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => delSurvey(b.dataset.del)));
@@ -137,13 +137,35 @@ function openEditor(id) {
   $("named-editor").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+/* 복제 — 기존 조사의 문항·동의 문안을 그대로 가진 '새 조사'를 편집기에 띄운다.
+ * 여기서 저장을 눌러야 실제로 만들어지므로, 복제 직후 문구를 손보거나 취소할 수 있다.
+ * 응답 기간과 상태는 물려받지 않는다 — 새 조사가 옛 기간 그대로 접수를 시작하면
+ * 의도치 않게 열리거나 이미 닫힌 상태로 만들어진다. */
+function copySurvey(id) {
+  const src = list.find((s) => s.id === id);
+  if (!src) return alert("복제할 조사를 찾을 수 없습니다.");
+  const copy = JSON.parse(JSON.stringify({ ...blankSurvey(), ...src }));
+  delete copy.id;
+  delete copy.createdAtMs;
+  copy.title = `${src.title || "(제목 없음)"} 사본`;
+  copy.status = "draft";      // 작성 중으로 시작 — 검토 후 직접 열도록
+  copy.openMs = 0;
+  copy.closeMs = 0;
+  editingId = null;           // 새 문서로 저장된다
+  draft = copy;
+  draft.questions = Array.isArray(draft.questions) ? draft.questions : [];
+  draft.optItems = Array.isArray(draft.optItems) ? draft.optItems : [];
+  $("named-editor").hidden = false;
+  $("named-editor-title").textContent = "새 조사 (복제)";
+  paintEditor();
+  $("named-editor").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function paintEditor() {
   if (!draft) return;
   const d = draft;
   $("nm-title").value = d.title || "";
   $("nm-intro").value = d.intro || "";
-  $("nm-idlabel").value = d.idLabel || "";
-  $("nm-idhint").value = d.idHint || "";
   $("nm-status").value = d.status || "draft";
   $("nm-open").value = msToLocal(d.openMs);
   $("nm-close").value = msToLocal(d.closeMs);
@@ -266,8 +288,6 @@ function readEditor() {
   return {
     title: $("nm-title").value.trim(),
     intro: $("nm-intro").value.trim(),
-    idLabel: $("nm-idlabel").value.trim() || "식별자",
-    idHint: $("nm-idhint").value.trim(),
     status: $("nm-status").value,
     openMs: localToMs($("nm-open").value),
     closeMs: localToMs($("nm-close").value),

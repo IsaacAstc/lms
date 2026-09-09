@@ -486,29 +486,17 @@ exports.submitSurveyPhotos = onCall(
 /* ================================================================
  *  기명 조사(namedSurveys) — 익명 설문과 완전히 분리된 개인정보 처리 경로
  *
- *  익명 설문(surveyResponses)과 달리 이 경로는 개인정보를 처리한다.
- *  · 응답자 식별자(아이디 등)는 원문을 저장하지 않고 서버에서만 해시로 변환한다.
- *    해시 비밀값은 Firebase Secret(SURVEY_ID_SALT)에만 두며 저장소에 남기지 않는다.
- *    비밀값 없이는 응답을 받지 않는다(가명처리 전제가 깨진 상태로 수집 금지).
- *  · 선택 목적(경품 이벤트 등) 항목인 사진·연락처는 저장하지 않고 담당자 메일로만 전달한다.
- *  · 응답 문서에는 목적별 파기 예정일(purgeAt)을 함께 기록하고, 일일 배치가 파기한다.
- *  클라이언트는 namedResponses를 직접 읽거나 쓸 수 없다(보안규칙에서 전면 차단).
+ *  익명 설문(surveyResponses)과 달리 이 경로는 개인정보(성명·연락처 일부)를 처리한다.
+ *  · 응답자 정보와 응답 원문은 시스템에 저장하지 않고 담당 부서 메일로만 전달한다.
+ *    따라서 개인정보의 보관 장소는 그 메일함뿐이고, 파기도 메일 삭제로 이뤄진다.
+ *  · 시스템에는 개인을 특정할 수 없는 집계 수치(namedAggregates)만 누적한다.
+ *    개인정보가 아니므로 파기 대상이 아니며 기한 없이 보관한다.
+ *  · 중복 응답은 허용한다(운영 정책) — 응답자를 식별해 두는 표시를 따로 만들지 않는다.
+ *  이전 방식으로 저장된 응답(namedResponses)은 조회·파기 함수로만 다루고,
+ *  클라이언트는 직접 읽거나 쓸 수 없다(보안규칙에서 전면 차단).
  * ================================================================ */
-const SURVEY_ID_SALT = defineSecret("SURVEY_ID_SALT");
-const NAMED_RESP = "namedResponses";      // 응답 본문 — 식별자를 붙이지 않는다
-const NAMED_MARK = "namedRespondents";    // 중복 방지 표시 — 식별자 해시만, 응답과 연결선 없음
-
-// 응답자 식별자 → 되돌릴 수 없는 해시.
-// 대상 인원이 적어 단순 해시는 전수 대입으로 복원되므로, 서버 전용 비밀값을 키로 쓴다.
-function hashRespondentId(surveyId, rawId) {
-  const key = String(SURVEY_ID_SALT.value() || "");
-  if (key.length < 16) {
-    throw new HttpsError("failed-precondition",
-      "조사 설정이 완료되지 않았습니다(식별자 보호 키 미설정). 관리자에게 문의하세요.");
-  }
-  const norm = String(rawId).trim().toLowerCase();
-  return crypto.createHmac("sha256", key).update(`${surveyId}|${norm}`).digest("hex");
-}
+const NAMED_RESP = "namedResponses";      // 이전 방식으로 저장된 응답(신규 저장 없음)
+const NAMED_MARK = "namedRespondents";    // 이전 방식의 중복 방지 표시(신규 생성 없음)
 
 const NAMED_AGG = "namedAggregates";      // 집계 수치만 — 개인정보 아님, 파기 대상 아님
 
@@ -541,14 +529,9 @@ function ymOf(a) {
 }
 
 const addDays = (days) => new Date(Date.now() + days * 86400000);
-// 수집일(KST) 자정 기준 + N일. 중복 방지 표시의 파기 예정일을 일 단위로 맞춰,
-// 응답 문서의 파기 예정일(밀리초 정밀)과 대조해 두 문서를 잇지 못하게 한다.
-function dayAlignedPurge(collectedDate, days) {
-  return new Date(new Date(`${collectedDate}T00:00:00+09:00`).getTime() + (days + 1) * 86400000);
-}
 
 exports.submitNamedSurvey = onCall(
-  { region: "asia-northeast3", secrets: [MAIL_USER, MAIL_PASS, SURVEY_ID_SALT], memory: "512MiB", timeoutSeconds: 60, maxInstances: 5 },
+  { region: "asia-northeast3", secrets: [MAIL_USER, MAIL_PASS], memory: "512MiB", timeoutSeconds: 60, maxInstances: 5 },
   async (req) => {
     const d = req.data || {};
     const surveyId = str(d.surveyId, 100, "조사 ID", true);
@@ -569,9 +552,12 @@ exports.submitNamedSurvey = onCall(
     const optEnabled = !!(sv.purposeOpt && sv.purposeOpt.enabled);
     const consentOpt = optEnabled && d.consentOpt === true;
 
-    // ── 응답자 식별자(원문은 저장하지 않음) ──
-    const rawId = str(d.respondentId, 100, sv.idLabel || "식별자", true);
-    const idHash = hashRespondentId(surveyId, rawId);
+    // ── 응답자 정보(성명 + 휴대전화 뒷 4자리) ──
+    // 시스템에 저장하지 않고 메일에만 담는다. 뒷 4자리는 동명이인 구분용이며
+    // 형식을 서버에서도 확인한다(클라이언트 검사는 우회될 수 있다).
+    const rName = str(d.name, 50, "성명", true);
+    const rPhone4 = str(d.phone4, 4, "휴대전화 뒷 4자리", true);
+    if (!/^[0-9]{4}$/.test(rPhone4)) bad("휴대전화 뒷 4자리를 숫자 4자리로 입력해 주세요.");
 
     // ── 문항 응답 검증(정의 기준) ──
     const given = Array.isArray(d.answers) ? d.answers : [];
@@ -638,33 +624,14 @@ exports.submitNamedSurvey = onCall(
     });
     if (totalBytes > 8 * 1024 * 1024) bad("사진 전체 합계는 8MB 이하만 가능합니다.");
 
-    // ── 중복 응답 차단 ──
-    // 식별자 해시는 '응답을 마쳤다'는 표시로만 남긴다. 응답 원문은 시스템에 저장하지 않으므로
-    // 이 표시에서 응답 내용으로 이어지는 경로 자체가 없다(집계는 개인 단위가 아닌 합계).
-    // 문서 ID를 조사ID+해시로 고정해 트랜잭션으로 선점한다 — 조회 후 쓰기는 동시 제출에서 새어나간다.
-    const markRef = db.collection(NAMED_MARK).doc(`${surveyId}__${idHash}`);
-
-    // ── 접수 자리 선점(중복 차단) ──
-    // 메일보다 먼저 선점해야 동시 제출에서 메일이 두 번 나가지 않는다.
+    // 중복 응답은 허용한다(운영 정책). 응답자를 식별해 두는 표시를 만들지 않으므로
+    // 시스템에는 개인과 이어지는 데이터가 전혀 남지 않는다 — 남는 것은 집계 수치뿐이다.
+    // 같은 사람의 반복 제출을 막는 장치가 없어지므로, 남용 방지는 IP 시간당 상한에 의존한다.
     const mainDays = Math.max(1, Number(sv.purposeMain?.retainDays) || 365);
-    const collectedDate = todayKST();
-    await db.runTransaction(async (tx) => {
-      const cur = await tx.get(markRef);
-      if (cur.exists) {
-        throw new HttpsError("already-exists", "이미 응답이 접수된 " + (sv.idLabel || "식별자") + "입니다.");
-      }
-      // 표시에는 조사·수집일·파기예정일만 둔다. 응답 내용은 적지 않는다.
-      tx.create(markRef, { surveyId, collectedDate, purgeAt: dayAlignedPurge(collectedDate, mainDays) });
-    });
-    // 되돌리기: 메일이 나가지 못하면 접수가 없던 일이 되어야 재제출할 수 있다.
-    const rollback = async () => {
-      await markRef.delete().catch(() => { /* 실패 시 재시도가 중복으로 막힌다 */ });
-    };
 
     /* ── 응답 전달(메일) ──
-     * 응답 원문은 시스템에 저장하지 않는다. 이 메일이 유일한 보관본이므로
-     * 발송에 실패하면 접수를 되돌려, 응답이 어디에도 남지 않은 채 접수만
-     * 성립하는 상태를 막는다. */
+     * 응답 원문은 시스템에 저장하지 않는다. 이 메일이 유일한 보관본이므로,
+     * 발송에 실패하면 접수 자체가 성립하지 않은 것으로 보고 오류를 돌려준다. */
     let to = "";
     try {
       const s2 = await db.doc("settings/namedSurveyMail").get();
@@ -672,13 +639,12 @@ exports.submitNamedSurvey = onCall(
       to = String((cfg.bySurvey || {})[surveyId] || cfg.default || "").trim();
     } catch { /* */ }
     if (!to) {
-      await rollback();
       throw new HttpsError("failed-precondition", "응답 수신 이메일이 설정되지 않았습니다. 관리자에게 문의하세요.");
     }
     const when = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" }).format(new Date());
 
-    // 제목: [조사명] ID: <식별자> / <짧은 이름>: <값> …
-    const subjectParts = [`ID: ${headerSafe(rawId)}`];
+    // 제목: [조사명] 홍길동(1234) / <짧은 이름>: <값> …
+    const subjectParts = [`${headerSafe(rName)}(${headerSafe(rPhone4)})`];
     for (const a of answers) {
       if (!a.slabel) continue;                        // 짧은 이름이 없는 문항은 제목에서 제외
       subjectParts.push(`${headerSafe(a.slabel)}: ${headerSafe(subjectValue(a))}`);
@@ -689,7 +655,8 @@ exports.submitNamedSurvey = onCall(
     // 본문: 전체 응답 항목(제목에 넣지 않은 문항까지 모두).
     const lines = [
       `조사: ${sv.title || surveyId}`,
-      `${sv.idLabel || "식별자"}: ${rawId}`,
+      `성명: ${rName}`,
+      `휴대전화 뒷 4자리: ${rPhone4}`,
       `제출 일시: ${when}`,
       "",
       "─ 응답 ─",
@@ -703,8 +670,8 @@ exports.submitNamedSurvey = onCall(
     }
     lines.push(
       "",
-      "※ 이 메일이 응답의 유일한 보관본입니다. 시스템에는 집계 수치만 남습니다.",
-      `※ 보유기간 ${mainDays}일이 지난 메일은 삭제해야 파기가 완료됩니다.`,
+      "※ 이 메일이 응답의 유일한 보관본입니다. 시스템에는 개인을 알아볼 수 없는 집계 수치만 남습니다.",
+      `※ 성명·연락처가 담긴 이 메일은 보유기간 ${mainDays}일이 지나면 삭제해야 파기가 완료됩니다.`,
     );
     if (consentOpt && sv.purposeOpt?.label) {
       lines.push(`※ 선택 목적(${sv.purposeOpt.label}) 동의 건입니다.`);
@@ -721,7 +688,6 @@ exports.submitNamedSurvey = onCall(
     } catch (e) {
       // 원인을 로그에 남긴다 — 남기지 않으면 어떤 이유로 실패했는지 확인할 방법이 없다.
       console.error("기명 조사 응답 메일 발송 실패:", e?.response || e?.message || e);
-      await rollback();
       if (e instanceof HttpsError) throw e;
       throw new HttpsError("internal", "응답 전달에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     }
