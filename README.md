@@ -222,6 +222,24 @@ CLAUDE.md 5절 대비 1단계 조정 사항(운영 협의 반영):
 5. 이후 Actions 탭에서 `Deploy Functions & Rules` 워크플로를 수동 실행(`Run workflow`)해
    한 번 검증한다. 시크릿이 없으면 워크플로는 경고만 남기고 건너뛴다.
 
+### 커스텀 도메인 점검 (`domain-check.yml`)
+
+`kacastc.mooo.com`은 FreeDNS 공유 도메인이라 CNAME을 쓸 수 없어 **A 레코드**로 걸려 있다.
+A 레코드는 GitHub Pages의 IP를 고정하므로, GitHub이 IP를 바꾸면 코드도 배포도 멀쩡한 채
+접속만 끊긴다. KAC 내부망에서 `github.io`가 차단돼 있어 우회 경로도 없다.
+
+그래서 **매일 06:00(KST)** 워크플로가 도메인이 아직 GitHub Pages IP를 가리키는지와
+`https://kacastc.mooo.com/`이 우리 페이지를 돌려주는지 확인하고, 어긋나면 실패시킨다
+(실패 시 Actions 알림 메일). 실패하면 다음을 차례로 본다.
+
+1. FreeDNS에 A 레코드가 남아 있는지 — 네 개 모두 등록해야 한다.
+2. [GitHub Pages 문서](https://docs.github.com/pages/configuring-a-custom-domain-for-your-github-pages-site)의
+   IP 목록이 바뀌었는지 — 바뀌었으면 FreeDNS와 워크플로의 `EXPECTED_IPS`를 함께 고친다.
+3. Pages 설정의 커스텀 도메인·인증서 상태.
+
+> 이 점검은 **외부에서 보이는 상태**만 확인한다. KAC 내부망에서의 차단 여부는 알 수 없으므로,
+> 사내에서 접속이 안 될 때는 이 워크플로가 통과하고 있어도 별개로 확인해야 한다.
+
 ### 추가 기관 배포 (항공훈련센터 등 — 별도 Firebase 프로젝트)
 
 기본 기관과 코드는 같지만 프로젝트가 다르므로 배포도 프로젝트별로 따로 이뤄진다.
