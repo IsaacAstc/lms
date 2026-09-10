@@ -1,0 +1,73 @@
+name: Domain Check
+
+# 커스텀 도메인이 조용히 끊기는 것을 잡기 위한 일일 점검.
+#
+# 이 도메인은 FreeDNS 공유 도메인(mooo.com)이라 CNAME을 쓸 수 없어 A 레코드로 걸어 뒀다.
+# A 레코드는 GitHub Pages의 IP를 고정하므로, GitHub이 IP를 바꾸면 코드도 배포도 멀쩡한
+# 채로 접속만 안 된다. 게다가 KAC 내부망에서 github.io가 차단돼 있어 우회 경로도 없다.
+# 그래서 사람이 알아채기 전에 워크플로가 먼저 실패하도록 해 둔다(실패 시 알림 메일).
+on:
+  schedule:
+    - cron: "0 21 * * *"   # 매일 06:00 KST (UTC 21:00)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      SITE: kacastc.mooo.com
+      # GitHub Pages A 레코드(문서 기준). 바뀌면 이 목록도 함께 고쳐야 한다.
+      # https://docs.github.com/pages/configuring-a-custom-domain-for-your-github-pages-site
+      EXPECTED_IPS: "185.199.108.153 185.199.109.153 185.199.110.153 185.199.111.153"
+      # 우리 사이트가 맞는지 확인할 표식(index.html의 <title>).
+      MARKER: "항공보안 교육 운영관리 시스템"
+    steps:
+      # 1) DNS — 도메인이 아직 GitHub Pages를 가리키는가.
+      #    레코드가 지워지거나 남의 IP로 바뀌면 여기서 걸린다.
+      - name: DNS 확인
+        run: |
+          python3 - <<'PY'
+          import os, socket, sys
+          site = os.environ["SITE"]
+          expected = set(os.environ["EXPECTED_IPS"].split())
+          try:
+              got = {i[4][0] for i in socket.getaddrinfo(site, 443, socket.AF_INET)}
+          except OSError as e:
+              print(f"::error::{site} 이름 풀이 실패: {e}")
+              sys.exit(1)
+          print(f"{site} → {sorted(got)}")
+          unknown = got - expected
+          if not got & expected:
+              print(f"::error::{site}가 GitHub Pages IP를 가리키지 않습니다. 확인: {sorted(got)}")
+              sys.exit(1)
+          if unknown:
+              print(f"::warning::목록에 없는 IP가 섞여 있습니다: {sorted(unknown)} — GitHub이 IP를 바꿨는지 문서를 확인하세요.")
+          missing = expected - got
+          if missing:
+              print(f"::warning::등록되지 않은 A 레코드가 있습니다: {sorted(missing)} — 네 개 모두 넣어야 한 대가 죽어도 접속이 유지됩니다.")
+          PY
+
+      # 2) HTTPS — 실제로 우리 사이트가 응답하는가.
+      #    IP 변경·인증서 만료·Pages 장애는 여기서 드러난다.
+      #    일시적 네트워크 오류로 헛알림이 나지 않도록 두 번까지 다시 시도한다.
+      - name: 사이트 응답 확인
+        run: |
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o body.html -w '%{http_code}' --max-time 20 "https://${SITE}/" || echo "000")
+            if [ "$code" = "200" ]; then
+              if grep -qF "$MARKER" body.html; then
+                echo "HTTPS 200 · 내용 확인됨"
+                exit 0
+              fi
+              echo "::error::200이지만 우리 사이트가 아닙니다(표식 '$MARKER' 없음). 도메인이 다른 곳을 가리키는지 확인하세요."
+              head -c 300 body.html
+              exit 1
+            fi
+            echo "시도 $attempt: HTTP $code"
+            [ "$attempt" -lt 3 ] && sleep 20
+          done
+          echo "::error::https://${SITE}/ 응답 실패(마지막 코드 $code). 인증서 만료·DNS·Pages 장애를 확인하세요."
+          exit 1
