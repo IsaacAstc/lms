@@ -187,6 +187,17 @@ h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
 /* small은 인라인이라 좁은 입력칸 옆 여백으로 흘러 들어간다 — 안내 문구는 늘 다음 줄에.
    (p.hint는 원래 블록이라 영향 없음. 인라인일 때는 위 margin도 먹지 않는다) */
 small.hint { display: block; }
+
+/* 경품 안내 — 설문 화면의 제목 아래에 들어가는 문구+이미지 블록. */
+.prize-notice { margin: 0.9rem 0 1.4rem; text-align: center; }
+.prize-notice .prize-title { font-weight: 700; margin: 0 0 0.5rem; }
+.prize-notice img { display: block; margin: 0 auto; max-width: 100%; height: auto; border-radius: 8px; }
+/* 응답 완료 화면의 추가 안내(재제출 가능 등). */
+.done-notice {
+  max-width: 32rem; margin: 1rem auto 0; padding: 0.9rem 1.1rem;
+  background: #f2f8f0; border: 1px solid #cfe6c8; border-radius: 8px;
+  font-size: 0.9rem; line-height: 1.65; text-align: left;
+}
 .notice { font-size: 0.82rem; color: #7a5; background: #f2f8f0; border: 1px solid #cfe6c8; padding: 0.5rem 0.75rem; border-radius: 6px; }
 .warn { color: var(--danger); font-size: 0.8rem; }
 .total-line { text-align: right; font-size: 0.95rem; font-weight: 600; margin-top: 0.75rem; }
