@@ -514,6 +514,12 @@
               <label>응답 종료 <input id="nm-close" type="datetime-local" /></label>
             </div>
             <label class="wide">안내 문구(첫 화면) <textarea id="nm-intro" rows="2"></textarea></label>
+            <div class="grid">
+              <label>경품 안내 문구(문항 화면) <input id="nm-prize-text" maxlength="100" placeholder="예: 취업률 조사 참여자 경품 안내" /></label>
+              <label>경품 안내 이미지 경로 <input id="nm-prize-img" maxlength="200" placeholder="예: media/prize-1.png" /></label>
+            </div>
+            <label class="wide">응답 완료 화면 추가 안내 <textarea id="nm-done" rows="3" placeholder="**별표 두 개**로 감싼 부분은 굵게 표시됩니다."></textarea></label>
+            <p class="hint">경품 안내는 <b>조사 제목 바로 아래</b>에 문구와 이미지로 표시됩니다. 이미지는 저장소 <code>media/</code> 폴더에 올린 뒤 경로를 적으세요. 둘 다 비우면 표시되지 않습니다.</p>
             <p class="hint">응답자에게는 <b>성명</b>과 <b>휴대전화 뒷 4자리</b>를 먼저 받습니다(문항으로 만들 필요 없음). 두 값은 저장하지 않고 응답과 함께 담당 부서 이메일로 전달됩니다. <b>중복 응답은 허용</b>되어 같은 사람이 여러 번 제출할 수 있습니다.</p>
 
             <h4>[필수] 수집·이용 동의</h4>
@@ -542,6 +548,11 @@
               </div>
               <label class="wide">추가 안내(선택) <textarea id="nm-opt-notice" rows="2"></textarea></label>
               <label class="wide">미동의 시 안내 <textarea id="nm-opt-decline" rows="2"></textarea></label>
+              <div class="grid">
+                <label>경품 안내 문구(선택 목적) <input id="nm-opt-prize-text" maxlength="100" placeholder="예: 취업 인증 이벤트 참여자 경품 안내" /></label>
+                <label>경품 안내 이미지 경로 <input id="nm-opt-prize-img" maxlength="200" placeholder="예: media/prize-2.png" /></label>
+              </div>
+              <p class="hint">문항 화면의 <b>선택 목적 제목 바로 아래</b>에 표시됩니다.</p>
               <h4>노출 조건(선택)</h4>
               <p class="hint">특정 문항의 답에 따라 이 블록을 보일지 정합니다. 예: <b>취업 여부</b>가 <b>'아니오'</b>면 취업 인증샷·연락처를 물을 이유가 없습니다. 비워 두면 항상 표시됩니다. 조건에 맞지 않아 숨겨지면 입력값은 전송되지 않습니다.</p>
               <div class="load-row" id="nm-opt-cond"></div>
