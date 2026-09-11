@@ -10,7 +10,7 @@ import {
   updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, deleteField,
+  collection, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, deleteField,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db, auth, activeConfig } from "./firebase.js";
 import { escapeHtml, isMasterMode, ASSIGNABLE_TABS } from "./app.js";
@@ -90,11 +90,26 @@ async function addAdmin() {
     // 마스터 부여는 마스터만(규칙에서도 차단). 참관자 지정은 권한 축소라 관리자도 가능.
     const sel = document.getElementById("admin-role").value;
     const role = sel === "master" ? (isMasterMode() ? "master" : "admin") : (sel === "observer" ? "observer" : "admin");
-    await setDoc(doc(db, "admins", email), {
-      email, memo, role, addedBy: auth.currentUser?.email || "", addedAtMs: Date.now(),
-    }, { merge: true });
+    /* tabs를 빈 배열로 시작한다. 이 필드가 없으면 화면·규칙 모두 '전체 허용'으로 읽으므로,
+     * 쓰지 않고 두면 갓 만든 계정이 모든 탭에 쓰기까지 되는 상태가 된다(최소권한 위배).
+     * 다만 보안규칙이 tabs 지정을 마스터로 제한하므로(자기 권한 확대 방지), 마스터가
+     * 아닌 계정이 만들 때는 넣을 수 없다 — 넣으면 생성 자체가 거부된다.
+     * 마스터는 tabs와 무관하게 전체 접근이라 제한을 걸지 않는다. */
+    const isNew = !(await getDoc(doc(db, "admins", email))).exists();
+    const canSetTabs = isMasterMode() && isNew && role !== "master";
+    const base = { email, memo, role, addedBy: auth.currentUser?.email || "", addedAtMs: Date.now() };
+    if (canSetTabs) base.tabs = [];
+    await setDoc(doc(db, "admins", email), base, { merge: true });
     out.style.color = "#3a3";
-    out.textContent = `'${email}' 관리자를 등록했습니다.${authNote}`;
+    let tabNote = "";
+    if (canSetTabs) {
+      tabNote = " 사용 가능 탭이 없는 상태로 만들어졌습니다 — 아래 목록에서 탭을 지정해야 화면이 열립니다.";
+    } else if (isNew && role === "admin") {
+      // 마스터가 아니면 tabs를 넣을 수 없어 '전체 허용' 상태로 만들어진다. 그대로 두면 안 된다.
+      out.style.color = "";
+      tabNote = " ⚠ 이 계정은 현재 모든 탭에 접근할 수 있습니다(탭 지정은 마스터만 가능). 마스터 관리자에게 사용 가능 탭 지정을 요청하세요.";
+    }
+    out.textContent = `'${email}' 관리자를 등록했습니다.${authNote}${tabNote}`;
     ["admin-email", "admin-pw", "admin-memo"].forEach((id) => (document.getElementById(id).value = ""));
   } catch (e) { out.style.color = ""; out.textContent = "추가 실패: " + e.message; }
 }
@@ -131,7 +146,7 @@ function tabCell(a, master) {
   if (!master) {
     return cur === null ? "전체" : (cur.length
       ? escapeHtml(ASSIGNABLE_TABS.filter((t) => cur.includes(t.id)).map((t) => t.label).join(", "))
-      : "<span class='warn'>없음</span>");
+      : "<span class='warn'>없음 — 지정 필요</span>");
   }
   const boxes = ASSIGNABLE_TABS.map((t) =>
     `<label class="tabchk"><input type="checkbox" class="a-tab" value="${t.id}"${cur && cur.includes(t.id) ? " checked" : ""}> ${escapeHtml(t.label)}</label>`

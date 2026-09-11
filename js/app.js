@@ -166,7 +166,19 @@ function setupTabs() {
   // 첫 화면: 차수·시간표가 허용이면 그것, 아니면 첫 번째 보이는 탭.
   const groups = visibleGroups();
   const first = groups.some((g) => g.tabs.some(([t]) => t === "courses")) ? "courses" : groups[0]?.tabs[0][0];
-  if (first) showTab(first);
+  if (first) { showTab(first); return; }
+  // 사용 가능 탭이 하나도 없는 계정 — 빈 화면만 보이면 고장으로 오해한다.
+  document.querySelectorAll(".tab-panel").forEach((p) => { p.hidden = true; });
+  const bar = document.getElementById("sub-tabs");
+  if (bar) { bar.hidden = true; bar.innerHTML = ""; }
+  const host = document.querySelector("main") || document.body;
+  if (!document.getElementById("no-tab-msg")) {
+    const box = document.createElement("p");
+    box.id = "no-tab-msg";
+    box.className = "empty";
+    box.textContent = "사용 가능한 탭이 지정되지 않았습니다. 마스터 관리자에게 권한 지정을 요청하세요.";
+    host.prepend(box);
+  }
 }
 
 function initApp() {
