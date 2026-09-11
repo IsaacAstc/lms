@@ -491,7 +491,12 @@ exports.submitSurveyPhotos = onCall(
  *    따라서 개인정보의 보관 장소는 그 메일함뿐이고, 파기도 메일 삭제로 이뤄진다.
  *  · 시스템에는 개인을 특정할 수 없는 집계 수치(namedAggregates)만 누적한다.
  *    개인정보가 아니므로 파기 대상이 아니며 기한 없이 보관한다.
- *  · 중복 응답은 허용한다(운영 정책) — 응답자를 식별해 두는 표시를 따로 만들지 않는다.
+ *  · 중복 응답은 허용한다(운영 정책). 다만 집계 수치가 그대로 부풀면 보고서에 쓸 수
+ *    없으므로, 몇 건이 중복인지만 세기 위해 응답자 표시(namedRespondents)를 둔다.
+ *    표시에는 성명·연락처 원문이 아니라 서버 전용 비밀값(SURVEY_ID_SALT)으로 만든
+ *    HMAC 해시만 남긴다. 비밀값 없이는 되돌릴 수 없으므로 가명정보에 해당하며,
+ *    응답 내용과는 어떤 연결선도 두지 않는다(중복 여부 외에는 아무것도 알 수 없다).
+ *    비밀값이 설정되지 않았으면 중복 집계만 건너뛴다 — 접수 자체를 막지는 않는다.
  *  이전 방식으로 저장된 응답(namedResponses)은 조회·파기 함수로만 다루고,
  *  클라이언트는 직접 읽거나 쓸 수 없다(보안규칙에서 전면 차단).
  * ================================================================ */
@@ -507,9 +512,22 @@ function fmtPhone(v) {
 }
 
 const NAMED_RESP = "namedResponses";      // 이전 방식으로 저장된 응답(신규 저장 없음)
-const NAMED_MARK = "namedRespondents";    // 이전 방식의 중복 방지 표시(신규 생성 없음)
-
+const NAMED_MARK = "namedRespondents";    // 응답자 표시 — 해시만, 응답과 연결선 없음
 const NAMED_AGG = "namedAggregates";      // 집계 수치만 — 개인정보 아님, 파기 대상 아님
+
+const SURVEY_ID_SALT = defineSecret("SURVEY_ID_SALT");
+
+/* 성명 + 휴대전화 뒷 4자리 → 되돌릴 수 없는 해시.
+ * 대상 인원이 적고 뒷 4자리는 1만 가지뿐이라 단순 해시는 전수 대입으로 복원된다.
+ * 그래서 서버 전용 비밀값을 키로 쓴다. 조사 ID를 섞어 조사끼리 대조할 수도 없게 한다.
+ * 비밀값이 없으면 null — 호출부가 중복 집계를 건너뛴다(접수는 그대로 받는다). */
+function hashRespondent(surveyId, name, phone4) {
+  const key = String(SURVEY_ID_SALT.value() || "");
+  if (key.length < 16) return null;
+  // 이름의 공백·대소문자 차이로 같은 사람이 다른 해시가 되지 않도록 맞춘다.
+  const norm = String(name).replace(/\s+/g, "").toLowerCase();
+  return crypto.createHmac("sha256", key).update(`${surveyId}|${norm}|${phone4}`).digest("hex");
+}
 
 /* ── 메일 제목·본문 구성 ──
  * 응답 원문은 저장하지 않고 담당자 메일로만 전달한다(운영 결정).
@@ -541,13 +559,20 @@ function ymOf(a) {
 
 const addDays = (days) => new Date(Date.now() + days * 86400000);
 
+/* 응답자 표시의 파기 예정일. 수집일(KST) 자정 기준 + N일로 일 단위에 맞춘다 —
+ * 밀리초까지 맞으면 같은 시각에 만들어진 다른 문서와 짝지을 수 있다.
+ * 보유기간이 '기한 없음'(0)이면 파기 예정일을 두지 않는다(본문 고지와 동일). */
+function dayAlignedPurge(collectedDate, days) {
+  return new Date(new Date(`${collectedDate}T00:00:00+09:00`).getTime() + (days + 1) * 86400000);
+}
+
 exports.submitNamedSurvey = onCall(
-  { region: "asia-northeast3", secrets: [MAIL_USER, MAIL_PASS], memory: "512MiB", timeoutSeconds: 60, maxInstances: 5 },
+  { region: "asia-northeast3", secrets: [MAIL_USER, MAIL_PASS, SURVEY_ID_SALT], memory: "512MiB", timeoutSeconds: 60, maxInstances: 5 },
   async (req) => {
     const d = req.data || {};
     const surveyId = str(d.surveyId, 100, "조사 ID", true);
     // 대상자가 같은 기관망(하나의 공인 IP) 뒤에 몰릴 수 있어 접수 제한을 별도로 둔다.
-    // 중복 응답은 식별자 해시로 막으므로 IP 제한은 남용 방지 용도에 한한다.
+    // 중복 응답은 정책상 허용하므로(세기만 한다) IP 제한이 유일한 남용 방지 수단이다.
     await checkRateLimit(req.rawRequest?.ip || req.rawRequest?.headers?.["x-forwarded-for"] || "", NAMED_RATE_LIMIT_PER_HOUR);
 
     const snap = await db.doc(`namedSurveys/${surveyId}`).get();
@@ -730,8 +755,38 @@ exports.submitNamedSurvey = onCall(
       throw new HttpsError("internal", "응답 전달에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     }
 
+    /* ── 중복 여부 판정 ──
+     * 같은 조사에 같은 사람(성명+뒷 4자리)이 다시 답했는지만 본다. 막지는 않는다 —
+     * 중복 응답 허용이 운영 정책이고, 여기서는 '몇 건이 중복인지'만 세면 된다.
+     * 판정에 실패해도 접수를 되돌리지 않는다(응답은 이미 메일로 전달됐다).
+     * 판정 결과는 세 가지다: 최초(false) · 중복(true) · 확인 불가(null). */
+    const collectedDate = todayKST();
+    let isDup = null;
+    const hash = hashRespondent(surveyId, rName, rPhone4);
+    if (!hash) {
+      console.warn("SURVEY_ID_SALT 미설정 — 중복 집계를 건너뜁니다.");
+    } else {
+      try {
+        const markRef = db.collection(NAMED_MARK).doc(`${surveyId}__${hash}`);
+        isDup = await db.runTransaction(async (tx) => {
+          const cur = await tx.get(markRef);
+          if (cur.exists) {
+            tx.update(markRef, { times: admin.firestore.FieldValue.increment(1), lastDate: collectedDate });
+            return true;
+          }
+          // 보유기간이 '기한 없음'이면 파기 예정일을 두지 않는다 — 응답자에게 고지한 내용과 맞춘다.
+          const mark = { surveyId, collectedDate, lastDate: collectedDate, times: 1 };
+          if (mainDays > 0) mark.purgeAt = dayAlignedPurge(collectedDate, mainDays);
+          tx.create(markRef, mark);
+          return false;
+        });
+      } catch (e) {
+        console.error("응답자 표시 갱신 실패:", e?.message || e);
+      }
+    }
+
     /* ── 집계 갱신 ──
-     * 개별 응답 대신 수치만 남긴다: 총 응답수 · 예/아니오 문항의 답변 건수 ·
+     * 개별 응답 대신 수치만 남긴다: 총 응답수 · 중복 건수 · 예/아니오 문항의 답변 건수 ·
      * 날짜/연월 문항의 월별 건수. 개인을 특정할 수 없고 파기 대상이 아니다.
      * 라벨에 점·슬래시가 들어갈 수 있어 필드 경로는 FieldPath로 만든다.
      * 집계 실패가 접수를 되돌리지는 않는다 — 응답은 이미 메일로 전달됐다. */
@@ -739,6 +794,9 @@ exports.submitNamedSurvey = onCall(
       const { FieldPath, FieldValue } = admin.firestore;
       const inc = FieldValue.increment(1);
       const updates = [new FieldPath("count"), inc, new FieldPath("updatedAtMs"), Date.now()];
+      // 중복 건수와 '확인 불가' 건수를 따로 센다 — 둘을 합치면 실제 인원을 알 수 없다.
+      if (isDup === true) updates.push(new FieldPath("dupCount"), inc);
+      else if (isDup === null) updates.push(new FieldPath("dupUnknown"), inc);
       for (const a of answers) {
         const label = String(a.label).slice(0, 200);
         if (a.qtype === "ox") {
@@ -766,7 +824,8 @@ exports.submitNamedSurvey = onCall(
 exports.purgeNamedResponses = onSchedule(
   { region: "asia-northeast3", schedule: "10 3 * * *", timeZone: "Asia/Seoul" },
   async () => {
-    // 응답 본문과 중복 방지 표시는 같은 보유기간을 가지므로 함께 파기한다.
+    // 응답 본문과 응답자 표시는 같은 보유기간을 가지므로 함께 파기한다.
+    // 파기 예정일이 없는 표시(보유기간 '기한 없음')는 대상이 아니다.
     for (const coll of [NAMED_RESP, NAMED_MARK]) {
       const snap = await db.collection(coll).where("purgeAt", "<=", new Date()).limit(400).get();
       if (snap.empty) continue;
@@ -878,7 +937,7 @@ exports.namedResponsesExport = onCall(NAMED_OPTS, async (req) => {
 });
 
 // 수동 파기. 되돌릴 수 없는 작업이므로 기록을 먼저 남기고 삭제한다.
-// 응답 본문과 중복 방지 표시는 서로 연결되어 있지 않으므로 개별 응답만 지우면 표시가 남는다.
+// 응답 본문과 응답자 표시는 서로 연결되어 있지 않으므로 개별 응답만 지우면 표시가 남는다.
 // 그래서 수집일 범위 파기(range)에서는 같은 기간의 표시도 함께 지운다.
 exports.namedResponsesDelete = onCall(NAMED_OPTS, async (req) => {
   const account = await requireNamedTab(req);
@@ -897,7 +956,7 @@ exports.namedResponsesDelete = onCall(NAMED_OPTS, async (req) => {
   const targets = docs.filter((d) => d.exists && d.data().surveyId === surveyId);
   if (!targets.length) bad("파기할 응답을 찾을 수 없습니다.");
 
-  // 기간 파기일 때만 중복 방지 표시도 함께 지운다(같은 조사·같은 수집일 범위).
+  // 기간 파기일 때만 응답자 표시도 함께 지운다(같은 조사·같은 수집일 범위).
   let marks = [];
   if (from && to) {
     const ms = await db.collection(NAMED_MARK)
@@ -909,7 +968,7 @@ exports.namedResponsesDelete = onCall(NAMED_OPTS, async (req) => {
 
   await writeAccessLog({
     account, ip: ipOf(req), op: "파기", surveyId,
-    count: targets.length, reason: `${reason}${marks.length ? ` (중복 방지 표시 ${marks.length}건 포함)` : ""}`,
+    count: targets.length, reason: `${reason}${marks.length ? ` (응답자 표시 ${marks.length}건 포함)` : ""}`,
   });
   const batch = db.batch();
   targets.forEach((d) => batch.delete(d.ref));
@@ -926,8 +985,13 @@ exports.namedSurveyStats = onCall(NAMED_OPTS, async (req) => {
   const surveyId = str(req.data?.surveyId, 100, "조사 ID", true);
   const snap = await db.collection(NAMED_AGG).doc(surveyId).get();
   const v = snap.exists ? snap.data() : {};
+  const count = v.count || 0;
+  const dupCount = v.dupCount || 0;
   return {
-    count: v.count || 0,
+    count,                   // 제출 건수(중복 포함)
+    dupCount,                // 그중 같은 사람이 다시 낸 건수
+    dupUnknown: v.dupUnknown || 0,  // 중복 여부를 확인하지 못한 건수(비밀값 미설정 등)
+    uniqueCount: count - dupCount,  // 실제 인원(확인 불가 건이 있으면 상한값)
     ox: v.ox || {},          // { 문항 라벨: { yes, no } }
     months: v.months || {},  // { 문항 라벨: { "YYYY-MM": n } }
     updatedAtMs: v.updatedAtMs || 0,
