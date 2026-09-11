@@ -51,7 +51,10 @@ const TAB_GROUPS = [
   { id: "admin", label: "설정", tabs: [["settings", "기준값 설정"], ["admins", "관리자 계정"], ["data", "데이터 관리"], ["orgs", "기관 관리"]] },
 ];
 // 마스터 전용 탭(일반 관리자에게는 숨김 — 실제 차단은 firestore.rules).
-const MASTER_ONLY_TABS = new Set(["data", "orgs"]);
+// 관리자 계정 탭도 마스터 전용이다. 계정 생성 시 사용 가능 탭(tabs)을 함께 지정해야
+// 최소권한으로 시작하는데, 보안규칙이 tabs 지정을 마스터로 제한하기 때문이다
+// (일반 관리자가 자기 권한을 스스로 늘리는 것을 막는 조항).
+const MASTER_ONLY_TABS = new Set(["data", "orgs", "admins"]);
 // 개인정보를 처리하는 탭: '전체 허용' 계정에도 자동으로 열리지 않고,
 // 계정별 사용 가능 탭에 명시적으로 지정된 경우에만 보인다(마스터 제외).
 const RESTRICTED_TABS = new Set(["named"]);

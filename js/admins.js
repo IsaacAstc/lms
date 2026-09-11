@@ -92,23 +92,17 @@ async function addAdmin() {
     const role = sel === "master" ? (isMasterMode() ? "master" : "admin") : (sel === "observer" ? "observer" : "admin");
     /* tabs를 빈 배열로 시작한다. 이 필드가 없으면 화면·규칙 모두 '전체 허용'으로 읽으므로,
      * 쓰지 않고 두면 갓 만든 계정이 모든 탭에 쓰기까지 되는 상태가 된다(최소권한 위배).
-     * 다만 보안규칙이 tabs 지정을 마스터로 제한하므로(자기 권한 확대 방지), 마스터가
-     * 아닌 계정이 만들 때는 넣을 수 없다 — 넣으면 생성 자체가 거부된다.
-     * 마스터는 tabs와 무관하게 전체 접근이라 제한을 걸지 않는다. */
+     * 이 화면은 마스터 전용이므로 tabs를 항상 지정할 수 있다(규칙이 마스터에게만 허용).
+     * 마스터 계정은 tabs와 무관하게 전체 접근이라 제한을 걸지 않는다. */
     const isNew = !(await getDoc(doc(db, "admins", email))).exists();
-    const canSetTabs = isMasterMode() && isNew && role !== "master";
+    const newLimited = isNew && role !== "master";
     const base = { email, memo, role, addedBy: auth.currentUser?.email || "", addedAtMs: Date.now() };
-    if (canSetTabs) base.tabs = [];
+    if (newLimited) base.tabs = [];
     await setDoc(doc(db, "admins", email), base, { merge: true });
     out.style.color = "#3a3";
-    let tabNote = "";
-    if (canSetTabs) {
-      tabNote = " 사용 가능 탭이 없는 상태로 만들어졌습니다 — 아래 목록에서 탭을 지정해야 화면이 열립니다.";
-    } else if (isNew && role === "admin") {
-      // 마스터가 아니면 tabs를 넣을 수 없어 '전체 허용' 상태로 만들어진다. 그대로 두면 안 된다.
-      out.style.color = "";
-      tabNote = " ⚠ 이 계정은 현재 모든 탭에 접근할 수 있습니다(탭 지정은 마스터만 가능). 마스터 관리자에게 사용 가능 탭 지정을 요청하세요.";
-    }
+    const tabNote = newLimited
+      ? " 사용 가능 탭이 없는 상태로 만들어졌습니다 — 아래 목록에서 탭을 지정해야 화면이 열립니다."
+      : "";
     out.textContent = `'${email}' 관리자를 등록했습니다.${authNote}${tabNote}`;
     ["admin-email", "admin-pw", "admin-memo"].forEach((id) => (document.getElementById(id).value = ""));
   } catch (e) { out.style.color = ""; out.textContent = "추가 실패: " + e.message; }
