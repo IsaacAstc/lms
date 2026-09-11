@@ -7,7 +7,8 @@
 //  · 응답: 원문을 저장하지 않고 담당자 메일로만 전달한다. 시스템에는 집계 수치만 남는다.
 //    이전 방식으로 저장된 응답(namedResponses)은 브라우저에서 직접 읽지 못하며,
 //    조회·내보내기·파기를 서버 함수로만 수행해 취급자 접속기록(accessLogs)으로 남긴다.
-//  · 응답자 정보(성명·휴대전화 뒷 4자리)도 메일에만 있다. 중복 응답은 허용한다.
+//  · 응답자 정보(성명·휴대전화 뒷 4자리)도 메일에만 있다. 중복 응답은 허용하되,
+//    집계가 부풀지 않도록 몇 건이 중복인지만 해시로 세어 둔다(원문은 남기지 않는다).
 import { escapeHtml } from "./app.js";
 import { orgQuery } from "./orgs.js";
 import { watchCollection, onCollection, addItem, updateItem, removeItem, setDocById, getDocById } from "./store.js";
@@ -486,7 +487,8 @@ async function showResponses(surveyId) {
 
   box.innerHTML = `
     <h3>${esc(s?.title || surveyId)} — 집계</h3>
-    <p class="hint">응답 원문은 <b>시스템에 저장하지 않고 담당자 이메일로만</b> 전달합니다. 시스템에는 아래 <b>합계 수치만</b> 남으며, 개인을 특정할 수 없으므로 파기 대상이 아닙니다.</p>
+    <p class="hint">응답 원문은 <b>시스템에 저장하지 않고 담당자 이메일로만</b> 전달합니다. 시스템에는 아래 <b>합계 수치</b>와,
+      중복 여부만 가리기 위한 <b>되돌릴 수 없는 응답자 표시(해시)</b>가 남습니다. 표시에는 성명·연락처가 들어 있지 않고 응답 내용과도 연결되지 않습니다.</p>
     ${statsHtml(stats)}
     <h3>보관 중인 과거 응답 ${rows.length}건</h3>
     <p class="hint">아래는 <b>이전 방식으로 저장된 응답</b>입니다. 지금은 새 응답이 저장되지 않으므로 늘어나지 않으며, 파기하면 목록이 비워집니다. 응답에는 응답자 식별자가 붙어 있지 않습니다.</p>
@@ -530,7 +532,20 @@ function statsHtml(st) {
   const n = st.count || 0;
   if (!n) return `<p class="empty">아직 접수된 응답이 없습니다.</p>`;
   const pct = (v) => (n ? ((v / n) * 100).toFixed(1) + "%" : "-");
-  const out = [`<p><b>총 응답 ${n}건</b>${st.updatedAtMs ? ` <span class="muted">(최종 갱신 ${esc(fmtMs(st.updatedAtMs))})</span>` : ""}</p>`];
+  /* 제출 건수와 인원은 다르다 — 중복 응답을 허용하므로 같은 사람이 여러 번 낼 수 있다.
+   * 보고서에 쓰는 수치는 인원이므로 둘을 나란히 보여 준다. */
+  const dup = st.dupCount || 0;
+  const unknown = st.dupUnknown || 0;
+  const people = st.uniqueCount ?? (n - dup);
+  const out = [`<p><b>제출 ${n}건</b> · <b>응답 인원 ${people}명</b>${
+    dup ? ` <span class="muted">(중복 재제출 ${dup}건 제외)</span>` : ""
+  }${st.updatedAtMs ? ` <span class="muted">— 최종 갱신 ${esc(fmtMs(st.updatedAtMs))}</span>` : ""}</p>`];
+  if (unknown) {
+    out.push(`<p class="hint">⚠ ${unknown}건은 중복 여부를 확인하지 못했습니다(응답자 보호 키 미설정 시점에 접수된 건).
+      위 인원은 <b>상한값</b>이므로 확정 수치는 메일함에서 대조하세요.</p>`);
+  }
+  out.push(`<p class="hint">아래 문항별 건수는 <b>제출 기준</b>이라 중복이 포함됩니다. 확정 수치가 필요하면
+    메일 제목의 <code>성명(뒷 4자리)</code>로 중복을 걸러 산출하세요.</p>`);
   for (const [label, v] of Object.entries(st.ox || {})) {
     const yes = v.yes || 0;
     const no = v.no || 0;
@@ -597,8 +612,8 @@ async function exportCsv() {
 
 async function purgeIds(surveyId, ids, reason, range) {
   const warn = range
-    ? `응답 ${ids.length}건과 해당 기간의 중복 방지 표시를 함께 파기합니다.`
-    : `응답 ${ids.length}건을 파기합니다.\n중복 방지 표시는 응답과 연결되어 있지 않아 남으며, 해당 응답자는 보유기간이 끝날 때까지 재응답할 수 없습니다.`;
+    ? `응답 ${ids.length}건과 해당 기간의 응답자 표시를 함께 파기합니다.`
+    : `응답 ${ids.length}건을 파기합니다.\n응답자 표시는 응답과 연결되어 있지 않아 남습니다(보유기간이 지나면 자동 파기됩니다).`;
   if (!confirm(`${warn}\n되돌릴 수 없습니다. 계속할까요?`)) return;
   const why = prompt("파기 사유를 입력하세요. 접속기록에 함께 남습니다.", reason || "");
   if (why == null) return;
@@ -606,7 +621,7 @@ async function purgeIds(surveyId, ids, reason, range) {
   try {
     const res = await callFn("namedResponsesDelete")({ surveyId, ids, reason: why.trim(), ...(range || {}) });
     const m = res?.data?.marks;
-    alert(`${res?.data?.deleted ?? 0}건을 파기했습니다.${m ? ` (중복 방지 표시 ${m}건 포함)` : ""}`);
+    alert(`${res?.data?.deleted ?? 0}건을 파기했습니다.${m ? ` (응답자 표시 ${m}건 포함)` : ""}`);
     showResponses(surveyId);
   } catch (e) { alert("파기 실패: " + (e.message || e)); }
 }
