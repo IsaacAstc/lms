@@ -23,6 +23,20 @@ function esc(v) {
 }
 const msg = (html) => { root.innerHTML = html; };
 const nl2br = (v) => esc(v).replace(/\n/g, "<br>");
+// 관리자 입력 문구의 **강조** 표기만 굵게 바꾼다(그 밖의 태그는 이스케이프된 상태 그대로).
+const emph = (v) => nl2br(v).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+
+/* 경품 안내 — 문구와 이미지를 조사 정의에서 받아 그리는 공용 블록.
+ * 둘 다 비어 있으면 아무것도 그리지 않는다(기존 조사에 영향 없음). */
+function prizeBlock(n) {
+  const text = (n && n.text || "").trim();
+  const img = (n && n.img || "").trim();
+  if (!text && !img) return "";
+  return `<div class="prize-notice">
+    ${text ? `<p class="prize-title">${emph(text)}</p>` : ""}
+    ${img ? `<img src="${esc(img)}" alt="${esc(text || "경품 안내")}" loading="lazy">` : ""}
+  </div>`;
+}
 
 let survey = null;
 let surveyId = "";
@@ -138,6 +152,7 @@ function renderForm(consentOpt) {
   const optHtml = optItems.length ? `
     <div id="opt-block"${optWhen ? " hidden" : ""}>
     <h2>${esc(survey.purposeOpt.label || "선택 항목")}</h2>
+    ${prizeBlock(survey.purposeOpt.prizeNotice)}
     <p class="hint">아래 항목은 <b>시스템에 저장되지 않고</b> 담당자 이메일로만 전달됩니다. 모두 채우셔야 접수됩니다.</p>
     ${optItems.map((q, i) => q.type === "photo"
       ? `<div class="q-item"><div class="q-label">${esc(q.label)}</div>
@@ -155,6 +170,7 @@ function renderForm(consentOpt) {
 
   root.innerHTML = `
     <h1>${esc(survey.title || "조사 참여")}</h1>
+    ${prizeBlock(survey.prizeNotice)}
     <form id="n-form">
       <div class="q-item">
         <div class="q-label">성명</div>
@@ -385,7 +401,10 @@ async function submit(consentOpt, optItems) {
       mailTexts,
     });
     // 응답은 담당자 메일로 전달되고 시스템에는 집계 수치만 남는다 — 대조할 제출코드가 없다.
-    msg(`<p class="empty">응답이 접수되었습니다. 감사합니다.</p>`);
+    // 중복 응답을 허용하므로, 다시 제출할 수 있다는 안내를 조사 정의에서 받아 함께 보여준다.
+    const done = (survey.doneNotice || "").trim();
+    msg(`<p class="empty">응답이 접수되었습니다. 감사합니다.</p>
+      ${done ? `<div class="done-notice">${emph(done)}</div>` : ""}`);
   } catch (e) {
     btn.disabled = false;
     btn.textContent = "제출";

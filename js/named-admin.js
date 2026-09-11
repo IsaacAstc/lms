@@ -69,6 +69,8 @@ function blankSurvey() {
       notice: "",
       declineNote: "동의하지 않으셔도 설문에 응답하실 수 있으며, 경품 이벤트 응모만 제외됩니다.",
     },
+    prizeNotice: { text: "", img: "" },
+    doneNotice: "",
     questions: [],
     optItems: [],
   };
@@ -174,6 +176,9 @@ function paintEditor() {
   $("nm-open").value = msToLocal(d.openMs);
   $("nm-close").value = msToLocal(d.closeMs);
 
+  $("nm-prize-text").value = d.prizeNotice?.text || "";
+  $("nm-prize-img").value = d.prizeNotice?.img || "";
+  $("nm-done").value = d.doneNotice || "";
   $("nm-main-label").value = d.purposeMain.label || "";
   $("nm-main-items").value = d.purposeMain.items || "";
   $("nm-main-days").value = d.purposeMain.retainDays ?? 365;   // 0(기한 없음)도 그대로 보인다
@@ -186,6 +191,8 @@ function paintEditor() {
   $("nm-opt-days").value = d.purposeOpt.retainDays || 90;
   $("nm-opt-notice").value = d.purposeOpt.notice || "";
   $("nm-opt-decline").value = d.purposeOpt.declineNote || "";
+  $("nm-opt-prize-text").value = d.purposeOpt.prizeNotice?.text || "";
+  $("nm-opt-prize-img").value = d.purposeOpt.prizeNotice?.img || "";
   $("nm-opt-fields").hidden = !d.purposeOpt.enabled;
 
   paintQuestions();
@@ -321,6 +328,9 @@ function readEditor() {
     title: $("nm-title").value.trim(),
     intro: $("nm-intro").value.trim(),
     status: $("nm-status").value,
+    // 경품 안내(문항 화면 제목 아래)와 완료 화면 추가 안내. 비우면 화면에 나오지 않는다.
+    prizeNotice: { text: $("nm-prize-text").value.trim(), img: $("nm-prize-img").value.trim() },
+    doneNotice: $("nm-done").value.trim(),
     openMs: localToMs($("nm-open").value),
     closeMs: localToMs($("nm-close").value),
     purposeMain: {
@@ -346,6 +356,7 @@ function readEditor() {
       retainDays: Math.max(1, Number($("nm-opt-days").value) || 90),
       notice: $("nm-opt-notice").value.trim(),
       declineNote: $("nm-opt-decline").value.trim(),
+      prizeNotice: { text: $("nm-opt-prize-text").value.trim(), img: $("nm-opt-prize-img").value.trim() },
       // 노출 조건: 대상 문항이 예/아니오로 남아 있을 때만 보존한다.
       // 문항을 지우거나 유형을 바꾼 뒤 조건만 남으면 블록이 영영 숨는다.
       showWhen: (() => {
