@@ -1,6 +1,6 @@
 name: Deploy Functions & Rules
 
-# functions/ 또는 RTDB 규칙이 바뀐 채로 main에 머지되면 모든 기관에 자동 배포한다.
+# functions/ 또는 보안규칙이 바뀐 채로 main에 머지되면 모든 기관에 자동 배포한다.
 # 기관마다 Firebase 프로젝트가 달라 배포도 따로 이뤄지므로, 한쪽만 반영되면
 # 같은 화면이 기관마다 다르게 동작한다(옛 함수가 그대로 떠 있는 상태).
 # 그 사고를 막기 위해 기본값을 '전체'로 두고, 필요할 때만 한 기관을 골라 실행한다.
@@ -15,6 +15,9 @@ on:
     paths:
       - "functions/**"
       - "rtdb.rules.json"
+      # 추가 기관 job이 Firestore 규칙까지 배포한다 — 규칙만 고친 머지도 잡아야 한다.
+      # (기본 기관은 여기서 규칙을 배포하지 않으므로 영향 없음.)
+      - "firestore.rules"
       - "firebase.json"
       - ".github/workflows/deploy-functions.yml"
   workflow_dispatch:
