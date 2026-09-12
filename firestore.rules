@@ -208,17 +208,22 @@ service cloud.firestore {
     // ── 동거 앱: 항공보안 히어로 미션(scfe/) — LMS Firebase 프로젝트로 통합 ──
     // 관리자 판정은 위 admins 컬렉션을 그대로 공유한다(LMS 관리자 = scfe 관리자).
 
-    // 행사(세션): 참가자 앱이 행사명·일정을 읽어야 하므로 공개 읽기, 쓰기는 관리자만.
+    // 행사(세션): 참가자 앱이 행사명·일정을 읽어야 하므로 공개 읽기.
+    // 추가·수정은 관리자(행사마다 하는 일), 삭제만 마스터 — 되돌릴 수 없고 드문 조작이라
+    // 막아도 운영에 지장이 없다.
     match /events/{eventId} {
       allow read: if true;
-      allow write: if canWrite();
+      allow create, update: if canWrite();
+      allow delete: if isMaster();
     }
 
-    // 미션 설정(문구·항목·제한시간): 참가자 앱이 읽어야 하므로 공개 읽기, 쓰기는 관리자만.
+    // 미션 설정(문구·항목·제한시간): 참가자 앱이 읽어야 하므로 공개 읽기.
+    // 쓰기는 마스터만 — 모든 행사가 공유하는 게임의 '틀'이라, 우발적인 조작 한 번으로
+    // 구성이 통째로 어긋나면 복구에 손이 많이 간다('기본값으로 되돌리기' 포함).
     // (LMS의 관리자 전용 settings 와 분리된 별도 컬렉션)
     match /scfeSettings/{docId} {
       allow read: if true;
-      allow write: if canWrite();
+      allow write: if isMaster();
     }
 
     // 참가자(닉네임·점수만, 개인정보 없음): 리더보드용 공개 읽기.
