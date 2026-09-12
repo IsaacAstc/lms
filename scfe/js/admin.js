@@ -47,6 +47,11 @@ let unsubscribeEvents = null;
 let unsubscribeAdmins = null;
 let currentUserEmail = "";
 let currentIsOwner = false;
+/* 마스터 관리자 여부. 행사마다 새로 만드는 것(행사·참가자)은 일반 관리자도 다루지만,
+ * 한 번 만들어 계속 쓰는 '틀'(미션 설정)과 되돌릴 수 없는 조작(행사 삭제)은 마스터만.
+ * 우발적인 조작으로 모든 행사가 공유하는 게임 구성이 망가지는 것을 막는다.
+ * 화면 제어는 안내 목적이고, 실제 차단은 firestore.rules가 담당한다. */
+let currentIsMaster = false;
 
 // 아이디 형태(@ 없음) 입력 시 가상 도메인을 붙여 Firebase 이메일 계정으로 매핑
 const ADMIN_ID_DOMAIN = "@kac.astc";
@@ -69,21 +74,25 @@ function displayAccount(email) {
 // ---------------------------------------------------------------------
 // 인증 상태 — 로그인 계정이 실제 관리자인지 확인 후에만 대시보드를 연다
 // ---------------------------------------------------------------------
-async function isAdminAccount(email) {
-  if (OWNER_EMAILS.includes(email)) return true;
+/* 관리자 계정인지 확인하고, 맞으면 그 계정의 admins 문서를 돌려준다.
+ * 소유자는 문서가 없어도 통과한다(부트스트랩 — 규칙의 isOwner()와 같은 기준).
+ * 관리자가 아니면 null. */
+async function loadAdminAccount(email) {
+  if (OWNER_EMAILS.includes(email)) return { role: "master" };
   try {
     const snap = await getDoc(doc(db, "admins", email));
-    return snap.exists();
+    return snap.exists() ? (snap.data() || {}) : null;
   } catch (e) {
     // 권한이 없으면 규칙에서 읽기 자체가 거부된다 → 관리자가 아님
-    return false;
+    return null;
   }
 }
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     const email = (user.email || "").toLowerCase();
-    if (!(await isAdminAccount(email))) {
+    const account = await loadAdminAccount(email);
+    if (!account) {
       document.getElementById("loginError").textContent =
         "이 계정에는 관리자 권한이 없습니다. 관리자에게 권한 부여를 요청하세요.";
       await signOut(auth);
@@ -91,16 +100,20 @@ onAuthStateChanged(auth, async (user) => {
     }
     currentUserEmail = email;
     currentIsOwner = OWNER_EMAILS.includes(email);
+    // 마스터 = 부트스트랩 소유자이거나 admins 문서의 role이 'master'(규칙의 isMaster()와 같은 기준).
+    currentIsMaster = currentIsOwner || account.role === "master";
     document.getElementById("currentAdmin").textContent =
-      `${displayAccount(email)} · ${currentIsOwner ? "소유자" : "관리자"}`;
+      `${displayAccount(email)} · ${currentIsOwner ? "소유자" : currentIsMaster ? "마스터 관리자" : "관리자"}`;
     document.getElementById("loginBox").style.display = "none";
     document.getElementById("adminApp").style.display = "block";
+    applyMasterOnlyUi();
     startListener();
     loadMissionsForEdit();
     initSiteUrlInput();
   } else {
     currentUserEmail = "";
     currentIsOwner = false;
+    currentIsMaster = false;
     document.getElementById("loginBox").style.display = "block";
     document.getElementById("adminApp").style.display = "none";
     if (unsubscribe) unsubscribe();
@@ -211,6 +224,35 @@ async function loadMissionsForEdit() {
     missionCfg = mergeMissionConfig(null);
   }
   renderMissionEditor();
+}
+
+/* 마스터 전용 조작을 화면에서 잠근다.
+ * 규칙에서 이미 막히지만, 눌러본 뒤 오류만 뜨는 것보다 애초에 못 누르게 하는 편이 낫다.
+ * 표를 다시 그릴 때마다 새 DOM에 다시 적용해야 하므로 렌더 끝에서 호출한다. */
+function applyMasterOnlyUi() {
+  if (currentIsMaster) return;
+
+  // 미션 설정: 입력칸은 읽기 전용, 저장·되돌리기·행 추가/삭제는 숨김.
+  const editor = document.getElementById("missionEditor");
+  if (editor) {
+    editor.querySelectorAll("input, textarea, select").forEach((el) => {
+      if (el.type === "checkbox" || el.type === "radio") el.disabled = true;
+      else el.readOnly = true;
+    });
+    editor.querySelectorAll("button").forEach((b) => { b.hidden = true; });
+  }
+  for (const id of ["btnSaveMissions", "btnResetMissions"]) {
+    const b = document.getElementById(id);
+    if (b) b.hidden = true;
+  }
+  const msg = document.getElementById("missionSaveMsg");
+  if (msg && !msg.dataset.locked) {
+    msg.dataset.locked = "1";
+    msg.textContent = "미션 설정은 마스터 관리자만 수정할 수 있습니다(보기 전용).";
+  }
+
+  // 행사 삭제: 되돌릴 수 없어 마스터만.
+  document.querySelectorAll(".ev-del").forEach((b) => { b.hidden = true; });
 }
 
 function textRow(label, id, value) {
@@ -376,9 +418,11 @@ function collectMissionEditor() {
   });
   collectItemRows();
   collectPairRows();
+  applyMasterOnlyUi();
 }
 
 document.getElementById("btnSaveMissions").addEventListener("click", async () => {
+  if (!currentIsMaster) return alert("미션 설정은 마스터 관리자만 수정할 수 있습니다.");
   collectMissionEditor();
   // 저장 전 유효성 확인 — 잘못된 설정으로 게임이 깨지지 않도록
   const items = missionCfg.mission1.items.filter((i) => i.e && i.l);
@@ -411,6 +455,7 @@ document.getElementById("btnSaveMissions").addEventListener("click", async () =>
 });
 
 document.getElementById("btnResetMissions").addEventListener("click", () => {
+  if (!currentIsMaster) return alert("미션 설정은 마스터 관리자만 수정할 수 있습니다.");
   if (!confirm("편집 중인 내용을 기본값으로 되돌립니다. (저장을 눌러야 실제 반영됩니다)")) return;
   missionCfg = JSON.parse(JSON.stringify(DEFAULT_MISSION_CONFIG));
   renderMissionEditor();
@@ -519,6 +564,7 @@ function renderEventsTable() {
 
   body.querySelectorAll(".ev-del").forEach((btn) =>
     btn.addEventListener("click", async () => {
+      if (!currentIsMaster) return alert("행사 삭제는 마스터 관리자만 할 수 있습니다.");
       const id = btn.dataset.id;
       const count = allRows.filter((r) => rowEventId(r) === id).length;
       if (count > 0) {
@@ -537,6 +583,8 @@ function renderEventsTable() {
       btn.disabled = false;
     })
   );
+
+  applyMasterOnlyUi();
 }
 
 document.getElementById("eventFilter").addEventListener("change", (e) => {
@@ -833,8 +881,15 @@ document.getElementById("btnReset").addEventListener("click", async () => {
   const scopeLabel =
     selectedEventId === "all" ? "모든 행사" : eventNameById(selectedEventId);
   if (targets.length === 0) return alert(`삭제할 참가자 기록이 없습니다. (${scopeLabel})`);
-  if (!confirm(`"${scopeLabel}"의 참가자 기록 ${targets.length}건을 삭제하시겠습니까?`)) return;
-  if (!confirm("다시 한 번 확인합니다. 삭제 후 복구할 수 없습니다. 진행하시겠습니까?")) return;
+  /* 확인창 연타로 지나칠 수 있는 조작이라, 대상 이름을 직접 입력하게 한다.
+   * 행사 중에 잘못 누르면 그날 기록이 통째로 사라진다. */
+  const typed = prompt(
+    `"${scopeLabel}"의 참가자 기록 ${targets.length}건을 삭제합니다. 복구할 수 없습니다.\n\n` +
+    `진행하려면 아래에 대상 이름을 그대로 입력하세요.\n${scopeLabel}`,
+    ""
+  );
+  if (typed == null) return;
+  if (typed.trim() !== scopeLabel.trim()) return alert("입력한 이름이 대상과 다릅니다. 삭제하지 않았습니다.");
 
   const btn = document.getElementById("btnReset");
   const label = btn.textContent;
