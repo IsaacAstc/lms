@@ -324,13 +324,17 @@ function renderMissionEditor() {
   renderPairRows();
 
   document.getElementById("m1-add").addEventListener("click", () => {
+    if (!currentIsMaster) return;
     missionCfg.mission1.items.push({ e: "❓", l: "새 항목", d: false });
     renderItemRows();
   });
   document.getElementById("m3-add").addEventListener("click", () => {
+    if (!currentIsMaster) return;
     missionCfg.mission3.pairs.push({ id: "pair" + Date.now(), emoji: "❓", label: "새 직업", duty: "설명" });
     renderPairRows();
   });
+
+  applyMasterOnlyUi();
 }
 
 function renderItemRows() {
@@ -348,11 +352,13 @@ function renderItemRows() {
     .join("");
   body.querySelectorAll(".it-del").forEach((b) =>
     b.addEventListener("click", () => {
+      if (!currentIsMaster) return;
       collectItemRows();
       missionCfg.mission1.items.splice(Number(b.dataset.i), 1);
       renderItemRows();
     })
   );
+  applyMasterOnlyUi();   // 행을 다시 그릴 때마다 새 버튼이 생기므로 매번 잠근다
 }
 
 function renderPairRows() {
@@ -370,11 +376,13 @@ function renderPairRows() {
     .join("");
   body.querySelectorAll(".pr-del").forEach((b) =>
     b.addEventListener("click", () => {
+      if (!currentIsMaster) return;
       collectPairRows();
       missionCfg.mission3.pairs.splice(Number(b.dataset.i), 1);
       renderPairRows();
     })
   );
+  applyMasterOnlyUi();   // 행을 다시 그릴 때마다 새 버튼이 생기므로 매번 잠근다
 }
 
 // 화면 입력값을 missionCfg로 수집
@@ -418,7 +426,6 @@ function collectMissionEditor() {
   });
   collectItemRows();
   collectPairRows();
-  applyMasterOnlyUi();
 }
 
 document.getElementById("btnSaveMissions").addEventListener("click", async () => {
