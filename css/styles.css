@@ -546,3 +546,30 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
 @media (max-width: 560px) {
   .consent-dl > div { grid-template-columns: 1fr; gap: 0.1rem; }
 }
+
+/* ---------- 공개 자료실(downloads.html) ---------- */
+.dl-main { max-width: 760px; }
+.dl-group { margin-top: 1.5rem; }
+.dl-group h2 { font-size: 1.05rem; margin: 0 0 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border); }
+.dl-items { list-style: none; margin: 0; padding: 0; }
+.dl-item + .dl-item { margin-top: 0.5rem; }
+/* 링크 전체를 누를 수 있게 한다 — 모바일에서 제목 글자만 노리기 어렵다. */
+.dl-item a {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.7rem 0.85rem; border: 1px solid var(--border); border-radius: 8px;
+  color: inherit; text-decoration: none; background: #fff;
+}
+.dl-item a:hover { border-color: var(--accent); background: #fafcfb; }
+.dl-ext {
+  flex: none; min-width: 3.2rem; text-align: center;
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em;
+  padding: 0.3rem 0.35rem; border-radius: 5px;
+  background: var(--bg-soft, #eef2f1); color: var(--muted);
+}
+.dl-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.dl-body small { color: var(--muted); font-size: 0.82rem; }
+.dl-size { flex: none; color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+@media (max-width: 480px) {
+  .dl-item a { gap: 0.55rem; padding: 0.6rem 0.65rem; }
+  .dl-size { display: none; }   /* 좁은 화면에서는 제목 자리를 양보한다 */
+}

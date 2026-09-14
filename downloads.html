@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 주소를 아는 사람만 보는 페이지: 검색엔진 수집을 막는다.
+         ⚠ 저장소가 public이라 파일 자체를 숨기지는 못한다 — 공개해도 되는 파일만 올릴 것. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <title>자료실</title>
+    <link rel="icon" href="favicon.ico" sizes="any" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <main class="board-main dl-main">
+      <h1 class="board-title">자료실</h1>
+      <p class="board-guide">필요한 자료를 눌러 내려받으세요.</p>
+      <div id="dl-root"><p class="empty">자료를 불러오는 중…</p></div>
+    </main>
+    <script type="module" src="js/downloads.js"></script>
+  </body>
+</html>

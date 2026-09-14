@@ -157,6 +157,14 @@ service cloud.firestore {
       allow write: if canTab('courses') || canTab('rentals') || canTab('board');
     }
 
+    // 자료실(공개 다운로드 목록): 제목·설명·파일 경로만. 파일 자체는 저장소 files/ 폴더에 있다.
+    // 공개 페이지는 published == true 만 조회하므로 준비 중인 항목은 노출되지 않는다.
+    // (개인정보 없음 — 목록 정보뿐이고, 파일은 어차피 public 저장소에 있다.)
+    match /downloads/{docId} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow write: if canTab('downloads');
+    }
+
     // 설문 응답: create 만 공개 허용(완전 익명), 읽기·수정·삭제는 관리자만.
     // expireAt은 서버시각 기준 약 180일 후여야 함(클라이언트 조작 방지, ±2일 허용).
     match /surveyResponses/{responseId} {
