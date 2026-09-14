@@ -916,6 +916,50 @@
           </div>
         </section>
 
+        <!-- 현장·공개: 자료실(공개 파일 다운로드) -->
+        <section class="tab-panel" data-tab="downloads" hidden>
+          <h2>현장·공개 — 자료실</h2>
+          <p class="hint">주소를 아는 사람이 파일을 내려받는 <b>공개 페이지</b>입니다. 검색엔진 수집은 막아 두었습니다(<code>noindex</code>).</p>
+          <p class="hint"><b>⚠ 저장소가 public입니다.</b> <code>files/</code> 폴더에 올린 파일은 이 목록에 등록하지 않아도 주소를 알면 받을 수 있습니다. <b>공개해도 되는 파일만</b> 올리세요 — 개인정보가 담긴 파일, 대외 공개용이 아닌 내부 문서는 올리지 마십시오.</p>
+
+          <h3>공개 주소</h3>
+          <div class="load-row">
+            <input id="dl-url" readonly style="min-width:280px" />
+            <button id="dl-url-copy" type="button">주소 복사</button>
+            <a id="dl-open" href="downloads.html" target="_blank" rel="noopener" class="btn-link">새 창에서 열기</a>
+          </div>
+
+          <h3>파일 올리는 방법</h3>
+          <p class="hint">파일 자체는 이 화면이 아니라 <b>GitHub 저장소</b>에 올립니다. 목록 정보만 여기서 관리합니다.</p>
+          <ol class="hint">
+            <li>GitHub 저장소에서 <code>files/</code> 폴더를 열고 <b>Add file → Upload files</b>로 파일을 올립니다.</li>
+            <li>파일명은 <b>영문·숫자·하이픈</b>을 권장합니다(한글·공백은 주소가 깨져 보일 수 있습니다).</li>
+            <li>배포가 끝나면(1~2분) 아래에서 <code>files/파일명</code>으로 목록에 등록합니다.</li>
+          </ol>
+
+          <h3>등록된 자료</h3>
+          <div id="dl-list"><p class="empty">불러오는 중…</p></div>
+
+          <h3 id="dl-form-title">자료 추가</h3>
+          <div class="load-row">
+            <label>제목 <input id="dl-title" placeholder="예: 2026 교육과정 안내문" style="min-width:220px" /></label>
+            <label>분류 <input id="dl-category" placeholder="예: 교육안내 (비우면 '기타')" /></label>
+            <label title="작은 수가 먼저 나옵니다">순서 <input id="dl-order" type="number" step="10" style="width:90px" /></label>
+          </div>
+          <div class="load-row" style="margin-top:0.4rem">
+            <label style="flex:1">설명 <input id="dl-desc" placeholder="목록에 함께 보일 한 줄 설명(선택)" style="min-width:260px" /></label>
+          </div>
+          <div class="load-row" style="margin-top:0.4rem">
+            <label style="flex:1">파일 경로 <input id="dl-path" placeholder="files/course-guide-2026.pdf" style="min-width:260px" /></label>
+            <label><input type="checkbox" id="dl-published" checked /> 공개</label>
+          </div>
+          <div class="form-actions">
+            <button id="dl-save" type="button">저장</button>
+            <button id="dl-cancel" type="button" hidden>편집 취소</button>
+            <span id="dl-msg" class="hint"></span>
+          </div>
+        </section>
+
         <!-- 수업 지원: 수업 보드(협업 게시판) -->
         <section class="tab-panel" data-tab="pad" hidden>
           <h2>수업 지원 — 수업 보드</h2>

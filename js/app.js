@@ -21,6 +21,7 @@ import { initCsvImport } from "./csv-import.js";
 import { initSeed } from "./seed.js";
 import { initOrgSelectors, initOrgAdmin, tabFeature } from "./orgs.js";
 import { initRentals } from "./rentals.js";
+import { initDownloadsAdmin } from "./downloads-admin.js";
 import { initPadAdmin } from "./pad-admin.js";
 import { initLogiAdmin } from "./logi-admin.js";
 import { initNamedAdmin } from "./named-admin.js";
@@ -46,7 +47,7 @@ const TAB_GROUPS = [
   // 기명 조사는 개인정보 처리 경로라 익명 설문 그룹과 나란히 두지 않고 별도 그룹으로 분리한다.
   { id: "named", label: "기명 조사", tabs: [["named", "기명 조사"]] },
   { id: "stats", label: "통계·보고서", tabs: [["stats", "통계 대시보드"], ["reportdoc", "운영 보고서"]] },
-  { id: "site", label: "현장·공개", tabs: [["board", "공개 현황 보드"], ["rentals", "현장 안내(DID)"]] },
+  { id: "site", label: "현장·공개", tabs: [["board", "공개 현황 보드"], ["rentals", "현장 안내(DID)"], ["downloads", "자료실"]] },
   { id: "class", label: "수업 지원", tabs: [["pad", "수업 보드"], ["logi", "ICAO 로지보드"]] },
   { id: "admin", label: "설정", tabs: [["settings", "기준값 설정"], ["admins", "관리자 계정"], ["data", "데이터 관리"], ["orgs", "기관 관리"]] },
 ];
@@ -207,6 +208,8 @@ function initApp() {
   initAdmins();
   initBoardAdmin();
   initRentals();
+  initDownloadsAdmin();
+  initDownloadsAdmin();
   initPadAdmin();
   initLogiAdmin();
   initNamedAdmin();
