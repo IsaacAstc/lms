@@ -267,11 +267,26 @@ function paintQuestions() {
   }
 
   const optBox = $("nm-optitems");
-  optBox.innerHTML = draft.optItems.map((q, i) => `<div class="load-row">
+  optBox.innerHTML = draft.optItems.map((q, i) => `<div class="optitem-box">
+    <div class="load-row">
       <span>${i + 1}.</span>
       <select class="no-type" data-i="${i}">${OPT_TYPES.map(([t, lb]) => `<option value="${t}"${q.type === t ? " selected" : ""}>${lb}</option>`).join("")}</select>
       <input class="no-label" data-i="${i}" value="${esc(q.label || "")}" placeholder="항목 문구" style="min-width:240px">
       <button type="button" class="chip-del no-del" data-i="${i}">×</button>
+    </div>
+    ${q.type === "photo" ? `<div class="load-row optitem-ex">
+      <label style="flex:1">예시 이미지 주소
+        <input class="no-eximg" data-i="${i}" value="${esc(q.exImg || "")}"
+               placeholder="files/example.jpg — 자료실에 올린 뒤 경로를 적으세요" style="min-width:240px">
+      </label>
+    </div>
+    <div class="load-row optitem-ex">
+      <label style="flex:1">예시 설명
+        <input class="no-exnote" data-i="${i}" value="${esc(q.exNote || "")}"
+               placeholder="예: 회사 로고 등 입사 인증 사진을 업로드" style="min-width:240px">
+      </label>
+    </div>
+    <small class="hint">사진 첨부 칸 옆에 예시가 함께 표시됩니다(모바일에서는 아래로 내려갑니다). 둘 다 비우면 표시되지 않습니다. 설명에는 <code>**강조**</code>를 쓸 수 있습니다.</small>` : ""}
     </div>`).join("") || `<p class="empty">선택 목적 항목이 없습니다.</p>`;
 
   box.querySelectorAll(".nq-type").forEach((el) => el.addEventListener("change", (e) => {
@@ -314,6 +329,12 @@ function paintQuestions() {
   }));
   optBox.querySelectorAll(".no-label").forEach((el) => el.addEventListener("input", (e) => {
     draft.optItems[+e.target.dataset.i].label = e.target.value;
+  }));
+  optBox.querySelectorAll(".no-eximg").forEach((el) => el.addEventListener("input", (e) => {
+    draft.optItems[+e.target.dataset.i].exImg = e.target.value;
+  }));
+  optBox.querySelectorAll(".no-exnote").forEach((el) => el.addEventListener("input", (e) => {
+    draft.optItems[+e.target.dataset.i].exNote = e.target.value;
   }));
   optBox.querySelectorAll(".no-del").forEach((b) => b.addEventListener("click", () => {
     draft.optItems.splice(+b.dataset.i, 1); paintQuestions();
@@ -387,7 +408,15 @@ function readEditor() {
           options: Array.isArray(q.options) ? q.options : [],
           required: q.type === "note" ? false : !!q.required,
         })),
-    optItems: d.optItems.map((q) => ({ type: q.type, label: (q.label || "").trim() })),
+    // 예시 이미지·설명은 사진 항목에서만 의미가 있다(유형을 바꾸면 함께 버린다).
+    optItems: d.optItems.map((q) => ({
+      type: q.type,
+      label: (q.label || "").trim(),
+      ...(q.type === "photo" ? {
+        exImg: (q.exImg || "").trim(),
+        exNote: (q.exNote || "").trim(),
+      } : {}),
+    })),
   };
 }
 
