@@ -38,6 +38,18 @@ function prizeBlock(n) {
   </div>`;
 }
 
+/* 사진 첨부 항목의 '업로드 예시' — 관리자가 조사 정의에서 지정한다.
+ * 이미지도 설명도 없으면 아무것도 그리지 않는다(기존 조사에 영향 없음). */
+function exampleHtml(q) {
+  const img = String(q.exImg || "").trim();
+  const note = String(q.exNote || "").trim();
+  if (!img && !note) return "";
+  return `<figure class="photo-ex">
+    ${img ? `<img src="${esc(img)}" alt="업로드 예시 사진" loading="lazy">` : ""}
+    ${note ? `<figcaption>${emph(note)}</figcaption>` : ""}
+  </figure>`;
+}
+
 let survey = null;
 let surveyId = "";
 
@@ -153,11 +165,16 @@ function renderForm(consentOpt) {
     <div id="opt-block"${optWhen ? " hidden" : ""}>
     <h2>${esc(survey.purposeOpt.label || "선택 항목")}</h2>
     ${prizeBlock(survey.purposeOpt.prizeNotice)}
-    <p class="hint">아래 항목은 <b>시스템에 저장되지 않고</b> 담당자 이메일로만 전달됩니다. 모두 채우셔야 접수됩니다.</p>
+    <p class="hint opt-lead">아래 항목은 <b>시스템에 저장되지 않고</b> 담당자 이메일로만 전달됩니다. 모두 채우셔야 접수됩니다.</p>
     ${optItems.map((q, i) => q.type === "photo"
       ? `<div class="q-item"><div class="q-label">${esc(q.label)}</div>
-           <input type="file" name="o_${i}" accept="image/*" />
-           <div class="photo-preview" id="pv-o_${i}"></div>
+           <div class="photo-row">
+             <div class="photo-pick">
+               <input type="file" name="o_${i}" accept="image/*" />
+               <div class="photo-preview" id="pv-o_${i}"></div>
+             </div>
+             ${exampleHtml(q)}
+           </div>
            <small class="hint">사진을 찍거나 저장된 사진·파일에서 고를 수 있습니다. 타인의 얼굴·개인정보가 담기지 않게 해 주세요.</small></div>`
       : q.type === "phone"
         ? `<div class="q-item"><div class="q-label">${esc(q.label)}</div>
