@@ -11,21 +11,27 @@
 import {
   collection, getDocs, query, orderBy,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { db } from "./firebase.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+import { db, app } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import { orgQuery } from "./orgs.js";
 import { addItem, updateItem, removeItem } from "./store.js";
 
 const COLL = "downloads";
+// 파일 조작은 저장소 쓰기 토큰이 필요해 함수를 거친다(토큰은 브라우저에 두지 않는다).
+const callFn = (name) => httpsCallable(getFunctions(app, "asia-northeast3"), name);
 const esc = escapeHtml;
 const $ = (id) => document.getElementById(id);
 
 let list = [];
+let files = [];          // files/ 폴더의 실제 파일 목록(함수로 조회)
 let editingId = null;
 
 export function initDownloadsAdmin() {
   $("dl-save").addEventListener("click", save);
   $("dl-cancel").addEventListener("click", resetForm);
+  $("dl-upload").addEventListener("click", upload);
+  $("dl-files-refresh").addEventListener("click", () => loadFiles(true));
   $("dl-url-copy").addEventListener("click", () => {
     navigator.clipboard?.writeText($("dl-url").value);
     $("dl-url-copy").textContent = "복사됨";
@@ -48,6 +54,107 @@ async function load() {
     list.sort((a, b) => (a.order || 0) - (b.order || 0));
   }
   paint();
+  loadFiles();
+}
+
+/* ── files/ 폴더의 실제 파일 ──
+ * 저장소를 직접 보지 않아도 무엇이 올라가 있는지, 그중 무엇이 아직 목록에 등록되지
+ * 않았는지 한눈에 보이게 한다. 경로를 손으로 적다 오타를 내는 일을 없애는 것이 목적. */
+async function loadFiles(manual = false) {
+  const box = $("dl-files");
+  box.innerHTML = `<p class="empty">파일 목록을 불러오는 중…</p>`;
+  try {
+    files = (await callFn("publicFileList")())?.data?.files || [];
+  } catch (e) {
+    files = [];
+    box.innerHTML = `<p class="empty">파일 목록을 불러오지 못했습니다. ${esc(e.message || "")}</p>`;
+    if (manual) alert("파일 목록을 불러오지 못했습니다: " + (e.message || e));
+    return;
+  }
+  paintFiles();
+}
+
+function paintFiles() {
+  const box = $("dl-files");
+  if (!files.length) {
+    box.innerHTML = `<p class="empty">올라간 파일이 없습니다. 위에서 파일을 선택해 올리세요.</p>`;
+    return;
+  }
+  const used = new Set(list.map((d) => d.path));
+  box.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>파일</th><th>크기</th><th>목록 등록</th><th></th></tr></thead>
+    <tbody>${files.map((f) => `<tr>
+      <td><code>${esc(f.path)}</code></td>
+      <td>${fmtSize(f.size)}</td>
+      <td>${used.has(f.path)
+        ? `<span class="chip chip-on">등록됨</span>`
+        : `<span class="chip">미등록</span>`}</td>
+      <td class="row-actions">
+        ${used.has(f.path) ? "" : `<button type="button" data-use="${esc(f.name)}">목록에 추가</button>`}
+        <button type="button" class="del" data-fdel="${esc(f.name)}">파일 삭제</button>
+      </td>
+    </tr>`).join("")}</tbody></table></div>`;
+  box.querySelectorAll("[data-use]").forEach((b) => b.addEventListener("click", () => useFile(b.dataset.use)));
+  box.querySelectorAll("[data-fdel]").forEach((b) => b.addEventListener("click", () => delFile(b.dataset.fdel)));
+}
+
+// 올라간 파일을 곧바로 '자료 추가' 폼에 채워 준다(제목은 파일명에서 뽑아 초안으로).
+function useFile(name) {
+  const f = files.find((x) => x.name === name);
+  if (!f) return;
+  resetForm();
+  $("dl-path").value = f.path;
+  if (!$("dl-title").value) $("dl-title").value = name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ");
+  $("dl-msg").textContent = "제목을 확인하고 저장하세요.";
+  $("dl-title").focus();
+  $("dl-title").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+async function delFile(name) {
+  const path = `files/${name}`;
+  const registered = list.filter((d) => d.path === path);
+  if (!confirm(`${path} 파일을 저장소에서 지웁니다.\n\n`
+    + (registered.length ? `⚠ 이 파일은 자료 목록 ${registered.length}건에 연결돼 있습니다. 지우면 그 자료의 다운로드가 실패합니다.\n\n` : "")
+    + `지운 뒤에는 주소로도 받을 수 없습니다. 다만 git 이력에는 남습니다.\n\n계속할까요?`)) return;
+  try {
+    const res = await callFn("publicFileDelete")({ name });
+    alert(res?.data?.deleted ? "파일을 지웠습니다. 반영까지 1~2분 걸립니다." : (res?.data?.reason || "이미 없는 파일입니다."));
+    loadFiles();
+  } catch (e) { alert("삭제 실패: " + (e.message || e)); }
+}
+
+async function upload() {
+  const inp = $("dl-file");
+  const f = inp.files[0];
+  if (!f) return alert("올릴 파일을 선택하세요.");
+  if (f.size > 8 * 1024 * 1024) {
+    return alert("파일은 8MB 이하만 올릴 수 있습니다.\n더 큰 파일은 GitHub 저장소 files/ 폴더에서 직접 올리세요.");
+  }
+  const dataBase64 = await new Promise((resolve) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1] || "");
+    r.onerror = () => resolve("");
+    r.readAsDataURL(f);
+  });
+  if (!dataBase64) return alert("파일을 읽지 못했습니다.");
+
+  const btn = $("dl-upload");
+  btn.disabled = true;
+  $("dl-upload-msg").textContent = "올리는 중…";
+  try {
+    const res = await callFn("publicFileUpload")({ name: f.name, dataBase64 });
+    const d = res?.data || {};
+    inp.value = "";
+    // 배포가 끝나야 실제 주소에서 받을 수 있다 — 바로 확인하면 404가 뜬다.
+    $("dl-upload-msg").textContent =
+      `${d.path} ${d.replaced ? "교체" : "업로드"} 완료. 실제 주소에 반영되기까지 1~2분 걸립니다.`;
+    await loadFiles();
+    useFile(d.name);
+  } catch (e) {
+    $("dl-upload-msg").textContent = "";
+    alert("업로드 실패: " + (e.message || e));
+  }
+  btn.disabled = false;
 }
 
 const fmtSize = (n) => (!n ? "" : n < 1024 * 1024
@@ -106,7 +213,7 @@ function edit(id) {
 
 async function del(id) {
   const d = list.find((x) => x.id === id);
-  if (!confirm(`"${d?.title || id}"를 목록에서 지울까요?\n\n파일 자체는 지워지지 않습니다 — files/ 폴더의 파일은 GitHub에서 따로 삭제해야 합니다.`)) return;
+  if (!confirm(`"${d?.title || id}"를 목록에서 지울까요?\n\n파일 자체는 남습니다 — 파일까지 지우려면 아래 '올라간 파일'에서 '파일 삭제'를 누르세요.`)) return;
   try {
     await removeItem(COLL, id);
     if (editingId === id) resetForm();
@@ -169,6 +276,7 @@ async function save() {
       ? "저장했습니다. (파일 존재 여부는 확인하지 못했습니다 — 공개 페이지에서 직접 눌러 확인하세요)"
       : "저장했습니다.";
     resetForm();
-    load();
+    await load();
+    paintFiles();
   } catch (e) { alert("저장 실패: " + e.message); }
 }
