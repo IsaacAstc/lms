@@ -1029,3 +1029,170 @@ exports.namedResponsesCount = onCall(NAMED_OPTS, async (req) => {
   const agg = await db.collection(NAMED_RESP).where("surveyId", "==", surveyId).count().get();
   return { count: agg.data().count };
 });
+
+/* ================================================================
+ *  공개 자료실 파일 관리 — 관리자 화면에서 GitHub 저장소 files/ 를 직접 다룬다
+ *
+ *  파일은 저장소에 커밋되어 GitHub Pages가 서빙한다. 커밋에는 쓰기 토큰이 필요한데,
+ *  토큰을 브라우저에 두면 저장소 전체를 조작할 수 있는 열쇠가 노출되므로
+ *  Firebase Secret(GH_FILES_TOKEN)에만 두고 이 함수가 대신 호출한다.
+ *
+ *  ⚠ files/ 는 저장소 하나를 모든 기관이 공유한다(Pages가 하나이므로).
+ *    목록 등록(Firestore downloads)은 기관별로 나뉘지만 파일 자체는 공용이다.
+ * ================================================================ */
+const GH_FILES_TOKEN = defineSecret("GH_FILES_TOKEN");
+const GH_REPO = "IsaacAstc/lms";          // 파일을 두는 저장소
+const GH_DIR = "files";                   // 그 안의 폴더
+const GH_BRANCH = "main";
+const FILE_MAX_BYTES = 8 * 1024 * 1024;   // 8MB — 더 큰 파일은 GitHub 웹에서 직접 올린다
+
+/* 같은 출처(오리진)에서 실행될 수 있는 형식은 받지 않는다.
+ * 자료실은 관리자 화면과 같은 도메인이라, html·js·svg를 올리면 그 페이지의 스크립트가
+ * 관리자 세션이 있는 오리진에서 돌아간다(저장된 XSS). 문서·이미지·압축만 허용한다. */
+const FILE_EXT_OK = new Set([
+  "pdf", "hwp", "hwpx", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+  "txt", "csv", "zip", "png", "jpg", "jpeg", "gif", "webp", "mp4", "mp3",
+]);
+
+// 자료실 권한 확인(관리자 + 'downloads' 탭). 참관자는 제외.
+async function requireDownloadsTab(req) {
+  const email = String(req.auth?.token?.email || "").toLowerCase();
+  if (!email) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (BOOTSTRAP_ADMINS.includes(email)) return email;
+  const snap = await db.doc(`admins/${email}`).get();
+  if (!snap.exists) throw new HttpsError("permission-denied", "관리자만 사용할 수 있습니다.");
+  const a = snap.data() || {};
+  if (a.role === "observer") throw new HttpsError("permission-denied", "참관자 계정은 파일을 올리거나 지울 수 없습니다.");
+  if (a.role === "master") return email;
+  const tabs = Array.isArray(a.tabs) ? a.tabs : null;
+  if (tabs && !tabs.includes("downloads")) {
+    throw new HttpsError("permission-denied", "자료실 권한이 없는 계정입니다.");
+  }
+  return email;
+}
+
+function ghHeaders() {
+  const token = String(GH_FILES_TOKEN.value() || "");
+  if (token.length < 20) {
+    throw new HttpsError("failed-precondition",
+      "파일 저장소 연결이 설정되지 않았습니다(토큰 미설정). 관리자에게 문의하세요.");
+  }
+  return {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "lms-downloads",
+  };
+}
+
+/* 파일명 정리 — 주소에 그대로 들어가므로 다루기 쉬운 글자만 남긴다.
+ * 한글·공백도 동작은 하지만 퍼센트 인코딩되어 관리자가 경로를 확인하기 어렵다. */
+function safeFileName(raw) {
+  const name = String(raw || "").trim().replace(/^.*[\\/]/, "");   // 경로 제거
+  const m = name.match(/^(.*?)\.([A-Za-z0-9]{1,6})$/);
+  if (!m) bad("확장자가 있는 파일만 올릴 수 있습니다.");
+  const ext = m[2].toLowerCase();
+  if (!FILE_EXT_OK.has(ext)) {
+    bad(`이 형식(.${ext})은 올릴 수 없습니다. 문서·이미지·압축 파일만 가능합니다.`);
+  }
+  const stem = m[1]
+    .replace(/[^A-Za-z0-9가-힣._-]+/g, "-")   // 공백·특수문자 → 하이픈
+    .replace(/-{2,}/g, "-")
+    .replace(/^[-.]+|[-.]+$/g, "")
+    .slice(0, 80);
+  if (!stem) bad("파일명이 비어 있습니다.");
+  return `${stem}.${ext}`;
+}
+
+const FILE_OPTS = {
+  region: "asia-northeast3", secrets: [GH_FILES_TOKEN],
+  memory: "512MiB", timeoutSeconds: 120, maxInstances: 3,
+};
+
+// files/ 폴더의 파일 목록. 관리자 화면에서 경로를 고르게 하기 위한 것.
+exports.publicFileList = onCall(FILE_OPTS, async (req) => {
+  await requireDownloadsTab(req);
+  const res = await fetch(
+    `https://api.github.com/repos/${GH_REPO}/contents/${GH_DIR}?ref=${GH_BRANCH}`,
+    { headers: ghHeaders() }
+  );
+  if (res.status === 404) return { files: [] };      // 폴더가 아직 없음
+  if (!res.ok) {
+    console.error("GitHub 목록 조회 실패:", res.status, await res.text());
+    throw new HttpsError("unavailable", "파일 목록을 불러오지 못했습니다.");
+  }
+  const arr = await res.json();
+  return {
+    files: (Array.isArray(arr) ? arr : [])
+      .filter((f) => f.type === "file" && f.name !== "README.md")
+      .map((f) => ({ name: f.name, path: `${GH_DIR}/${f.name}`, size: f.size || 0, sha: f.sha }))
+      .sort((a, b) => a.name.localeCompare(b.name, "ko")),
+  };
+});
+
+// files/ 에 파일 올리기(= 저장소에 커밋). 같은 이름이 있으면 덮어쓴다.
+exports.publicFileUpload = onCall(FILE_OPTS, async (req) => {
+  const email = await requireDownloadsTab(req);
+  const name = safeFileName(req.data?.name);
+  const dataBase64 = String(req.data?.dataBase64 || "");
+  if (!dataBase64) bad("파일 내용이 비었습니다.");
+  const bytes = Math.floor(dataBase64.length * 3 / 4);
+  if (bytes > FILE_MAX_BYTES) {
+    bad(`파일은 ${Math.floor(FILE_MAX_BYTES / 1024 / 1024)}MB 이하만 올릴 수 있습니다. 더 큰 파일은 GitHub에서 직접 올리세요.`);
+  }
+  const path = `${GH_DIR}/${name}`;
+  const url = `https://api.github.com/repos/${GH_REPO}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}`;
+
+  // 덮어쓰기는 기존 파일의 sha가 있어야 한다(없으면 신규 생성).
+  let sha;
+  const cur = await fetch(`${url}?ref=${GH_BRANCH}`, { headers: ghHeaders() });
+  if (cur.ok) sha = (await cur.json()).sha;
+
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { ...ghHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: `자료실 파일 ${sha ? "교체" : "추가"}: ${name}`,
+      content: dataBase64,
+      branch: GH_BRANCH,
+      ...(sha ? { sha } : {}),
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    console.error("GitHub 업로드 실패:", res.status, body);
+    if (res.status === 401 || res.status === 403) {
+      throw new HttpsError("failed-precondition", "파일 저장소 토큰이 만료되었거나 권한이 없습니다. 관리자에게 문의하세요.");
+    }
+    throw new HttpsError("unavailable", "파일을 올리지 못했습니다. 잠시 후 다시 시도해 주세요.");
+  }
+  console.log(`자료실 업로드: ${path} (${bytes}B) by ${email}`);
+  return { path, name, size: bytes, replaced: !!sha };
+});
+
+// files/ 에서 파일 지우기(= 저장소에서 삭제 커밋).
+// git 이력에는 남으므로 '더는 주소로 받을 수 없게 하는' 조치임을 화면에서 안내한다.
+exports.publicFileDelete = onCall(FILE_OPTS, async (req) => {
+  const email = await requireDownloadsTab(req);
+  const name = String(req.data?.name || "").replace(/^.*[\\/]/, "");
+  if (!name || name === "README.md") bad("지울 파일명을 확인하세요.");
+  const path = `${GH_DIR}/${name}`;
+  const url = `https://api.github.com/repos/${GH_REPO}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}`;
+
+  const cur = await fetch(`${url}?ref=${GH_BRANCH}`, { headers: ghHeaders() });
+  if (cur.status === 404) return { deleted: false, reason: "이미 없는 파일입니다." };
+  if (!cur.ok) throw new HttpsError("unavailable", "파일 정보를 확인하지 못했습니다.");
+  const sha = (await cur.json()).sha;
+
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: { ...ghHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ message: `자료실 파일 삭제: ${name}`, sha, branch: GH_BRANCH }),
+  });
+  if (!res.ok) {
+    console.error("GitHub 삭제 실패:", res.status, await res.text());
+    throw new HttpsError("unavailable", "파일을 지우지 못했습니다.");
+  }
+  console.log(`자료실 삭제: ${path} by ${email}`);
+  return { deleted: true };
+});
