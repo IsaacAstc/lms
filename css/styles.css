@@ -573,3 +573,8 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
   .dl-item a { gap: 0.55rem; padding: 0.6rem 0.65rem; }
   .dl-size { display: none; }   /* 좁은 화면에서는 제목 자리를 양보한다 */
 }
+/* 제목 옆에 붙는 작은 보조 버튼(새로고침 등) */
+.btn-inline {
+  font-size: 0.75rem; font-weight: 400; padding: 0.15rem 0.5rem;
+  margin-left: 0.4rem; vertical-align: middle;
+}
