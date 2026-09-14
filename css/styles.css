@@ -227,6 +227,28 @@ small.hint { display: block; }
   white-space: pre-wrap; background: #f2f6fb; border-left: 4px solid var(--primary);
   border-radius: 6px; padding: 0.7rem 0.9rem; margin: 0.9rem 0; line-height: 1.6;
 }
+/* 선택 목적 안내와 첫 항목이 붙어 답답해 보이지 않게 사이를 띄운다. */
+.opt-lead { margin-bottom: 1.1rem; }
+
+/* 사진 첨부 항목: 파일 선택 영역 옆에 업로드 예시를 나란히 둔다.
+ * 좁은 화면에서는 wrap으로 예시가 아래로 내려간다 — 가로로 붙여두면
+ * 파일 선택 버튼과 예시 이미지가 모두 눌릴 수 없을 만큼 좁아진다. */
+.photo-row { display: flex; flex-wrap: wrap; gap: 0.9rem; align-items: flex-start; }
+.photo-pick { flex: 1 1 15rem; min-width: 0; }
+.photo-ex {
+  flex: 0 1 15rem; min-width: 0; margin: 0;
+  padding: 0.6rem; border: 1px dashed var(--border); border-radius: 8px;
+  background: #fafbfc;
+}
+.photo-ex img { display: block; width: 100%; height: auto; border-radius: 6px; }
+.photo-ex figcaption {
+  margin-top: 0.45rem; font-size: 0.78rem; line-height: 1.45; color: var(--muted, #667);
+}
+@media (max-width: 560px) {
+  /* 예시가 아래로 내려오면 폭을 다 쓰게 해, 로고가 알아볼 수 있는 크기로 보이게 한다. */
+  .photo-ex { flex-basis: 100%; }
+}
+
 /* 사진 첨부 문항 미리보기(제출 전 확인용) */
 .photo-preview { margin-top: 0.5rem; }
 .photo-preview img { max-width: 100%; max-height: 40vh; border-radius: 8px; border: 1px solid var(--border); }
@@ -638,3 +660,7 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
   font-size: 0.75rem; font-weight: 400; padding: 0.15rem 0.5rem;
   margin-left: 0.4rem; vertical-align: middle;
 }
+/* 기명 조사 관리: 선택 목적 항목 한 덩어리(사진 항목은 예시 입력칸이 따라붙는다) */
+.optitem-box { padding: 0.5rem 0; border-bottom: 1px dashed var(--border); }
+.optitem-box:last-child { border-bottom: 0; }
+.optitem-ex { margin-top: 0.35rem; padding-left: 1.4rem; }
