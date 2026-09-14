@@ -13,9 +13,16 @@
   </head>
   <body>
     <main class="board-main dl-main">
-      <h1 class="board-title">자료실</h1>
-      <p class="board-guide">필요한 자료를 눌러 내려받으세요.</p>
-      <div id="dl-root"><p class="empty">자료를 불러오는 중…</p></div>
+      <header class="dl-head">
+        <h1 class="board-title">자료실</h1>
+        <p class="dl-sub">필요한 자료를 눌러 내려받으세요.</p>
+      </header>
+      <!-- 검색은 자료가 일정 개수를 넘을 때만 노출한다(적을 때는 방해만 된다). -->
+      <div class="dl-search" id="dl-search" hidden>
+        <input type="search" id="dl-q" placeholder="자료 검색 (제목·설명·분류)" aria-label="자료 검색" />
+      </div>
+      <p class="dl-count" id="dl-count" hidden></p>
+      <div id="dl-root"><p class="dl-empty">자료를 불러오는 중…</p></div>
     </main>
     <script type="module" src="js/downloads.js"></script>
   </body>
