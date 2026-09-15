@@ -282,11 +282,12 @@ function paintQuestions() {
     </div>
     <div class="load-row optitem-ex">
       <label style="flex:1">예시 설명
-        <input class="no-exnote" data-i="${i}" value="${esc(q.exNote || "")}"
-               placeholder="예: 회사 로고 등 입사 인증 사진을 업로드" style="min-width:240px">
+        <textarea class="no-exnote" data-i="${i}" rows="3"
+                  placeholder="예: 업로드 예시 사진&#10;회사 로고 등 입사 인증 사진을 업로드&#10;단, 이름 등 개인정보는 사진에 포함 금지"
+                  style="min-width:240px">${esc(q.exNote || "")}</textarea>
       </label>
     </div>
-    <small class="hint">사진 첨부 칸 옆에 예시가 함께 표시됩니다(모바일에서는 아래로 내려갑니다). 둘 다 비우면 표시되지 않습니다. 설명에는 <code>**강조**</code>를 쓸 수 있습니다.</small>` : ""}
+    <small class="hint">사진 첨부 칸 옆에 예시가 함께 표시됩니다(모바일에서는 아래로 내려갑니다). 둘 다 비우면 표시되지 않습니다. 설명은 <b>줄바꿈이 그대로 반영</b>되며 <code>**강조**</code>로 굵게 쓸 수 있습니다.</small>` : ""}
     </div>`).join("") || `<p class="empty">선택 목적 항목이 없습니다.</p>`;
 
   box.querySelectorAll(".nq-type").forEach((el) => el.addEventListener("change", (e) => {

@@ -192,11 +192,31 @@ small.hint { display: block; }
 .prize-notice { margin: 0.9rem 0 1.4rem; text-align: center; }
 .prize-notice .prize-title { font-weight: 700; margin: 0 0 0.5rem; }
 .prize-notice img { display: block; margin: 0 auto; max-width: 100%; height: auto; border-radius: 8px; }
-/* 응답 완료 화면의 추가 안내(재제출 가능 등). */
+/* 응답 완료 화면 — 접수됐다는 사실이 한눈에 들어오도록 크게·색을 넣어 강조한다.
+ * 좁은 화면에서는 3rem이 한 줄에 들어가지 않아 줄이 지저분하게 쪼개지므로 줄인다. */
+/* 한글은 기본 줄바꿈 규칙에서 단어 중간이 끊긴다('진심/으로'). 어절 단위로 끊는다. */
+.done-head { text-align: center; margin: 2rem auto 0; word-break: keep-all; }
+.done-title {
+  font-size: 2.4rem; line-height: 1.25; font-weight: 700;
+  color: var(--primary); margin: 0 0 0.6rem;
+}
+.done-thanks {
+  font-size: 2.4rem; line-height: 1.3; font-weight: 700;
+  color: var(--primary); margin: 0;
+}
+@media (max-width: 640px) {
+  .done-title, .done-thanks { font-size: 1.5rem; }
+}
+
+/* 응답 완료 화면의 추가 안내(재제출 가능 등).
+ * 제목과 같은 테마색 계열로 맞춘다 — 한 화면에서 색 계열이 갈리면 산만해진다. */
 .done-notice {
-  max-width: 32rem; margin: 1rem auto 0; padding: 0.9rem 1.1rem;
-  background: #f2f8f0; border: 1px solid #cfe6c8; border-radius: 8px;
-  font-size: 0.9rem; line-height: 1.65; text-align: left;
+  max-width: 32rem; margin: 1.6rem auto 0; padding: 1.1rem 1.3rem;
+  background: #eef3f9; border: 1px solid #c6d6ea; border-radius: 8px;
+  font-size: 1.45rem; line-height: 1.55; text-align: center; word-break: keep-all;
+}
+@media (max-width: 640px) {
+  .done-notice { font-size: 1rem; }
 }
 .notice { font-size: 0.82rem; color: #7a5; background: #f2f8f0; border: 1px solid #cfe6c8; padding: 0.5rem 0.75rem; border-radius: 6px; }
 .warn { color: var(--danger); font-size: 0.8rem; }
