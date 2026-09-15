@@ -420,7 +420,10 @@ async function submit(consentOpt, optItems) {
     // 응답은 담당자 메일로 전달되고 시스템에는 집계 수치만 남는다 — 대조할 제출코드가 없다.
     // 중복 응답을 허용하므로, 다시 제출할 수 있다는 안내를 조사 정의에서 받아 함께 보여준다.
     const done = (survey.doneNotice || "").trim();
-    msg(`<p class="empty">응답이 접수되었습니다. 감사합니다.</p>
+    msg(`<div class="done-head">
+        <p class="done-title">응답이 접수되었습니다.</p>
+        <p class="done-thanks">조사에 참여해 주셔서 진심으로 감사드립니다.</p>
+      </div>
       ${done ? `<div class="done-notice">${emph(done)}</div>` : ""}`);
   } catch (e) {
     btn.disabled = false;
