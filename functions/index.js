@@ -1151,6 +1151,16 @@ function safeFileName(raw) {
   return `${stem}.${ext}`;
 }
 
+/* 응답 헤더에서 토큰 만료일을 꺼낸다.
+ * 값 예: "2027-09-14 08:00:00 UTC". 형식이 바뀌어 파싱에 실패하면 원문만 돌려준다. */
+function tokenExpiryOf(res) {
+  const raw = res.headers.get("github-authentication-token-expiration");
+  if (!raw) return null;
+  const at = Date.parse(raw.replace(" UTC", "Z").replace(" ", "T"));
+  if (!Number.isFinite(at)) return { raw };
+  return { raw, atMs: at, daysLeft: Math.floor((at - Date.now()) / 86400000) };
+}
+
 const FILE_OPTS = {
   region: "asia-northeast3", secrets: [GH_FILES_TOKEN],
   memory: "512MiB", timeoutSeconds: 120, maxInstances: 3,
@@ -1163,13 +1173,20 @@ exports.publicFileList = onCall(FILE_OPTS, async (req) => {
     `https://api.github.com/repos/${GH_REPO}/contents/${GH_DIR}?ref=${GH_BRANCH}`,
     { headers: ghHeaders() }
   );
-  if (res.status === 404) return { files: [] };      // 폴더가 아직 없음
+  /* 토큰 만료일 — GitHub는 파인그레인드 토큰으로 호출하면 응답 헤더로 만료일을 알려준다.
+   * 만료되면 업로드가 통째로 막히는데 지금은 막히고 나서야 알게 되므로, 목록을 부를 때
+   * 같이 받아 화면에 띄운다(추가 호출 없음). 헤더가 없으면(형식 변경·만료 없는 토큰)
+   * 조용히 생략한다 — 만료일을 모른다고 목록까지 못 쓰게 할 이유는 없다. */
+  const token = tokenExpiryOf(res);
+
+  if (res.status === 404) return { files: [], token };   // 폴더가 아직 없음
   if (!res.ok) {
     console.error("GitHub 목록 조회 실패:", res.status, await res.text());
     throw new HttpsError("unavailable", "파일 목록을 불러오지 못했습니다.");
   }
   const arr = await res.json();
   return {
+    token,
     files: (Array.isArray(arr) ? arr : [])
       .filter((f) => f.type === "file" && f.name !== "README.md")
       .map((f) => ({ name: f.name, path: `${GH_DIR}/${f.name}`, size: f.size || 0, sha: f.sha }))

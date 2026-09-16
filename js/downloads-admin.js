@@ -25,6 +25,7 @@ const $ = (id) => document.getElementById(id);
 
 let list = [];
 let files = [];          // files/ 폴더의 실제 파일 목록(함수로 조회)
+let token = null;        // 저장소 쓰기 토큰의 만료일(함수가 GitHub 응답 헤더에서 받아 전달)
 let editingId = null;
 
 export function initDownloadsAdmin() {
@@ -64,9 +65,12 @@ async function loadFiles(manual = false) {
   const box = $("dl-files");
   box.innerHTML = `<p class="empty">파일 목록을 불러오는 중…</p>`;
   try {
-    files = (await callFn("publicFileList")())?.data?.files || [];
+    const d = (await callFn("publicFileList")())?.data || {};
+    files = d.files || [];
+    token = d.token || null;
   } catch (e) {
     files = [];
+    token = null;
     box.innerHTML = `<p class="empty">파일 목록을 불러오지 못했습니다. ${esc(e.message || "")}</p>`;
     if (manual) alert("파일 목록을 불러오지 못했습니다: " + (e.message || e));
     return;
@@ -74,14 +78,45 @@ async function loadFiles(manual = false) {
   paintFiles();
 }
 
+/* 토큰 만료 안내 — 만료되면 업로드·삭제가 통째로 막힌다.
+ * 평소에는 한 줄로만 알리고, 30일 이내로 남으면 갱신 방법까지 펼쳐 보여준다. */
+function tokenHtml() {
+  if (!token) return "";
+  const d = token.daysLeft;
+  if (!Number.isFinite(d)) {
+    return `<p class="hint">파일 저장소 토큰 만료: ${esc(token.raw)}</p>`;
+  }
+  const when = new Date(token.atMs).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
+  if (d > 30) {
+    return `<p class="hint">파일 저장소 토큰 만료: <b>${esc(when)}</b> (${d}일 남음)</p>`;
+  }
+  const gone = d < 0;
+  return `<div class="notice-warn">
+    <p style="margin:0 0 0.4rem"><b>${gone
+      ? `파일 저장소 토큰이 만료되었습니다(${esc(when)}).`
+      : `파일 저장소 토큰이 ${d}일 뒤 만료됩니다(${esc(when)}).`}</b>
+      ${gone ? "지금은 파일을 올리거나 지울 수 없습니다." : "만료되면 파일을 올리거나 지울 수 없게 됩니다."}
+      코드 배포 없이 토큰만 새로 넣으면 됩니다.</p>
+    <ol style="margin:0;padding-left:1.2rem">
+      <li>GitHub → Settings → Developer settings → <b>Fine-grained tokens</b> → 기존 토큰의 <b>Regenerate</b>
+        (또는 새로 발급: 저장소는 <code>IsaacAstc/lms</code> 하나만, 권한은 <b>Contents: Read and write</b>)</li>
+      <li><a href="https://shell.cloud.google.com" target="_blank" rel="noopener">Google Cloud Shell</a>에서 두 기관 모두 실행:
+        <br><code>firebase functions:secrets:set GH_FILES_TOKEN --project astc-lms</code>
+        <br><code>firebase functions:secrets:set GH_FILES_TOKEN --project kacpilot-eaeeb</code>
+        <br>값을 물으면 토큰을 붙여넣고 엔터(<b>화면에 안 보이는 것이 정상</b>)</li>
+      <li>이 화면을 새로고침해 만료일이 바뀌었는지 확인</li>
+    </ol>
+  </div>`;
+}
+
 function paintFiles() {
   const box = $("dl-files");
   if (!files.length) {
-    box.innerHTML = `<p class="empty">올라간 파일이 없습니다. 위에서 파일을 선택해 올리세요.</p>`;
+    box.innerHTML = `${tokenHtml()}<p class="empty">올라간 파일이 없습니다. 위에서 파일을 선택해 올리세요.</p>`;
     return;
   }
   const used = new Set(list.map((d) => d.path));
-  box.innerHTML = `<div class="table-wrap"><table>
+  box.innerHTML = `${tokenHtml()}<div class="table-wrap"><table>
     <thead><tr><th>파일</th><th>크기</th><th>목록 등록</th><th></th></tr></thead>
     <tbody>${files.map((f) => `<tr>
       <td><code>${esc(f.path)}</code></td>
