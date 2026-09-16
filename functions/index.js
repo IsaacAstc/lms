@@ -998,6 +998,53 @@ exports.namedSurveyStats = onCall(NAMED_OPTS, async (req) => {
   };
 });
 
+/* 마스터 관리자 확인(부트스트랩 계정 또는 admins 문서의 role === 'master').
+ * firestore.rules의 isMaster()와 같은 기준. */
+async function requireNamedMaster(req) {
+  const email = await requireNamedTab(req);
+  if (BOOTSTRAP_ADMINS.includes(email)) return email;
+  const snap = await db.doc(`admins/${email}`).get();
+  if ((snap.data() || {}).role !== "master") {
+    throw new HttpsError("permission-denied", "집계 초기화는 마스터 관리자만 할 수 있습니다.");
+  }
+  return email;
+}
+
+/* 집계 초기화 — 오픈 전 테스트 응답이 실제 집계에 섞였을 때 되돌린다.
+ * 집계 수치(namedAggregates)와 응답자 표시(namedRespondents)를 함께 지운다.
+ * 표시를 남겨두면 그 사람이 나중에 진짜로 응답할 때 중복으로 잡힌다.
+ *
+ * ⚠ 되돌릴 수 없고, 실제 응답이 들어온 뒤에 쓰면 그 수치까지 사라진다.
+ *   응답 원문은 담당자 메일함에만 있으므로 여기서 지워지지 않는다(메일은 따로 삭제).
+ *   응답자 표시는 가명정보라 삭제 사실을 접속기록에 남긴다.
+ *   되돌릴 수 없고 실제 수치까지 날릴 수 있는 조작이라 마스터만 쓸 수 있다. */
+exports.namedStatsReset = onCall(NAMED_OPTS, async (req) => {
+  const account = await requireNamedMaster(req);
+  const surveyId = str(req.data?.surveyId, 100, "조사 ID", true);
+  const reason = str(req.data?.reason, 200, "사유", true);
+
+  await db.collection(NAMED_AGG).doc(surveyId).delete();
+
+  // 표시가 많을 수 있어 나눠 지운다. 한 번에 다 못 지우면 남은 수를 돌려준다.
+  let marks = 0;
+  for (let round = 0; round < 10; round++) {
+    const snap = await db.collection(NAMED_MARK).where("surveyId", "==", surveyId).limit(400).get();
+    if (snap.empty) break;
+    const batch = db.batch();
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    marks += snap.size;
+    if (snap.size < 400) break;
+  }
+  const rest = await db.collection(NAMED_MARK).where("surveyId", "==", surveyId).limit(1).get();
+
+  await writeAccessLog({
+    account, ip: ipOf(req), op: "집계 초기화", surveyId,
+    count: marks, reason: `${reason} (응답자 표시 ${marks}건 삭제)`,
+  });
+  return { marks, remaining: !rest.empty };
+});
+
 // 월 1회 점검 기록. 점검 자체도 기록으로 남겨 이행 여부를 확인할 수 있게 한다.
 exports.namedAccessReview = onCall(NAMED_OPTS, async (req) => {
   const account = await requireNamedTab(req);

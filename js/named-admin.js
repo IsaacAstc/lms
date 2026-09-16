@@ -9,7 +9,7 @@
 //    조회·내보내기·파기를 서버 함수로만 수행해 취급자 접속기록(accessLogs)으로 남긴다.
 //  · 응답자 정보(성명·휴대전화 뒷 4자리)도 메일에만 있다. 중복 응답은 허용하되,
 //    집계가 부풀지 않도록 몇 건이 중복인지만 해시로 세어 둔다(원문은 남기지 않는다).
-import { escapeHtml } from "./app.js";
+import { escapeHtml, isMasterMode } from "./app.js";
 import { orgQuery } from "./orgs.js";
 import { watchCollection, onCollection, addItem, updateItem, removeItem, setDocById, getDocById } from "./store.js";
 import {
@@ -523,6 +523,10 @@ async function showResponses(surveyId) {
     <p class="hint">응답 원문은 <b>시스템에 저장하지 않고 담당자 이메일로만</b> 전달합니다. 시스템에는 아래 <b>합계 수치</b>와,
       중복 여부만 가리기 위한 <b>되돌릴 수 없는 응답자 표시(해시)</b>가 남습니다. 표시에는 성명·연락처가 들어 있지 않고 응답 내용과도 연결되지 않습니다.</p>
     ${statsHtml(stats)}
+    ${isMasterMode() ? `<div class="form-actions">
+      <button type="button" class="del" id="nm-stats-reset">집계 초기화</button>
+      <span class="hint">오픈 전 테스트 응답이 집계에 섞였을 때 사용합니다. 되돌릴 수 없습니다.</span>
+    </div>` : `<p class="hint">집계 초기화는 마스터 관리자만 할 수 있습니다.</p>`}
     <h3>보관 중인 과거 응답 ${rows.length}건</h3>
     <p class="hint">아래는 <b>이전 방식으로 저장된 응답</b>입니다. 지금은 새 응답이 저장되지 않으므로 늘어나지 않으며, 파기하면 목록이 비워집니다. 응답에는 응답자 식별자가 붙어 있지 않습니다.</p>
     <p class="hint">이 화면의 <b>조회·내보내기·파기는 모두 접속기록으로 남습니다</b>(계정·일시·접속지·건수). 내보내기는 사유 입력이 필요합니다.</p>
@@ -548,6 +552,7 @@ async function showResponses(surveyId) {
       </tr>`).join("")}</tbody></table></div>` : `<p class="empty">아직 응답이 없습니다.</p>`}`;
 
   box.querySelectorAll("[data-rdel]").forEach((b) => b.addEventListener("click", () => purgeIds(surveyId, [b.dataset.rdel], "건별 파기")));
+  $("nm-stats-reset")?.addEventListener("click", () => resetStats(surveyId, s?.title || surveyId, stats));
   $("nm-resp-csv").addEventListener("click", exportCsv);
   $("nm-resp-purge").addEventListener("click", () => purgeRange(surveyId));
   $("nm-resp-close").addEventListener("click", () => {
@@ -641,6 +646,32 @@ async function exportCsv() {
   a.download = `${title}_응답.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+/* 집계 초기화 — 오픈 전 테스트 응답이 실제 집계에 섞였을 때 되돌린다.
+ * 응답 원문은 담당자 메일함에만 있으므로 여기서 지워지지 않는다(메일은 따로 삭제해야 한다). */
+async function resetStats(surveyId, title, stats) {
+  const n = stats?.count || 0;
+  if (!confirm(`"${title}"의 집계를 0으로 되돌립니다.\n\n`
+    + (n ? `현재 제출 ${n}건이 집계돼 있습니다. 실제 응답이 섞여 있다면 그 수치도 함께 사라집니다.\n\n` : "")
+    + `중복 판정에 쓰는 응답자 표시도 함께 지웁니다(안 지우면 그분이 다시 응답할 때 중복으로 잡힙니다).\n`
+    + `응답 원문은 담당자 메일함에 그대로 남습니다 — 테스트 메일은 따로 지우세요.\n\n`
+    + `되돌릴 수 없습니다. 계속할까요?`)) return;
+  const why = prompt("초기화 사유를 입력하세요. 접속기록에 함께 남습니다.", "오픈 전 테스트 응답 정리");
+  if (why == null) return;
+  if (!why.trim()) return alert("사유를 입력하세요.");
+  const btn = $("nm-stats-reset");
+  btn.disabled = true;
+  try {
+    const res = await callFn("namedStatsReset")({ surveyId, reason: why.trim() });
+    const d = res?.data || {};
+    alert(`집계를 초기화했습니다. (응답자 표시 ${d.marks || 0}건 삭제)`
+      + (d.remaining ? "\n\n표시가 많아 일부가 남았습니다. 한 번 더 실행해 주세요." : ""));
+    showResponses(surveyId);
+  } catch (e) {
+    alert("초기화 실패: " + (e.message || e));
+  }
+  btn.disabled = false;
 }
 
 async function purgeIds(surveyId, ids, reason, range) {
