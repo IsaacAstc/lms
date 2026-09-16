@@ -71,6 +71,7 @@ function blankSurvey() {
       declineNote: "동의하지 않으셔도 설문에 응답하실 수 있으며, 경품 이벤트 응모만 제외됩니다.",
     },
     prizeNotice: { text: "", img: "" },
+    doneTitle: "",      // 비우면 named.js의 기본 문구를 쓴다
     doneNotice: "",
     questions: [],
     optItems: [],
@@ -179,6 +180,7 @@ function paintEditor() {
 
   $("nm-prize-text").value = d.prizeNotice?.text || "";
   $("nm-prize-img").value = d.prizeNotice?.img || "";
+  $("nm-done-title").value = d.doneTitle || "";
   $("nm-done").value = d.doneNotice || "";
   $("nm-main-label").value = d.purposeMain.label || "";
   $("nm-main-items").value = d.purposeMain.items || "";
@@ -353,6 +355,7 @@ function readEditor() {
     status: $("nm-status").value,
     // 경품 안내(문항 화면 제목 아래)와 완료 화면 추가 안내. 비우면 화면에 나오지 않는다.
     prizeNotice: { text: $("nm-prize-text").value.trim(), img: $("nm-prize-img").value.trim() },
+    doneTitle: $("nm-done-title").value.trim(),
     doneNotice: $("nm-done").value.trim(),
     openMs: localToMs($("nm-open").value),
     closeMs: localToMs($("nm-close").value),
