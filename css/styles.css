@@ -739,3 +739,12 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
 .stat-fold { margin-top: 0.6rem; }
 .stat-fold > summary { cursor: pointer; font-size: 0.8rem; color: var(--muted); }
 .stat-fold table { margin-top: 0.4rem; }
+
+/* 되돌릴 수 없는 조작은 접어 둔다 — 자주 쓰지 않는데 잘못 눌리면 복구가 안 된다.
+   펼쳐야 버튼이 나오므로 클릭 한 번으로는 실행되지 않는다. */
+.danger-fold { margin: 1.2rem 0 0; }
+.danger-fold > summary { cursor: pointer; font-size: 0.85rem; color: var(--danger); font-weight: 600; }
+.danger-fold[open] {
+  border: 1px solid #e8c4bf; border-radius: 8px; background: #fdf5f4;
+  padding: 0.7rem 0.9rem;
+}
