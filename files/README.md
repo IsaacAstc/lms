@@ -39,6 +39,32 @@ GitHub Pages가 이 폴더를 그대로 서빙하므로, 여기 올린 파일은
 - 저장소 전체가 커지면 clone·배포가 느려집니다. 총합 **1GB 이내**를 권장합니다.
 - 영상처럼 큰 파일은 여기 두지 말고 별도 서비스를 쓰세요.
 
+## 토큰 갱신 (1년에 한 번)
+
+관리자 화면에서 파일을 올리고 지우는 기능은 GitHub 토큰으로 동작합니다.
+이 토큰은 **유효기간이 있고, 만료되면 업로드·삭제가 막힙니다**(다운로드는 계속 됩니다).
+
+만료 30일 전부터 자료실 화면 '올라간 파일' 위에 경고와 함께 갱신 방법이 표시됩니다.
+
+**갱신은 코드 배포 없이 토큰만 새로 넣으면 끝납니다.**
+
+1. GitHub → Settings → Developer settings → **Fine-grained tokens**
+   → 기존 토큰의 **Regenerate** (또는 새로 발급 — 저장소는 `IsaacAstc/lms` 하나만,
+   권한은 **Contents: Read and write**)
+2. [Google Cloud Shell](https://shell.cloud.google.com)에서 **두 기관 모두** 실행
+
+   ```
+   firebase functions:secrets:set GH_FILES_TOKEN --project astc-lms
+   firebase functions:secrets:set GH_FILES_TOKEN --project kacpilot-eaeeb
+   ```
+
+   값을 물으면 토큰을 붙여넣고 엔터. **입력해도 화면에 글자가 안 보이는 것이 정상**입니다.
+   (붙여넣기가 안 되면 `Ctrl+Shift+V` 또는 마우스 우클릭 → 붙여넣기)
+3. 자료실 화면을 새로고침해 만료일이 바뀌었는지 확인
+
+> 한쪽 기관만 갱신하면 그 기관에서만 동작합니다. 두 명령을 모두 실행하세요.
+> 함수 재배포는 필요 없습니다 — Secret Manager의 새 버전을 함수가 자동으로 집어갑니다.
+
 ## 지울 때
 
 자료 목록에서 지우는 것과 파일을 지우는 것은 **다릅니다.**
