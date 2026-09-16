@@ -1089,9 +1089,22 @@ exports.namedResponsesCount = onCall(NAMED_OPTS, async (req) => {
  * ================================================================ */
 const GH_FILES_TOKEN = defineSecret("GH_FILES_TOKEN");
 const GH_REPO = "IsaacAstc/lms";          // 파일을 두는 저장소
-const GH_DIR = "files";                   // 그 안의 폴더
 const GH_BRANCH = "main";
 const FILE_MAX_BYTES = 8 * 1024 * 1024;   // 8MB — 더 큰 파일은 GitHub 웹에서 직접 올린다
+
+/* 다룰 수 있는 폴더. 여기 없는 값은 받지 않는다 — 경로를 그대로 믿으면
+ * 저장소 어디든 쓸 수 있게 된다(코드·워크플로 포함).
+ *  · files  — 공개 자료실. 자료실 탭 권한.
+ *  · media  — 퀴즈 동영상. 퀴즈 편집은 관리자면 되므로 탭을 따로 두지 않는다. */
+const GH_DIRS = {
+  files: { tab: "downloads", label: "자료실" },
+  media: { tab: null, label: "퀴즈 미디어" },
+};
+function dirOf(v) {
+  const d = String(v || "files");
+  if (!Object.prototype.hasOwnProperty.call(GH_DIRS, d)) bad("잘못된 대상 폴더입니다.");
+  return d;
+}
 
 /* 같은 출처(오리진)에서 실행될 수 있는 형식은 받지 않는다.
  * 자료실은 관리자 화면과 같은 도메인이라, html·js·svg를 올리면 그 페이지의 스크립트가
@@ -1099,7 +1112,26 @@ const FILE_MAX_BYTES = 8 * 1024 * 1024;   // 8MB — 더 큰 파일은 GitHub �
 const FILE_EXT_OK = new Set([
   "pdf", "hwp", "hwpx", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
   "txt", "csv", "zip", "png", "jpg", "jpeg", "gif", "webp", "mp4", "mp3",
+  "webm",
 ]);
+
+/* 폴더별 권한 확인. media 는 탭 지정 없이 관리자면 되고, files 는 자료실 탭이 필요하다. */
+async function requireDir(req, dir) {
+  return GH_DIRS[dir].tab === "downloads" ? requireDownloadsTab(req) : requireAnyAdmin(req);
+}
+
+// 관리자면 충분한 경우(참관자 제외).
+async function requireAnyAdmin(req) {
+  const email = String(req.auth?.token?.email || "").toLowerCase();
+  if (!email) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  if (BOOTSTRAP_ADMINS.includes(email)) return email;
+  const snap = await db.doc(`admins/${email}`).get();
+  if (!snap.exists) throw new HttpsError("permission-denied", "관리자만 사용할 수 있습니다.");
+  if ((snap.data() || {}).role === "observer") {
+    throw new HttpsError("permission-denied", "참관자 계정은 파일을 올리거나 지울 수 없습니다.");
+  }
+  return email;
+}
 
 // 자료실 권한 확인(관리자 + 'downloads' 탭). 참관자는 제외.
 async function requireDownloadsTab(req) {
@@ -1168,9 +1200,10 @@ const FILE_OPTS = {
 
 // files/ 폴더의 파일 목록. 관리자 화면에서 경로를 고르게 하기 위한 것.
 exports.publicFileList = onCall(FILE_OPTS, async (req) => {
-  await requireDownloadsTab(req);
+  const dir = dirOf(req.data?.dir);
+  await requireDir(req, dir);
   const res = await fetch(
-    `https://api.github.com/repos/${GH_REPO}/contents/${GH_DIR}?ref=${GH_BRANCH}`,
+    `https://api.github.com/repos/${GH_REPO}/contents/${dir}?ref=${GH_BRANCH}`,
     { headers: ghHeaders() }
   );
   /* 토큰 만료일 — GitHub는 파인그레인드 토큰으로 호출하면 응답 헤더로 만료일을 알려준다.
@@ -1189,14 +1222,15 @@ exports.publicFileList = onCall(FILE_OPTS, async (req) => {
     token,
     files: (Array.isArray(arr) ? arr : [])
       .filter((f) => f.type === "file" && f.name !== "README.md")
-      .map((f) => ({ name: f.name, path: `${GH_DIR}/${f.name}`, size: f.size || 0, sha: f.sha }))
+      .map((f) => ({ name: f.name, path: `${dir}/${f.name}`, size: f.size || 0, sha: f.sha }))
       .sort((a, b) => a.name.localeCompare(b.name, "ko")),
   };
 });
 
 // files/ 에 파일 올리기(= 저장소에 커밋). 같은 이름이 있으면 덮어쓴다.
 exports.publicFileUpload = onCall(FILE_OPTS, async (req) => {
-  const email = await requireDownloadsTab(req);
+  const dir = dirOf(req.data?.dir);
+  const email = await requireDir(req, dir);
   const name = safeFileName(req.data?.name);
   const dataBase64 = String(req.data?.dataBase64 || "");
   if (!dataBase64) bad("파일 내용이 비었습니다.");
@@ -1204,7 +1238,7 @@ exports.publicFileUpload = onCall(FILE_OPTS, async (req) => {
   if (bytes > FILE_MAX_BYTES) {
     bad(`파일은 ${Math.floor(FILE_MAX_BYTES / 1024 / 1024)}MB 이하만 올릴 수 있습니다. 더 큰 파일은 GitHub에서 직접 올리세요.`);
   }
-  const path = `${GH_DIR}/${name}`;
+  const path = `${dir}/${name}`;
   const url = `https://api.github.com/repos/${GH_REPO}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}`;
 
   // 덮어쓰기는 기존 파일의 sha가 있어야 한다(없으면 신규 생성).
@@ -1216,7 +1250,7 @@ exports.publicFileUpload = onCall(FILE_OPTS, async (req) => {
     method: "PUT",
     headers: { ...ghHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify({
-      message: `자료실 파일 ${sha ? "교체" : "추가"}: ${name}`,
+      message: `${GH_DIRS[dir].label} 파일 ${sha ? "교체" : "추가"}: ${name}`,
       content: dataBase64,
       branch: GH_BRANCH,
       ...(sha ? { sha } : {}),
@@ -1230,17 +1264,18 @@ exports.publicFileUpload = onCall(FILE_OPTS, async (req) => {
     }
     throw new HttpsError("unavailable", "파일을 올리지 못했습니다. 잠시 후 다시 시도해 주세요.");
   }
-  console.log(`자료실 업로드: ${path} (${bytes}B) by ${email}`);
+  console.log(`${GH_DIRS[dir].label} 업로드: ${path} (${bytes}B) by ${email}`);
   return { path, name, size: bytes, replaced: !!sha };
 });
 
 // files/ 에서 파일 지우기(= 저장소에서 삭제 커밋).
 // git 이력에는 남으므로 '더는 주소로 받을 수 없게 하는' 조치임을 화면에서 안내한다.
 exports.publicFileDelete = onCall(FILE_OPTS, async (req) => {
-  const email = await requireDownloadsTab(req);
+  const dir = dirOf(req.data?.dir);
+  const email = await requireDir(req, dir);
   const name = String(req.data?.name || "").replace(/^.*[\\/]/, "");
   if (!name || name === "README.md") bad("지울 파일명을 확인하세요.");
-  const path = `${GH_DIR}/${name}`;
+  const path = `${dir}/${name}`;
   const url = `https://api.github.com/repos/${GH_REPO}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}`;
 
   const cur = await fetch(`${url}?ref=${GH_BRANCH}`, { headers: ghHeaders() });
@@ -1251,12 +1286,12 @@ exports.publicFileDelete = onCall(FILE_OPTS, async (req) => {
   const res = await fetch(url, {
     method: "DELETE",
     headers: { ...ghHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ message: `자료실 파일 삭제: ${name}`, sha, branch: GH_BRANCH }),
+    body: JSON.stringify({ message: `${GH_DIRS[dir].label} 파일 삭제: ${name}`, sha, branch: GH_BRANCH }),
   });
   if (!res.ok) {
     console.error("GitHub 삭제 실패:", res.status, await res.text());
     throw new HttpsError("unavailable", "파일을 지우지 못했습니다.");
   }
-  console.log(`자료실 삭제: ${path} by ${email}`);
+  console.log(`${GH_DIRS[dir].label} 삭제: ${path} by ${email}`);
   return { deleted: true };
 });
