@@ -523,10 +523,13 @@ async function showResponses(surveyId) {
     <p class="hint">응답 원문은 <b>시스템에 저장하지 않고 담당자 이메일로만</b> 전달합니다. 시스템에는 아래 <b>합계 수치</b>와,
       중복 여부만 가리기 위한 <b>되돌릴 수 없는 응답자 표시(해시)</b>가 남습니다. 표시에는 성명·연락처가 들어 있지 않고 응답 내용과도 연결되지 않습니다.</p>
     ${statsHtml(stats)}
-    ${isMasterMode() ? `<div class="form-actions">
-      <button type="button" class="del" id="nm-stats-reset">집계 초기화</button>
-      <span class="hint">오픈 전 테스트 응답이 집계에 섞였을 때 사용합니다. 되돌릴 수 없습니다.</span>
-    </div>` : `<p class="hint">집계 초기화는 마스터 관리자만 할 수 있습니다.</p>`}
+    ${isMasterMode() ? `<details class="danger-fold">
+      <summary>집계 초기화</summary>
+      <p class="hint" style="margin:0.5rem 0">오픈 전 테스트 응답이 집계에 섞였을 때만 사용합니다.
+        집계 수치와 응답자 표시를 함께 지우며 <b>되돌릴 수 없습니다.</b>
+        응답 원문은 담당자 메일함에 남으므로 따로 지워야 합니다.</p>
+      <button type="button" class="del" id="nm-stats-reset">집계 초기화 실행</button>
+    </details>` : `<p class="hint">집계 초기화는 마스터 관리자만 할 수 있습니다.</p>`}
     <h3>보관 중인 과거 응답 ${rows.length}건</h3>
     <p class="hint">아래는 <b>이전 방식으로 저장된 응답</b>입니다. 지금은 새 응답이 저장되지 않으므로 늘어나지 않으며, 파기하면 목록이 비워집니다. 응답에는 응답자 식별자가 붙어 있지 않습니다.</p>
     <p class="hint">이 화면의 <b>조회·내보내기·파기는 모두 접속기록으로 남습니다</b>(계정·일시·접속지·건수). 내보내기는 사유 입력이 필요합니다.</p>
