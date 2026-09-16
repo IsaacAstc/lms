@@ -585,33 +585,90 @@ function statsHtml(st) {
   out.push(`<p class="hint">아래 문항별 건수는 <b>제출 기준</b>이라 중복이 포함됩니다. 확정 수치가 필요하면
     메일 제목의 <code>성명(뒷 4자리)</code>로 중복을 걸러 산출하세요.</p>`);
   for (const [label, v] of Object.entries(st.ox || {})) {
-    const yes = v.yes || 0;
-    const no = v.no || 0;
-    const sum = yes + no;
-    out.push(`<p class="hint" style="margin-bottom:0.2rem"><b>${esc(label)}</b> — 응답 ${sum}건</p>
-      <table><thead><tr><th>답변</th><th>건수</th><th>비율</th></tr></thead><tbody>
-        <tr><td>예</td><td style="text-align:right">${yes}</td><td style="text-align:right">${sum ? ((yes / sum) * 100).toFixed(1) + "%" : "-"}</td></tr>
-        <tr><td>아니오</td><td style="text-align:right">${no}</td><td style="text-align:right">${sum ? ((no / sum) * 100).toFixed(1) + "%" : "-"}</td></tr>
-      </tbody></table>`);
+    out.push(oxChart(label, v.yes || 0, v.no || 0));
   }
   for (const [label, months] of Object.entries(st.months || {})) {
-    const keys = Object.keys(months).sort();
-    if (!keys.length) continue;
-    // 최초~최종 사이 빈 달도 0건으로 채워, 응답이 없던 달이 표에서 드러나게 한다.
-    const all = [];
-    let [y, m] = keys[0].split("-").map(Number);
-    const [ey, em] = keys[keys.length - 1].split("-").map(Number);
-    while (y < ey || (y === ey && m <= em)) {
-      all.push(`${y}-${String(m).padStart(2, "0")}`);
-      if (++m > 12) { m = 1; y++; }
-    }
-    const sum = keys.reduce((t, k) => t + (months[k] || 0), 0);
-    out.push(`<p class="hint" style="margin-bottom:0.2rem"><b>${esc(label)}</b> — 응답 ${sum}건 (월별)</p>
-      <table><thead><tr><th>월</th><th>건수</th><th>전체 대비</th></tr></thead><tbody>${
-        all.map((k) => `<tr><td>${esc(k)}</td><td style="text-align:right">${months[k] || 0}</td><td style="text-align:right">${pct(months[k] || 0)}</td></tr>`).join("")
-      }</tbody></table>`);
+    out.push(monthChart(label, months, n));
   }
   return out.join("");
+}
+
+/* ── 집계 그래프 ──
+ * 표는 숫자를 세는 데는 정확하지만 한눈에 읽히지 않는다. 그래프를 먼저 보여 주고
+ * 정확한 수치가 필요할 때만 표를 펼치게 한다.
+ *
+ * 색은 브랜드 남색(--primary) 하나에 회색을 더한 '강조형'이다. 서로 다른 계열 색을
+ * 여럿 쓰는 방식(카테고리 팔레트)이 아니라, 주목할 값만 색을 갖고 나머지는 물러난다.
+ * 두 색의 구분도는 색각 이상에서도 충분하고(ΔE 23.7), 막대마다 값을 직접 붙여
+ * 색만으로 뜻이 갈리지 않게 했다. */
+
+// 접을 수 있는 수치표. 그래프 아래에 닫힌 채로 둔다.
+function foldTable(head, rows) {
+  return `<details class="stat-fold">
+    <summary>수치로 보기</summary>
+    <table><thead><tr>${head.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map((r) => `<tr>${r.map((c, i) =>
+        `<td${i ? ` style="text-align:right"` : ""}>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody>
+    </table>
+  </details>`;
+}
+
+const pct1 = (v, t) => (t ? ((v / t) * 100).toFixed(1) : "0.0");
+
+/* 예/아니오 — 비율이 요점이므로 가로 띠 하나에 두 몫을 담는다(원그래프 대신).
+ * 두 조각 사이는 테두리가 아니라 바탕색 틈으로 가른다. */
+function oxChart(label, yes, no) {
+  const sum = yes + no;
+  const yp = pct1(yes, sum);
+  return `<figure class="stat-fig">
+    <figcaption>${esc(label)} <span class="muted">— 응답 ${sum}건</span></figcaption>
+    <p class="stat-hero">${yp}<span class="unit">%</span> <span class="stat-hero-sub">예</span></p>
+    <div class="ox-bar" role="img" aria-label="예 ${yes}건 ${yp}%, 아니오 ${no}건">
+      ${yes ? `<span class="ox-yes" style="flex:${yes}"></span>` : ""}
+      ${no ? `<span class="ox-no" style="flex:${no}"></span>` : ""}
+    </div>
+    <p class="ox-key">
+      <span><i class="sw sw-yes"></i>예 ${yes}건</span>
+      <span><i class="sw sw-no"></i>아니오 ${no}건 (${pct1(no, sum)}%)</span>
+    </p>
+    ${foldTable(["답변", "건수", "비율"], [
+      ["예", String(yes), `${yp}%`],
+      ["아니오", String(no), `${pct1(no, sum)}%`],
+    ])}
+  </figure>`;
+}
+
+/* 월별 건수 — 시간 흐름이라 세로 막대로 둔다.
+ * 최초~최종 사이 빈 달도 0으로 채운다. 빠뜨리면 없던 달이 붙어 보여 추이가 왜곡된다. */
+function monthChart(label, months, total) {
+  const keys = Object.keys(months).sort();
+  if (!keys.length) return "";
+  const all = [];
+  let [y, m] = keys[0].split("-").map(Number);
+  const [ey, em] = keys[keys.length - 1].split("-").map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    all.push(`${y}-${String(m).padStart(2, "0")}`);
+    if (++m > 12) { m = 1; y++; }
+  }
+  const val = (k) => months[k] || 0;
+  const sum = keys.reduce((t, k) => t + val(k), 0);
+  const max = Math.max(...all.map(val), 1);
+  return `<figure class="stat-fig">
+    <figcaption>${esc(label)} <span class="muted">— 응답 ${sum}건 (월별)</span></figcaption>
+    <div class="col-chart" role="img" aria-label="${esc(label)} 월별 건수">
+      ${all.map((k) => {
+        const v = val(k);
+        // 값은 최고치에만 붙인다. 막대마다 숫자를 달면 읽히지 않는다.
+        return `<span class="col" title="${esc(k)} · ${v}건">
+          <span class="col-v">${v === max && v ? v : ""}</span>
+          <span class="col-bar${v ? "" : " zero"}" style="height:${Math.round((v / max) * 100)}%"></span>
+          <span class="col-x">${esc(k.slice(2).replace("-", "."))}</span>
+        </span>`;
+      }).join("")}
+    </div>
+    ${foldTable(["월", "건수", "전체 대비"], all.map((k) =>
+      [k, String(val(k)), `${pct1(val(k), total)}%`]))}
+  </figure>`;
 }
 
 // 내보내기: 사유를 받아 함수로 다시 조회한다(내려받은 내용과 기록이 일치하도록).
