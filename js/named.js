@@ -14,6 +14,9 @@ import { db, app } from "./firebase.js";
 const root = document.getElementById("named-root");
 const PHOTO_MAX_DIM = 1600;
 
+// 완료 화면 제목 기본값 — 관리자가 doneTitle을 비워 두면 이 문구를 쓴다.
+const DONE_TITLE_DEFAULT = "응답이 접수되었습니다.\n조사에 참여해 주셔서 진심으로 감사드립니다.";
+
 // 휴대전화 번호 검증 — 하이픈·공백은 무시한다. 서버(functions/index.js)와 같은 규칙.
 // 010 외에 011·016·017·018·019도 받는다.
 const isMobile = (v) => /^01[016789][0-9]{7,8}$/.test(String(v ?? "").replace(/[^0-9]/g, ""));
@@ -186,7 +189,7 @@ function renderForm(consentOpt) {
     </div>` : "";
 
   root.innerHTML = `
-    <h1>${esc(survey.title || "조사 참여")}</h1>
+    <h1 class="form-title">${esc(survey.title || "조사 참여")}</h1>
     ${prizeBlock(survey.prizeNotice)}
     <form id="n-form">
       <div class="q-item">
@@ -420,10 +423,11 @@ async function submit(consentOpt, optItems) {
     // 응답은 담당자 메일로 전달되고 시스템에는 집계 수치만 남는다 — 대조할 제출코드가 없다.
     // 중복 응답을 허용하므로, 다시 제출할 수 있다는 안내를 조사 정의에서 받아 함께 보여준다.
     const done = (survey.doneNotice || "").trim();
-    msg(`<div class="done-head">
-        <p class="done-title">응답이 접수되었습니다.</p>
-        <p class="done-thanks">조사에 참여해 주셔서 진심으로 감사드립니다.</p>
-      </div>
+    // 줄바꿈마다 한 줄씩. 첫 줄이 가장 크고, 나머지 줄은 조금 작게 이어 붙인다.
+    const lines = (survey.doneTitle || "").trim() || DONE_TITLE_DEFAULT;
+    const head = lines.split(/\n+/).map((t, i) =>
+      `<p class="${i === 0 ? "done-title" : "done-thanks"}">${emph(t)}</p>`).join("");
+    msg(`<div class="done-head">${head}</div>
       ${done ? `<div class="done-notice">${emph(done)}</div>` : ""}`);
   } catch (e) {
     btn.disabled = false;

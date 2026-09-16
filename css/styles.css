@@ -241,6 +241,21 @@ small.hint { display: block; }
 .survey-box { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; }
 .survey-box h1 { font-size: 1.3rem; }
 .survey-box h2 { font-size: 1.05rem; margin: 1.5rem 0 0.75rem; border-bottom: 2px solid var(--primary); padding-bottom: 0.3rem; }
+
+/* 문항 화면(기명 조사)의 제목 — 응답자가 무슨 조사인지 먼저 알아보도록 크게 둔다.
+ * 동의 화면과 익명 설문의 제목은 종전 크기 그대로다(.survey-box h1). */
+.survey-box h1.form-title { font-size: 2.6rem; line-height: 1.25; word-break: keep-all; }
+/* 선택 목적 영역 제목 — 문항 화면 제목과 같은 크기로 맞추고,
+ * 구분선을 제목 아래가 아니라 위에 둬서 '여기서부터 새 영역'임을 나타낸다. */
+#opt-block h2 {
+  font-size: 2.6rem; line-height: 1.25; word-break: keep-all;
+  margin: 2.2rem 0 0.9rem;
+  border-bottom: 0; border-top: 2px solid var(--primary);
+  padding-bottom: 0; padding-top: 1.1rem;
+}
+@media (max-width: 640px) {
+  .survey-box h1.form-title, #opt-block h2 { font-size: 1.7rem; }
+}
 .q-item { margin-bottom: 1rem; }
 /* 설문 중간 안내 문구(응답 입력 없는 note 유형) */
 .survey-note {
