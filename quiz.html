@@ -60,11 +60,13 @@
   .btn-sm.primary { background: var(--purple); color: #fff; }
   .btn-sm.danger { background: #fdecee; color: var(--red); }
 
-  input[type=text], input[type=number], select {
+  input[type=text], input[type=number], select, textarea {
     width: 100%; padding: 12px; font-size: 16px; border: 2px solid #ccc; border-radius: var(--radius);
     font-family: inherit; outline: none;
   }
-  input:focus, select:focus { border-color: var(--purple); }
+  input:focus, select:focus, textarea:focus { border-color: var(--purple); }
+  /* 여러 줄 입력은 세로로만 늘린다 — 가로로 끌면 옆 칸과 어긋난다. */
+  textarea { resize: vertical; line-height: 1.5; }
   .field { margin-bottom: 12px; }
   .field label { display: block; font-size: 12px; font-weight: 700; color: var(--text2); margin-bottom: 5px; }
 
@@ -355,12 +357,11 @@
         <div class="field" id="ed-choices-wrap"><label id="ed-choices-label">보기 (정답에 체크 — 복수 정답 가능, 3·4번은 비우면 제외)</label>
           <div id="ed-choices"></div></div>
         <div class="field"><label for="ed-explain">해설 (선택)</label>
-          <textarea id="ed-explain" rows="2" placeholder="정답 공개 화면에 진행자·참가자 모두에게 표시됩니다. 비우면 나오지 않습니다."></textarea></div>
+          <textarea id="ed-explain" rows="4" maxlength="300" placeholder="정답 공개 화면에 진행자·참가자 모두에게 표시됩니다. 비우면 나오지 않습니다."></textarea></div>
         <div class="field" id="ed-accepted-wrap" style="display:none;"><label>허용 답안 (쉼표로 구분 — 대소문자·공백 무시 비교)</label>
           <input type="text" id="ed-accepted" placeholder="예: 서울, 서울특별시"></div>
         <div class="field" id="ed-body-wrap" style="display:none;"><label>본문 (미디어 아래에 표시)</label>
-          <textarea id="ed-body" rows="5" maxlength="2000" placeholder="안내 본문을 입력하세요 (줄바꿈 유지)"
-            style="width:100%;padding:12px;font-size:15px;border:2px solid #ccc;border-radius:var(--radius);font-family:inherit;"></textarea></div>
+          <textarea id="ed-body" rows="5" maxlength="2000" placeholder="안내 본문을 입력하세요 (줄바꿈 유지)"></textarea></div>
         <div class="q-actions">
           <button class="btn-sm" id="btn-q-dup">⧉ 문제 복제</button>
           <button class="btn-sm" id="btn-q-up">▲ 위로</button>
@@ -524,7 +525,7 @@ const I18N = {
     revealTitle: "정답 공개", pollResult: "투표 결과", noAnswerLabel: "(무응답)", ppl: "명",
     noResponses: "응답이 없습니다.", answerIs: "정답: ", pts: "점",
     leaderboard: "🏆 리더보드", finalResult: "🎉 최종 결과", finish: "끝내기",
-    oxLabels: ["O 맞다", "X 아니다"],
+    oxLabels: ["맞다", "아니다"],
     waitStart: "입장 완료! 게임 시작을 기다리는 중...",
     soonStart: (n) => `${n}번 문제가 곧 시작됩니다!`, watchScreen: "화면을 봐주세요!",
     typeAnswer: "답을 입력하세요", submit: "제출", pickOne: "보기를 1개 이상 선택하세요.",
@@ -550,7 +551,7 @@ const I18N = {
     revealTitle: "Answer", pollResult: "Poll Results", noAnswerLabel: "(no answer)", ppl: "",
     noResponses: "No responses.", answerIs: "Answer: ", pts: " pts",
     leaderboard: "🏆 Leaderboard", finalResult: "🎉 Final Results", finish: "Finish",
-    oxLabels: ["O True", "X False"],
+    oxLabels: ["True", "False"],
     waitStart: "You're in! Waiting for the game to start...",
     soonStart: (n) => `Question ${n} is about to start!`, watchScreen: "Look at the screen!",
     typeAnswer: "Type your answer", submit: "Submit", pickOne: "Select at least one option.",
@@ -1456,7 +1457,19 @@ function hostReveal(q) {
     });
     updates["status"] = "reveal";
     return host.ref.update(updates);
-  }).then(() => hostShowReveal(q));
+  }).catch((e) => {
+    // 점수 반영이 실패해도 진행은 막지 않는다. 멈춰 서면 진행자가 손쓸 방법이 없다.
+    console.error("정답 공개 준비 실패(점수 반영 없이 진행):", e);
+    toast("점수 반영에 실패했습니다. 네트워크를 확인하세요.");
+    return host.ref.update({ status: "reveal" }).catch(() => {});
+  }).then(() => {
+    // 여기서 실패하면 화면이 넘어가지 않는데, 잡지 않으면 원인을 알 방법이 없다.
+    try { hostShowReveal(q); }
+    catch (e) {
+      console.error("정답 공개 화면 표시 실패:", e);
+      toast("정답 공개 화면을 표시하지 못했습니다. 콘솔(F12)을 확인하세요.");
+    }
+  });
 }
 function hostShowReveal(q) {
   const isPoll = q.type === "poll";
