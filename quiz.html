@@ -1253,7 +1253,9 @@ async function hostGame(quiz) {
   // 진행용 스냅샷: 정규화 + 뒤쪽 빈 보기 제거 + (옵션) 보기 셔플(정답 인덱스 재매핑).
   const prepareForPlay = (raw) => {
     const q = normQ(raw);
-    const base = { type: q.type, text: q.text, timeLimit: q.timeLimit, points: q.points, media: q.media || null };
+    // explain을 빠뜨리면 정답 공개 화면에 해설이 안 나온다(진행 화면은 이 스냅샷만 본다).
+    const base = { type: q.type, text: q.text, timeLimit: q.timeLimit, points: q.points,
+                   media: q.media || null, explain: q.explain || "" };
     if (q.type === "slide") return { type: "slide", text: q.text, body: q.body || "", media: q.media || null };
     if (q.type === "short") return { ...base, accepted: q.accepted };
     if (q.type === "ox") return { ...base, answers: q.answers };
