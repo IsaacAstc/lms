@@ -149,6 +149,14 @@
   .board-row .rank { width: 30px; font-size: 18px; color: var(--purple); }
   .board-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .board-row .score { font-variant-numeric: tabular-nums; }
+  /* 해설 — 정답 공개 뒤에 '왜 그런가'를 덧붙인다. 내용이 없으면 자리도 차지하지 않는다. */
+  .explain-box {
+    max-width: min(720px, 92vw); margin: 12px auto 0; padding: 12px 16px;
+    background: rgba(255,255,255,0.12); border-radius: 10px;
+    font-size: 15px; line-height: 1.6; text-align: left; white-space: pre-wrap;
+    word-break: keep-all;
+  }
+  .explain-box:empty { display: none; padding: 0; margin: 0; }
   .q-media { display:flex; justify-content:center; margin:4px 0; }
   .q-media:empty { display:none; }
   .board-row.gold { background: #ffd54f; } .board-row.silver { background: #e3e6ea; } .board-row.bronze { background: #e8b98a; }
@@ -346,6 +354,8 @@
         </div>
         <div class="field" id="ed-choices-wrap"><label id="ed-choices-label">보기 (정답에 체크 — 복수 정답 가능, 3·4번은 비우면 제외)</label>
           <div id="ed-choices"></div></div>
+        <div class="field"><label for="ed-explain">해설 (선택)</label>
+          <textarea id="ed-explain" rows="2" placeholder="정답 공개 화면에 진행자·참가자 모두에게 표시됩니다. 비우면 나오지 않습니다."></textarea></div>
         <div class="field" id="ed-accepted-wrap" style="display:none;"><label>허용 답안 (쉼표로 구분 — 대소문자·공백 무시 비교)</label>
           <input type="text" id="ed-accepted" placeholder="예: 서울, 서울특별시"></div>
         <div class="field" id="ed-body-wrap" style="display:none;"><label>본문 (미디어 아래에 표시)</label>
@@ -413,6 +423,7 @@
   <div class="q-media" id="hr-media"></div>
   <div class="dist-wrap" id="hr-dist"></div>
   <div class="answer-grid" id="hr-grid" style="flex:initial;"></div>
+  <div class="explain-box" id="hr-explain"></div>
 </div>
 
 <!-- ============ 호스트: 리더보드 ============ -->
@@ -461,6 +472,7 @@
     <h2 id="pr-title">정답!</h2>
     <div class="rs-points" id="pr-points">+800점</div>
     <div style="margin-top:14px; opacity:0.85;" id="pr-rank"></div>
+    <div class="explain-box" id="pr-explain"></div>
   </div>
 </div>
 
@@ -736,7 +748,7 @@ const TIME_OPTS = [5, 10, 20, 30, 60, 90, 120];
 const POINTS_OPTS = ["standard", "double", "none"];
 function newQuestion() {
   return { type: "mc", text: "", choices: ["", "", "", ""], answers: [0], accepted: [],
-           points: "standard", shuffle: false, media: null, timeLimit: 20 };
+           points: "standard", shuffle: false, media: null, timeLimit: 20, explain: "" };
 }
 // 주관식 답 비교용 정규화: 공백 제거 + 소문자.
 function normAnswer(t) { return String(t || "").replace(/\s+/g, "").toLowerCase(); }
@@ -773,6 +785,8 @@ function normQ(x) {
       return { url: u.slice(0, 2000) };
     })(),
     body: String(x.body || "").slice(0, 2000),
+    // 해설 — 정답 공개 화면에 진행자·참가자 모두에게 보인다. 비어 있으면 표시하지 않는다.
+    explain: String(x.explain || "").slice(0, 300),
     timeLimit: TIME_OPTS.includes(x.timeLimit) ? x.timeLimit : 20,
   };
 }
@@ -944,6 +958,9 @@ function renderQuestionPanel() {
   $("ed-qtext").placeholder = isSlide ? "제목/메시지를 입력하세요 (본문·미디어만 넣을 경우 비워도 됨)" : "문제를 입력하세요";
   $("ed-body-wrap").style.display = isSlide ? "" : "none";
   if (isSlide) $("ed-body").value = q.body || "";
+  // 해설은 정답이 있는 유형에만 둔다(안내 슬라이드·투표에는 정답이 없다).
+  $("ed-explain").value = q.explain || "";
+  $("ed-explain").closest(".field").style.display = (isSlide || q.type === "poll") ? "none" : "";
   // 미디어.
   $("ed-media-url").value = q.media && !q.media.url.startsWith("data:") ? q.media.url : "";
   renderMediaPreview(q);
@@ -1085,6 +1102,7 @@ $("btn-q-dup").onclick = () => {
   renderEditor();
 };
 $("ed-qtext").oninput = e => { edQuiz.questions[edIdx].text = e.target.value; };
+$("ed-explain").oninput = e => { edQuiz.questions[edIdx].explain = e.target.value; };
 $("ed-title").oninput = e => { edQuiz.title = e.target.value; };
 $("ed-lang-en").onchange = e => { edQuiz.lang = e.target.checked ? "en" : "ko"; };
 $("btn-add-q").onclick = () => {
@@ -1445,6 +1463,7 @@ function hostShowReveal(q) {
   $("hr-progress").textContent = `${host.qIdx + 1} / ${host.quiz.questions.length} — ${isPoll ? tr("pollResult") : tr("revealTitle")}`;
   $("hr-text").textContent = q.text;
   $("hr-media").innerHTML = mediaHTML(q);
+  $("hr-explain").textContent = (q.explain || "").trim();
   const grid = $("hr-grid");
 
   if (q.type === "short") {
@@ -1763,6 +1782,7 @@ function playerShowResult(game, myScore) {
   const myRank = ranked.findIndex(p => p.name === player.name) + 1;
 
   const q = game.quiz.questions[qi];
+  $("pr-explain").textContent = (q.explain || "").trim();
   if (q.type === "poll") {
     $("pr-icon").textContent = "🗳"; $("pr-title").textContent = my ? tr("voted") : tr("noVote");
     $("pr-points").textContent = "";
