@@ -59,6 +59,7 @@
   .btn-sm { padding: 7px 14px; font-size: 13px; background: #eee; color: var(--text); }
   .btn-sm.primary { background: var(--purple); color: #fff; }
   .btn-sm.danger { background: #fdecee; color: var(--red); }
+  .btn-sm:disabled { opacity: 0.45; cursor: default; }
 
   input[type=text], input[type=number], select, textarea {
     width: 100%; padding: 12px; font-size: 16px; border: 2px solid #ccc; border-radius: var(--radius);
@@ -1223,7 +1224,9 @@ $("btn-pv-close").onclick = () => {
 /* ================================================================
  *  호스트
  * ================================================================ */
-const host = { pin: null, ref: null, quiz: null, players: {}, answers: {}, qIdx: -1, timer: null, revealed: false, unsub: [] };
+// 정답 공개 화면이 뜬 직후 이만큼은 '다음'을 받지 않는다(윗 설명 참고).
+const REVEAL_GUARD_MS = 900;
+const host = { pin: null, ref: null, quiz: null, players: {}, answers: {}, qIdx: -1, timer: null, revealed: false, unsub: [], nextGuard: null };
 
 function hostCleanup(removeGame) {
   host.unsub.forEach(fn => fn()); host.unsub = [];
@@ -1521,7 +1524,19 @@ function hostShowReveal(q) {
   }
   if (isPoll) sfx.go(); else sfx.correct();
   show("view-hr");
-  $("btn-hr-next").onclick = () => hostShowBoard();
+  /* 전원이 답하면 이 화면으로 저절로 넘어온다. 그때 진행자가 '넘어가기'를 누르려던
+   * 클릭이 같은 자리의 '다음'에 얹혀 정답 공개를 그대로 지나치는 일이 있었다.
+   * 잠깐 막아 두면 이미 날아간 클릭은 흘려보내고, 진행자가 보고 누르는 클릭만 받는다. */
+  const next = $("btn-hr-next");
+  const shownAt = Date.now();
+  next.onclick = () => {
+    // disabled 는 사람이 누르는 클릭만 막는다. 이미 날아간 클릭은 시간으로 거른다.
+    if (Date.now() - shownAt < REVEAL_GUARD_MS) return;
+    hostShowBoard();
+  };
+  next.disabled = true;
+  clearTimeout(host.nextGuard);
+  host.nextGuard = setTimeout(() => { next.disabled = false; }, REVEAL_GUARD_MS);
 }
 function rankedPlayers() {
   return Object.entries(host.players)
