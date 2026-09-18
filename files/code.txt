@@ -1,0 +1,5 @@
+setTimeout(() => console.log(
+  "class:", document.body.className,
+  "/ veil:", !!document.querySelector('div[style*="2147483647"]'),
+  "/ cursor:", getComputedStyle(document.body).cursor
+), 35000);
