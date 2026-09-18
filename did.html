@@ -360,9 +360,14 @@
     }
   }
 
+  // 관리자 화면의 '표출 화면 새로고침'이 바꾸는 값. 첫 스냅샷은 기준만 잡고 넘어간다.
+  var lastReloadAt = null;
   function applyConfig(cfg) {
     cfg = cfg || {};
     didCfg = cfg;
+    var rel = cfg.reloadAt || 0;
+    if (lastReloadAt === null) lastReloadAt = rel;
+    else if (rel > lastReloadAt) { location.reload(); return; }
     $("title").textContent = cfg.title || "";
     document.title = cfg.title || "KAC 항공보안교육센터";
     $("title").style.display = cfg.title ? "" : "none";
