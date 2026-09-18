@@ -162,6 +162,9 @@
   .explain-box:empty { display: none; padding: 0; margin: 0; }
   .q-media { display:flex; justify-content:center; margin:4px 0; }
   .q-media:empty { display:none; }
+  /* 참가자 정답 화면은 아이콘·점수·순위·해설이 이미 들어차 있어 미디어를 더 낮게 잡는다. */
+  #pr-media { margin-top: 14px; }
+  #pr-media img, #pr-media video { max-height: 24vh; }
   .board-row.gold { background: #ffd54f; } .board-row.silver { background: #e3e6ea; } .board-row.bronze { background: #e8b98a; }
 
   /* 시상대 */
@@ -474,6 +477,7 @@
     <h2 id="pr-title">정답!</h2>
     <div class="rs-points" id="pr-points">+800점</div>
     <div style="margin-top:14px; opacity:0.85;" id="pr-rank"></div>
+    <div class="q-media" id="pr-media"></div>
     <div class="explain-box" id="pr-explain"></div>
   </div>
 </div>
@@ -1812,6 +1816,8 @@ function playerShowResult(game, myScore) {
   const myRank = ranked.findIndex(p => p.name === player.name) + 1;
 
   const q = game.quiz.questions[qi];
+  // 정답 화면의 미디어는 재생하지 않는다(진행자 화면에서 이미 틀었고, 참가자 폰이 한꺼번에 소리를 내면 곤란하다).
+  $("pr-media").innerHTML = mediaHTML(q);
   $("pr-explain").textContent = (q.explain || "").trim();
   if (q.type === "poll") {
     $("pr-icon").textContent = "🗳"; $("pr-title").textContent = my ? tr("voted") : tr("noVote");
