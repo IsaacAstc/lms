@@ -281,7 +281,9 @@
       if (items[i].kind === "edu") eduItems.push(items[i].v); else rentItems.push(items[i].v);
     }
 
-    $("sec-edu").className = (edu.length > 0 && eduItems.length === 0) ? "hidden" : "";
+    // 교육 칸은 이 페이지에 교육이 없을 때 숨긴다. 단 행사도 없으면(=화면이 통째로 비면)
+    // '오늘 진행 중인 교육이 없습니다' 안내를 내보내야 하므로 남겨 둔다.
+    $("sec-edu").className = (eduItems.length === 0 && (edu.length > 0 || rentItems.length > 0)) ? "hidden" : "";
     $("sec-rent").className = rentItems.length === 0 ? "hidden" : "";
     $("edu-page").textContent = label;
     $("rent-page").textContent = eduItems.length ? "" : label;
