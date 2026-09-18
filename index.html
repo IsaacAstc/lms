@@ -880,7 +880,9 @@
             <input id="did-special-file" type="file" accept="image/*" hidden />
             <label>예약 기간 <input id="did-special-start" type="datetime-local" /> ~ <input id="did-special-end" type="datetime-local" /></label>
             <button id="did-save" type="button">DID 설정 저장</button>
+            <button id="did-reload" type="button">표출 화면 새로고침</button>
           </div>
+          <p class="hint">교육·대관 일정과 DID 설정은 <b>저장 즉시</b> 표출 화면에 반영됩니다(실시간 연동). <b>표출 화면 새로고침</b>은 TV가 오래 켜져 있어 화면이 멈췄거나, 업로드한 이미지가 배포 뒤에도 안 바뀔 때 쓰는 강제 재시작 버튼입니다 — 열려 있는 모든 DID 화면이 몇 초 안에 다시 읽힙니다.</p>
           <p class="hint">교육·대관이 모두 없는 날에는 등록된 로고(최대 2개)만 화면 중앙에 크게 표시됩니다. <b>특별일정</b>은 ① <b>즉시 켜기</b> 체크 시 바로, ② <b>예약 기간</b>을 지정하면 해당 기간(시작일~종료일, 일 단위) 동안 자동으로 지정 이미지 하나만 전체화면으로 표시됩니다(행사 배너·공지 등). 기간이 끝나면 자동으로 일반 화면에 복귀합니다.</p>
           <p class="hint">로고·배경은 <b>파일 업로드</b> 버튼으로 저장소 <code>media/</code>에 바로 올릴 수 있습니다(GitHub 토큰 1회 등록 — 퀴즈 편집기와 공유, 공개 저장소이므로 공개 가능한 이미지만 · 업로드 후 배포 1~2분 뒤 표시). 업로드가 끝나면 <b>DID 설정 저장</b>을 눌러야 반영됩니다. TV 브라우저 전체화면으로 열어두면 실시간 자동 갱신됩니다.</p>
 

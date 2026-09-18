@@ -324,6 +324,20 @@ function initDidConfig() {
       alert("DID 설정을 저장했습니다. 표출 화면에 즉시 반영됩니다.");
     } catch (e) { alert("저장 실패: " + e.message); }
   });
+  // 강제 새로고침: reloadAt만 바꿔 두면 열려 있는 DID 화면이 스냅샷을 받고 스스로 재로드한다.
+  document.getElementById("did-reload").addEventListener("click", async () => {
+    if (!confirm("열려 있는 모든 DID 표출 화면을 새로고침합니다. 진행할까요?")) return;
+    const btn = document.getElementById("did-reload");
+    btn.disabled = true;
+    try {
+      await setDoc(doc(db, "publicBoard", "__did"), { reloadAt: Date.now() }, { merge: true });
+      btn.textContent = "요청됨";
+      setTimeout(() => { btn.textContent = "표출 화면 새로고침"; btn.disabled = false; }, 5000);
+    } catch (e) {
+      alert("요청 실패: " + e.message);
+      btn.disabled = false;
+    }
+  });
 }
 async function loadDidConfig() {
   try {
