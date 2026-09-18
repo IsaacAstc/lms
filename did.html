@@ -425,8 +425,20 @@
   // 30초간 조작이 없으면 마우스 포인터를 감춘다.
   function initIdleCursor() {
     var t = null;
-    function hide() { document.body.className = "idle"; }
+    var veil = null;
+    // 마우스가 멈춰 있으면 cursor 변경이 바로 반영되지 않는 브라우저가 있다(다음 마우스
+    // 이동까지 옛 포인터가 그대로 남는다). 커서 아래에 투명 레이어를 깔아 히트 테스트를
+    // 다시 돌게 한다. pointer-events:none이라 클릭·터치는 그대로 통과한다.
+    function hide() {
+      document.body.className = "idle";
+      if (veil) return;
+      veil = document.createElement("div");
+      veil.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;"
+        + "background:transparent;pointer-events:none;cursor:none;";
+      document.body.appendChild(veil);
+    }
     function wake() {
+      if (veil) { veil.parentNode.removeChild(veil); veil = null; }
       if (document.body.className === "idle") document.body.className = "";
       clearTimeout(t);
       t = setTimeout(hide, 30000);
