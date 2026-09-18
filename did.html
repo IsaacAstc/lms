@@ -174,6 +174,14 @@
   }
 
   function $(id) { return document.getElementById(id); }
+  // 업로드 이미지는 이 저장소의 media/ 폴더에 있다. 관리자가 다른 도메인(github.io 등)에서
+  // 업로드하면 그 도메인의 절대 URL이 저장되는데, 망에 따라 그쪽이 막혀 이미지가 안 뜬다.
+  // 저장값이 무엇이든 media/<파일명>만 떼어 내 이 화면과 같은 도메인에서 불러온다.
+  function mediaSrc(u) {
+    var s = String(u || "");
+    var m = /^https?:\/\/[^/]+\/.*?(media\/[^/?#]+)$/.exec(s);
+    return m ? m[1] : s;
+  }
   function esc(s) {
     var d = document.createElement("div");
     d.textContent = s == null ? "" : String(s);
@@ -231,7 +239,7 @@
     var specialEl = $("special");
     lastSpecial = specialActive();
     if (lastSpecial) {
-      specialEl.style.backgroundImage = 'url("' + String(didCfg.specialUrl).replace(/"/g, "") + '")';
+      specialEl.style.backgroundImage = 'url("' + mediaSrc(didCfg.specialUrl).replace(/"/g, "") + '")';
       specialEl.style.display = "block";
       $("wrap").style.display = "none";
       $("idle").style.display = "none";
@@ -243,8 +251,8 @@
     // 일정 없는 날: 등록된 로고(최대 2개)만 중앙 대형 표시.
     var idleEl = $("idle");
     var logos = [];
-    if (didCfg.logoUrl) logos.push(didCfg.logoUrl);
-    if (didCfg.logoUrl2) logos.push(didCfg.logoUrl2);
+    if (didCfg.logoUrl) logos.push(mediaSrc(didCfg.logoUrl));
+    if (didCfg.logoUrl2) logos.push(mediaSrc(didCfg.logoUrl2));
     if (all.length === 0 && logos.length) {
       var ih = "";
       for (i = 0; i < logos.length; i++) {
@@ -380,11 +388,11 @@
     n.textContent = cfg.notice || "";
     n.style.display = cfg.notice ? "block" : "none";
     var logo = $("logo");
-    if (cfg.logoUrl) { logo.src = cfg.logoUrl; logo.style.display = ""; }
+    if (cfg.logoUrl) { logo.src = mediaSrc(cfg.logoUrl); logo.style.display = ""; }
     else { logo.style.display = "none"; }
     var bg = $("bg");
     if (cfg.bgUrl) {
-      bg.style.backgroundImage = 'url("' + String(cfg.bgUrl).replace(/"/g, "") + '")';
+      bg.style.backgroundImage = 'url("' + mediaSrc(cfg.bgUrl).replace(/"/g, "") + '")';
       $("bg-overlay").style.display = "block";
     } else {
       bg.style.backgroundImage = "";
