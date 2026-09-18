@@ -200,7 +200,9 @@ async function uploadDidImage(file, { maxDim, keepAlpha, prefix }) {
     throw new Error("토큰이 유효하지 않거나 권한이 없습니다. 다시 시도해 토큰을 재등록하세요.");
   }
   if (!resp.ok) throw new Error(`업로드 실패 (HTTP ${resp.status})`);
-  return `${location.origin}${location.pathname.replace(/[^/]*$/, "")}${path}`;
+  // 절대 URL로 저장하면 업로드한 도메인(github.io 등)이 박혀, 그 도메인이 막힌 망의
+  // DID에서는 이미지가 안 뜬다. 상대 경로로 저장해 표출 화면과 같은 도메인에서 받게 한다.
+  return path;
 }
 
 function wireDidUpload(btnId, fileId, inputId, opts) {
