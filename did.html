@@ -16,6 +16,8 @@
     font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
     color: #0c2a52; background: #e9eff7; overflow: hidden;
   }
+  /* TV 상시 표출: 조작이 없으면 마우스 포인터를 감춘다(움직이면 바로 돌아온다). */
+  body.idle, body.idle * { cursor: none; }
   #bg {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background-size: cover; background-position: center;
@@ -412,7 +414,23 @@
     x.send();
   }
 
+  // 30초간 조작이 없으면 마우스 포인터를 감춘다.
+  function initIdleCursor() {
+    var t = null;
+    function hide() { document.body.className = "idle"; }
+    function wake() {
+      if (document.body.className === "idle") document.body.className = "";
+      clearTimeout(t);
+      t = setTimeout(hide, 30000);
+    }
+    ["mousemove", "mousedown", "wheel", "touchstart", "keydown"].forEach(function (ev) {
+      document.addEventListener(ev, wake, { passive: true });
+    });
+    t = setTimeout(hide, 30000); // 새로고침 직후에도 30초 뒤 숨김
+  }
+
   function start(db) {
+    initIdleCursor();
     tickClock();
     setInterval(tickClock, 5000);
     checkUpdate();
