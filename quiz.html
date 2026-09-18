@@ -1009,7 +1009,7 @@ function renderQuestionPanel() {
 function renderMediaPreview(q) {
   const box = $("ed-media-prev");
   if (!q.media) { box.innerHTML = ""; return; }
-  const url = q.media.url;
+  const url = sameOriginMedia(q.media.url);
   const kind = mediaKindOf(url);
   if (kind === "youtube") box.innerHTML = `<div style="font-size:13px;">🎬 유튜브: ${esc(url.slice(0, 80))}</div>`;
   else if (kind === "video") box.innerHTML = `<div style="font-size:13px;">🎬 동영상: ${esc(url.slice(0, 80))}</div>`;
@@ -1087,7 +1087,9 @@ $("ed-media-video").onchange = async e => {
     });
     const call = firebase.app().functions("asia-northeast3").httpsCallable("publicFileUpload");
     const out = (await call({ dir: "media", name: file.name, dataBase64: b64 })).data || {};
-    const url = `${location.origin}${location.pathname.replace(/[^/]*$/, "")}${out.path}`;
+    // 절대 URL로 저장하면 업로드한 도메인(github.io 등)이 박혀, 그 도메인이 막힌 망에서는
+    // 재생되지 않는다. 상대 경로로 저장해 퀴즈 화면과 같은 도메인에서 받게 한다.
+    const url = out.path;
     const q = edQuiz.questions[edIdx];
     q.media = { url };
     $("ed-media-url").value = url;
@@ -1333,9 +1335,15 @@ function hostNextQuestion() {
     else { clearInterval(cd); sfx.go(); hostShowQuestion(q); }
   }, 900);
 }
+// 업로드 파일은 이 저장소의 media/ 폴더에 있다. 예전에 저장된 절대 URL(업로드한 도메인이
+// 박힌 값)은 그 도메인이 막힌 망에서 받아오지 못하므로, media/<파일명>만 떼어 같은 도메인에서 받는다.
+function sameOriginMedia(url) {
+  const m = /^https?:\/\/[^/]+\/.*?(media\/[^/?#]+)$/.exec(String(url || ""));
+  return m ? m[1] : String(url || "");
+}
 function mediaHTML(q, autoplay = false) {
   if (!q.media || !q.media.url) return "";
-  const url = q.media.url;
+  const url = sameOriginMedia(q.media.url);
   const kind = url.startsWith("data:") ? "image" : mediaKindOf(url);
   if (kind === "youtube") {
     const em = youtubeEmbed(url);
