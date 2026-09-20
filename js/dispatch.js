@@ -10,6 +10,7 @@ import { getInstructorById, resolveInstructorAt } from "./instructors.js";
 import { getHiddenCourseIds, coursesCache } from "./courses.js";
 import { TEACHER_KINDS } from "./constants.js";
 import { fmtDot, kstToday } from "./time.js";
+import { downloadCsv } from "./csv.js";
 
 export function initDispatch() {
   const input = document.getElementById("dispatch-month");
@@ -17,6 +18,7 @@ export function initDispatch() {
   input.value = kstToday().slice(0, 7);
   document.getElementById("dispatch-run").addEventListener("click", () => render(input.value));
   document.getElementById("dispatch-print").addEventListener("click", () => window.print());
+  document.getElementById("dispatch-csv").addEventListener("click", exportCsv);
   // 탭을 처음 열 때 이번 달을 자동으로 보여준다.
   let loaded = false;
   document.addEventListener("tabshown", (e) => {
@@ -45,12 +47,30 @@ const ymLabel = (ym) => `${ym.slice(0, 4)}년 ${Number(ym.slice(5, 7))}월`;
 
 const timeRange = (s) => (s.startTime && s.endTime ? `${s.startTime}-${s.endTime}` : (s.startTime || ""));
 
+// 화면에 그린 것과 같은 순서의 평면 행. 강사유형·강사명이 줄마다 붙어 있어야
+// 엑셀에서 걸러 쓰기 좋다(화면은 그룹 제목으로 묶여 있어 그대로 뽑으면 빠진다).
+let lastRows = [];
+let lastYm = "";
+
+function csvCell(v) {
+  const t = String(v ?? "");
+  return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+}
+
+function exportCsv() {
+  if (!lastRows.length) { alert("내보낼 데이터가 없습니다. 먼저 조회하세요."); return; }
+  const head = ["강사유형", "강사명", "소속", "일자", "시간", "과정", "과목"];
+  const csv = [head, ...lastRows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+  downloadCsv(`출강목록_${lastYm}.csv`, csv);
+}
+
 async function render(ym) {
   const box = document.getElementById("dispatch-root");
   const note = document.getElementById("dispatch-note");
   if (!/^\d{4}-\d{2}$/.test(ym || "")) { box.innerHTML = `<p class="empty">조회할 월을 선택하세요.</p>`; note.textContent = ""; return; }
   box.innerHTML = `<p class="empty">불러오는 중…</p>`;
   note.textContent = "";
+  lastRows = [];
 
   let sessions;
   try {
@@ -85,6 +105,8 @@ async function render(ym) {
   const kinds = [...TEACHER_KINDS, ...new Set(groups.map((g) => g.kind).filter((k) => !TEACHER_KINDS.includes(k)))];
   let html = "";
   let totalInst = 0, totalSessions = 0;
+  lastRows = [];
+  lastYm = ym;
   for (const kind of kinds) {
     const inKind = groups.filter((g) => g.kind === kind).sort((a, b) => a.name.localeCompare(b.name));
     if (!inKind.length) continue; // 그 달에 출강이 없는 유형은 아예 내보내지 않는다.
@@ -93,6 +115,10 @@ async function render(ym) {
       <h3>${escapeHtml(kind)} <small>${inKind.length}명</small></h3>`;
     for (const g of inKind) {
       totalSessions += g.items.length;
+      g.items.forEach((s2) => lastRows.push([
+        kind, g.name, g.affil, fmtDot(s2.date), timeRange(s2),
+        courseLabel(s2.courseId), s2.subject || "",
+      ]));
       html += `<div class="dispatch-inst">
         <h4>${escapeHtml(g.name)}${g.affil ? ` <small>${escapeHtml(g.affil)}</small>` : ""} <small>${g.items.length}건</small></h4>
         <div class="table-wrap"><table>
