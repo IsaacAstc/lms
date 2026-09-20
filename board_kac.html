@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 공사 내부용 — 주소를 아는 직원만 이용한다(검색 노출 차단). -->
+    <meta name="robots" content="noindex, nofollow" />
+    <title>항공보안교육 수강신청 (공사 내부용)</title>
+    <link rel="icon" href="favicon.ico" sizes="any" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <main class="board-main">
+      <h1 class="board-title">항공보안교육 수강신청 <span class="board-badge">공사 내부용</span></h1>
+      <p class="board-updated" id="board-updated"></p>
+      <div class="board-controls no-print">
+        <label class="board-range">기간 <input type="date" id="board-from" /></label>
+        <span class="board-range-sep">-</span>
+        <label class="board-range"><input type="date" id="board-to" /></label>
+        <button type="button" id="board-reset">기본(오늘-다음달 말일)</button>
+        <label><input type="checkbox" id="board-past" /> 지난 과정 포함</label>
+      </div>
+      <p class="board-guide no-print">기본적으로 <b>오늘부터 다음 달 말일까지</b> 진행되는 과정만 표시됩니다. 그 밖의 과정을 보려면 위에서 기간을 직접 지정하세요.</p>
+      <p class="board-hint no-print" id="board-filter-note"></p>
+      <div id="board-root"><p class="empty">현황을 불러오는 중…</p></div>
+      <section id="board-apply" class="board-apply" hidden>
+        <h2>신청 방법 안내</h2>
+        <div id="board-apply-text" class="report-narr"></div>
+      </section>
+
+      <!-- 내부 신청/취소 양식 — 공문·신청양식 첨부 없이 소속기관과 인원만 받는다. -->
+      <dialog id="apply-dialog" class="apply-dialog">
+        <form id="apply-form" method="dialog">
+          <h2 id="apply-title">교육 신청</h2>
+          <p id="apply-course" class="apply-course"></p>
+          <div id="apply-fields-apply">
+            <label>소속기관
+              <select id="apply-org"></select>
+            </label>
+            <label>신청 인원
+              <select id="apply-count"></select>
+            </label>
+          </div>
+          <div id="apply-fields-cancel" hidden>
+            <label>접수번호 <small>(신청 시 발급된 8자리)</small>
+              <input type="text" id="apply-receipt" maxlength="12" autocomplete="off" placeholder="예: A2B3C4D5" />
+            </label>
+          </div>
+          <label>제목 <small>(선택)</small>
+            <input type="text" id="apply-subject" maxlength="200" />
+          </label>
+          <label>내용 <small>(선택)</small>
+            <textarea id="apply-body" rows="3" maxlength="5000"></textarea>
+          </label>
+          <label>본인 이메일 <small>(접수 확인 메일 수신용)</small>
+            <input type="email" id="apply-email" required maxlength="254" placeholder="name@airport.co.kr" />
+          </label>
+          <p class="hint" id="apply-domain-note" hidden></p>
+          <p class="apply-privacy">입력한 이메일은 접수 메일 발송에만 사용되며 이 시스템에 저장되지 않습니다.</p>
+          <p id="apply-status" class="apply-status"></p>
+          <div class="form-actions">
+            <button type="button" id="apply-send">신청</button>
+            <button type="button" id="apply-close">닫기</button>
+          </div>
+        </form>
+      </dialog>
+    </main>
+    <script type="module" src="js/board-kac.js"></script>
+  </body>
+</html>
