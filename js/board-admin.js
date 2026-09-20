@@ -19,6 +19,13 @@ export function initBoardAdmin() {
   document.getElementById("board-url-qr").addEventListener("click", showBoardQr);
   document.getElementById("board-form-save").addEventListener("click", saveApplyForm);
   document.getElementById("board-qr-close").addEventListener("click", () => document.getElementById("board-qr-dialog").close());
+  document.getElementById("board-kac-url-copy").addEventListener("click", () => {
+    navigator.clipboard?.writeText(document.getElementById("board-kac-url").value);
+    document.getElementById("board-kac-url-copy").textContent = "복사됨";
+  });
+  document.getElementById("board-kac-domains-save").addEventListener("click", saveKacDomains);
+  document.getElementById("board-kac-org-add").addEventListener("click", addOrgUnit);
+  document.getElementById("board-kac-org-body").addEventListener("click", onOrgUnitClick);
   document.addEventListener("tabshown", (e) => { if (e.detail === "board") load(); });
 }
 
@@ -102,6 +109,9 @@ async function load() {
     const a = await getDoc(doc(db, "settings", "apply"));
     document.getElementById("board-apply-email").value = a.exists() ? (a.data().email || "") : "";
   } catch { /* */ }
+  document.getElementById("board-kac-url").value = `${base}board_kac.html${orgQuery(true)}`;
+  document.getElementById("board-kac-open").href = `${base}board_kac.html${orgQuery(true)}`;
+  loadKac();
   loadApplications();
   // 탭 진입 시 차이만 자동 동기화(변경 없으면 쓰기 없음). CSV 대량등록·시드분 자동 반영.
   // 참관자는 쓰기 권한이 없으므로 건너뛴다(불필요한 권한 오류 방지).
@@ -156,6 +166,102 @@ async function saveApply() {
   } catch (e) { alert("저장 실패: " + e.message); }
 }
 
+/* ── 공사 내부용 페이지 설정(publicBoard/__kac — 공개 읽기) ──
+ * 소속기관 목록과 허용 이메일 도메인. 기관명·도메인뿐이라 개인정보가 아니며,
+ * 내부 페이지가 로그인 없이 읽어야 하므로 공개 문서에 둔다. */
+let kacOrgUnits = [];
+let kacDomains = [];
+
+async function loadKac() {
+  try {
+    const d = await getDoc(doc(db, "publicBoard", "__kac"));
+    const v = d.exists() ? d.data() : {};
+    kacOrgUnits = Array.isArray(v.orgUnits) ? v.orgUnits.map((x) => String(x)) : [];
+    kacDomains = Array.isArray(v.domains) ? v.domains.map((x) => String(x)) : [];
+  } catch { kacOrgUnits = []; kacDomains = []; }
+  document.getElementById("board-kac-domains").value = kacDomains.join(", ");
+  paintOrgUnits();
+}
+
+function paintOrgUnits() {
+  const body = document.getElementById("board-kac-org-body");
+  if (!kacOrgUnits.length) {
+    body.innerHTML = `<tr><td colspan="3" class="empty">등록된 소속기관이 없습니다. 추가하세요.</td></tr>`;
+    return;
+  }
+  body.innerHTML = kacOrgUnits.map((o, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${escHtml(o)}</td>
+      <td class="actions">
+        <button type="button" data-act="up" data-i="${i}"${i === 0 ? " disabled" : ""}>▲</button>
+        <button type="button" data-act="down" data-i="${i}"${i === kacOrgUnits.length - 1 ? " disabled" : ""}>▼</button>
+        <button type="button" data-act="rename" data-i="${i}">이름 수정</button>
+        <button type="button" data-act="del" data-i="${i}">삭제</button>
+      </td>
+    </tr>`).join("");
+}
+
+function escHtml(v) {
+  return String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+async function saveOrgUnits(msg) {
+  try {
+    await setDoc(doc(db, "publicBoard", "__kac"), { orgUnits: kacOrgUnits, updatedAtMs: Date.now() }, { merge: true });
+    paintOrgUnits();
+    if (msg) alert(msg);
+  } catch (e) { alert("저장 실패: " + e.message); loadKac(); }
+}
+
+async function addOrgUnit() {
+  const inp = document.getElementById("board-kac-org-new");
+  const v = inp.value.trim();
+  if (!v) { alert("소속기관 이름을 입력하세요."); return; }
+  if (kacOrgUnits.includes(v)) { alert("이미 등록된 소속기관입니다."); return; }
+  kacOrgUnits.push(v);
+  inp.value = "";
+  await saveOrgUnits();
+}
+
+async function onOrgUnitClick(e) {
+  const btn = e.target.closest("button[data-act]");
+  if (!btn) return;
+  const i = Number(btn.dataset.i);
+  const act = btn.dataset.act;
+  if (act === "del") {
+    // 이미 이 기관으로 접수된 건은 그대로 남는다(접수 기록은 문자열로 저장됨).
+    if (!confirm(`'${kacOrgUnits[i]}'을(를) 목록에서 삭제할까요?\n이후 이 기관으로는 신청할 수 없습니다.`)) return;
+    kacOrgUnits.splice(i, 1);
+  } else if (act === "rename") {
+    const v = prompt("소속기관 이름", kacOrgUnits[i]);
+    if (v == null) return;
+    const t = v.trim();
+    if (!t) { alert("이름이 비었습니다."); return; }
+    if (kacOrgUnits.some((x, j) => j !== i && x === t)) { alert("이미 등록된 소속기관입니다."); return; }
+    kacOrgUnits[i] = t;
+  } else if (act === "up" && i > 0) {
+    [kacOrgUnits[i - 1], kacOrgUnits[i]] = [kacOrgUnits[i], kacOrgUnits[i - 1]];
+  } else if (act === "down" && i < kacOrgUnits.length - 1) {
+    [kacOrgUnits[i + 1], kacOrgUnits[i]] = [kacOrgUnits[i], kacOrgUnits[i + 1]];
+  } else return;
+  await saveOrgUnits();
+}
+
+async function saveKacDomains() {
+  const raw = document.getElementById("board-kac-domains").value.trim();
+  const list = raw.split(/[,;\s]+/).filter(Boolean).map((x) => x.replace(/^@/, "").toLowerCase());
+  const bad = list.find((d) => !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d));
+  if (bad) { alert(`도메인 형식을 확인하세요. (잘못된 값: ${bad})`); return; }
+  try {
+    await setDoc(doc(db, "publicBoard", "__kac"), { domains: list, updatedAtMs: Date.now() }, { merge: true });
+    kacDomains = list;
+    alert(list.length
+      ? `허용 도메인을 저장했습니다. (${list.map((d) => "@" + d).join(", ")})`
+      : "허용 도메인을 비웠습니다. 모든 이메일 주소로 내부 신청이 가능합니다.");
+  } catch (e) { alert("저장 실패: " + e.message); }
+}
+
 // 접수 이메일(관리자 전용 settings) + 보드 노출 여부(__config, 공개는 boolean만).
 async function saveApplyEmail() {
   // 쉼표(,)로 복수 주소 입력 가능 — 저장 전 각 주소 형식 검증.
@@ -188,7 +294,8 @@ async function loadApplications() {
       const a = d.data();
       const t = a.createdAt?.toDate ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "short" }).format(a.createdAt.toDate()) : "-";
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${t}</td><td>${esc(a.courseName || a.courseId)}</td><td>${a.count || 0}명</td>
+      const via = a.channel === "internal" ? `<small>내부 · ${esc(a.orgUnit || "-")}</small>` : `<small>공개</small>`;
+      tr.innerHTML = `<td>${t}</td><td>${esc(a.courseName || a.courseId)}<br>${via}</td><td>${a.count || 0}명</td>
         <td>${label[a.status] || "신청"}${a.rejectReason ? ` <small>(${esc(a.rejectReason)})</small>` : ""}</td>
         <td class="actions">${a.status === "active" ? `<button type="button" class="reject">반려</button>` : ""}</td>`;
       const btn = tr.querySelector(".reject");

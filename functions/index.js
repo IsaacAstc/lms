@@ -110,8 +110,30 @@ exports.submitApplication = onCall(
     }
 
     // 첨부: 공문 필수(1개 이상), 최대 6개(공문+신청양식+기타 4), 파일당 5MB·전체 8MB.
+    // 내부(공사 직원)용 신청: 공문·신청양식 첨부 대신 소속기관을 받고, 접수번호를 사내 공문에 적는다.
+    const internal = d.channel === "internal";
+    let orgUnit = "";
+    if (internal) {
+      const kacSnap = await db.doc("publicBoard/__kac").get();
+      const kac = kacSnap.exists ? kacSnap.data() : {};
+      const domains = (Array.isArray(kac.domains) ? kac.domains : [])
+        .map((x) => String(x).trim().toLowerCase()).filter(Boolean);
+      if (domains.length) {
+        const at = email.lastIndexOf("@");
+        const dom = at < 0 ? "" : email.slice(at + 1).toLowerCase();
+        if (!domains.some((x) => dom === x || dom.endsWith("." + x))) {
+          bad(`내부 신청은 ${domains.map((x) => "@" + x).join(", ")} 주소로만 가능합니다.`);
+        }
+      }
+      if (kind === "apply") {
+        const units = (Array.isArray(kac.orgUnits) ? kac.orgUnits : []).map((x) => String(x));
+        orgUnit = str(d.orgUnit, 100, "소속기관", true);
+        if (!units.includes(orgUnit)) bad("소속기관을 목록에서 선택하세요.");
+      }
+    }
+
     const rawAtt = Array.isArray(d.attachments) ? d.attachments : [];
-    if (!rawAtt.length) bad("공문 파일을 첨부하세요(필수).");
+    if (!internal && !rawAtt.length) bad("공문 파일을 첨부하세요(필수).");
     if (rawAtt.length > 6) bad("첨부는 최대 6개까지 가능합니다.");
     let totalBytes = 0;
     const attachments = rawAtt.map((a) => {
@@ -167,6 +189,9 @@ exports.submitApplication = onCall(
           codeHash: sha256(code), courseId, courseName, count,
           status: "active", createdAt: admin.firestore.FieldValue.serverTimestamp(),
           email, purgeAfter: c.startDate || "",
+          // 내부 신청 구분(개인 식별정보 아님 — 기관명·경로만).
+          channel: internal ? "internal" : "public",
+          orgUnit: orgUnit || "",
         });
       });
 
@@ -175,12 +200,17 @@ exports.submitApplication = onCall(
           from: `"교육신청 접수" <${MAIL_USER.value()}>`,
           to: applyTo,
           cc: email,
-          subject: `[교육신청] ${courseName} ${count}명 (접수번호 ${code})${title ? ` - ${title}` : ""}`,
+          subject: `[교육신청${internal ? "·내부" : ""}] ${courseName} ${count}명`
+            + `${internal ? ` - ${orgUnit}` : ""} (접수번호 ${code})${title ? ` - ${title}` : ""}`,
           text: [
-            `과정: ${courseName}`, `신청 인원: ${count}명`, `접수번호: ${code}`,
+            `과정: ${courseName}`,
+            ...(internal ? [`소속기관: ${orgUnit}`] : []),
+            `신청 인원: ${count}명`, `접수번호: ${code}`,
             `신청자 이메일: ${email}`, "", body || "(내용 없음)", "",
-            "※ 이 메일은 공개 현황 보드의 신청 양식에서 자동 발송되었습니다.",
-            "※ 취소는 보드의 '신청 취소'에서 접수번호로 가능합니다.",
+            internal
+              ? "※ 공사 내부용 신청 페이지에서 접수된 건입니다. 공문·신청양식은 사내 공문으로 접수되며, 위 접수번호가 공문에 기재됩니다."
+              : "※ 이 메일은 공개 현황 보드의 신청 양식에서 자동 발송되었습니다.",
+            "※ 취소는 신청한 페이지의 '신청 취소'에서 접수번호로 가능합니다.",
           ].join("\n"),
           attachments,
         });

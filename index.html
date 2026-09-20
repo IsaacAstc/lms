@@ -834,6 +834,30 @@
             <label><input type="checkbox" id="board-apply-enabled" /> 보드에 신청 버튼 노출</label>
             <button id="board-apply-email-save" type="button">접수 설정 저장</button>
           </div>
+          <h3>공사 내부용 신청 페이지</h3>
+          <p class="hint">공사 직원이 쓰는 별도 신청 페이지입니다. 정원·신청·잔여 수치와 접수·취소 처리는 공개 보드와 <b>같은 데이터를 공유</b>합니다. 다른 점은 <b>공문·신청양식 첨부가 없고</b>, 대신 <b>소속기관</b>을 고르는 것입니다. 첨부 대신 신청 시 발급된 <b>접수번호를 사내 공문에 기재</b>해 접수합니다. 주소를 아는 직원만 이용하도록 검색 노출은 차단되어 있습니다. 신청/취소 버튼 노출 여부와 접수 이메일은 위 <b>온라인 신청 접수</b> 설정을 함께 따릅니다.</p>
+          <div class="load-row url-cell">
+            <input id="board-kac-url" readonly />
+            <button id="board-kac-url-copy" type="button">복사</button>
+            <a id="board-kac-open" href="board_kac.html" target="_blank" class="btn-link">새 창에서 열기</a>
+          </div>
+          <div class="load-row">
+            <label>허용 이메일 도메인
+              <input id="board-kac-domains" type="text" placeholder="예: airport.co.kr (쉼표로 여러 개 · 비우면 제한 없음)" style="min-width:320px" />
+            </label>
+            <button id="board-kac-domains-save" type="button">도메인 저장</button>
+          </div>
+          <h4>소속기관 목록</h4>
+          <p class="hint">내부 신청 화면의 소속기관 선택 목록입니다. 여기 없는 기관은 신청할 수 없습니다(서버에서도 검증).</p>
+          <div class="load-row">
+            <input id="board-kac-org-new" type="text" maxlength="100" placeholder="추가할 소속기관 (예: 김포공항, 항로시설본부)" style="min-width:280px" />
+            <button id="board-kac-org-add" type="button">추가</button>
+          </div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>순서</th><th>소속기관</th><th>관리</th></tr></thead>
+            <tbody id="board-kac-org-body"><tr><td colspan="3" class="empty">불러오는 중…</td></tr></tbody>
+          </table></div>
+
           <h3>신청 접수 이력</h3>
           <p class="hint">Cloud Function이 기록한 접수 현황입니다(접수번호 해시·수치·상태만 저장). 상세 내용·첨부는 접수 이메일함에서 확인하세요.
             공문·명단이 미비하면 <b>반려</b>를 눌러 처리하세요 — <b>잔여석이 즉시 복구</b>되고 신청자에게 반려 사유가 메일로 통지되며, 해당 접수번호는 사용할 수 없게 됩니다.
