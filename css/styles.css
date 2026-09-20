@@ -688,7 +688,22 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
 @media print {
   .dl-search, .dl-count, .dl-go { display: none; }
   .dl-item a { border-color: #bbb; box-shadow: none; }
+  /* 출강요청 공문에 붙일 목록: 강사 단위로 쪽이 갈리지 않게 한다. */
+  .dispatch-inst { break-inside: avoid; page-break-inside: avoid; }
+  .dispatch-group > h3 { break-after: avoid; page-break-after: avoid; }
 }
+
+/* ---------- 출강 목록(출강요청 공문용) ---------- */
+.dispatch-group { margin-top: 1.4rem; }
+.dispatch-group > h3 {
+  margin: 0 0 0.6rem; padding-bottom: 0.3rem;
+  border-bottom: 2px solid var(--primary); color: var(--primary);
+}
+.dispatch-group > h3 small,
+.dispatch-inst > h4 small { font-weight: 400; color: var(--muted); margin-left: 0.4rem; }
+.dispatch-inst { margin: 0 0 1rem 0.2rem; }
+.dispatch-inst > h4 { margin: 0 0 0.3rem; font-size: 0.95rem; }
+.dispatch-inst table { font-size: 0.85rem; }
 
 /* 제목 옆에 붙는 작은 보조 버튼(새로고침 등) */
 .btn-inline {

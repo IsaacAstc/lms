@@ -7,6 +7,7 @@ import { initInstructors } from "./instructors.js";
 import { initPrograms } from "./programs.js";
 import { initSettings } from "./settings.js";
 import { initPayroll } from "./payroll.js";
+import { initDispatch } from "./dispatch.js";
 import { initExpenses } from "./expenses.js";
 import { initSurveys } from "./surveys.js";
 import { initReports } from "./reports.js";
@@ -41,7 +42,7 @@ let initialized = false;
 
 // 상단 그룹(1단계) → 서브탭(2단계). 패널은 기존 그대로(data-tab)이며 표시만 제어.
 const TAB_GROUPS = [
-  { id: "operate", label: "교육 운영", tabs: [["courses", "차수·시간표"], ["programs", "과정 커리큘럼"], ["rooms", "강의실"], ["instructors", "강사"]] },
+  { id: "operate", label: "교육 운영", tabs: [["courses", "차수·시간표"], ["programs", "과정 커리큘럼"], ["rooms", "강의실"], ["instructors", "강사"], ["dispatch", "출강 목록"]] },
   { id: "finance", label: "강사료·경비", tabs: [["payroll", "강사료·집계"], ["expenses", "소요경비"]] },
   { id: "surveys", label: "설문", tabs: [["surveys", "설문 관리"], ["surveyitems", "문항 설정"], ["reports", "설문 집계"], ["freetext", "주관식 원문"]] },
   // 기명 조사는 개인정보 처리 경로라 익명 설문 그룹과 나란히 두지 않고 별도 그룹으로 분리한다.
@@ -197,6 +198,7 @@ function initApp() {
   initCourses();
   initSessions();
   initPayroll();
+  initDispatch();
   initExpenses();
   initSurveys();
   initReports();
