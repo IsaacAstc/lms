@@ -273,6 +273,19 @@
         </section>
 
         <!-- 강사료·집계 -->
+        <!-- 출강 목록(출강요청 공문용) -->
+        <section class="tab-panel" data-tab="dispatch" hidden>
+          <h2>출강 목록 <small class="hint">출강요청 공문용</small></h2>
+          <div class="load-row no-print">
+            <label>조회 월 <input id="dispatch-month" type="month" /></label>
+            <button id="dispatch-run" type="button">조회</button>
+            <button id="dispatch-print" type="button">인쇄</button>
+            <span id="dispatch-note" class="total-line"></span>
+          </div>
+          <p class="hint no-print">선택한 달에 <b>실제 출강이 있는 강사만</b> 강사유형별로 묶어 표시합니다. 강사유형은 <b>강의 일자 기준</b>으로 판단하므로, 기간 중 유형이 바뀐 강사는 해당 유형 아래에 나옵니다. 숨김 처리한 차수와 강사 미지정 시간표는 제외됩니다.</p>
+          <div id="dispatch-root"><p class="empty">조회할 월을 선택하세요.</p></div>
+        </section>
+
         <section class="tab-panel" data-tab="payroll" hidden>
           <h2>강사료·강의시간 집계 <button class="csv-export" type="button" data-target="#pay-tbody" data-name="강사료집계">CSV 내보내기</button></h2>
           <div class="load-row">
