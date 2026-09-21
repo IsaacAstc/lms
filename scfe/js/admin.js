@@ -512,7 +512,8 @@ function renderEventsTable() {
               style="width:90px" title="사용할 미션 번호를 순서대로 입력 (예: 1,2,3 또는 3,1)" /></td>
         <td>${count}</td>
         <td>
-          <button class="btn btn-secondary ev-qr" data-id="${e.id}">QR</button>
+          <button class="btn btn-secondary ev-qr" data-id="${e.id}" title="참가자 개인 휴대폰용 — 기기당 참여 횟수 제한이 적용됩니다">QR</button>
+          <button class="btn btn-secondary ev-qr-kiosk" data-id="${e.id}" title="부스 공용 기기용 — 참여 횟수 제한이 면제됩니다">QR(키오스크)</button>
           <button class="btn btn-secondary ev-save" data-id="${e.id}">저장</button>
           <button class="btn btn-danger ev-del" data-id="${e.id}">삭제</button>
         </td>
@@ -524,6 +525,14 @@ function renderEventsTable() {
     btn.addEventListener("click", () => {
       const id = btn.dataset.id;
       openQrModal(`${eventNameById(id)} 전용 QR`, siteUrlFor(id));
+    })
+  );
+
+  // 키오스크 QR: 부스 공용 기기로 찍으면 그 기기가 참여 횟수 제한에서 면제된다.
+  body.querySelectorAll(".ev-qr-kiosk").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.id;
+      openQrModal(`${eventNameById(id)} 키오스크 QR`, kioskUrl(siteUrlFor(id)), true);
     })
   );
 
@@ -649,11 +658,23 @@ function updateQrTargetInfo() {
   preview.textContent = base ? `· ${base}` : "· 주소를 입력하세요";
 }
 
-// QR 팝업 열기 (행사별 또는 기본 주소)
-function openQrModal(title, url) {
+// 공용 기기용 주소: ?kiosk=1 을 붙여 한 번 접속하면 그 기기는 참여 횟수 제한이 면제된다.
+function kioskUrl(url) {
+  if (!url) return "";
+  return `${url}${url.includes("?") ? "&" : "?"}kiosk=1`;
+}
+
+// QR 팝업 열기 (행사별 또는 기본 주소). kiosk=true면 용도 안내를 함께 띄운다.
+function openQrModal(title, url, kiosk = false) {
   if (!url) {
     alert("먼저 '접속 주소 설정'에서 참가자용 페이지 URL을 입력하세요.");
     return;
+  }
+  const note = document.getElementById("qrModalNote");
+  if (note) {
+    note.textContent = kiosk
+      ? "부스에 비치한 공용 기기로 한 번만 찍어 두세요. 그 기기는 참여 횟수 제한 없이 여러 명이 이어서 쓸 수 있습니다."
+      : "참가자 개인 휴대폰용입니다. 기기당 참여 횟수 제한이 적용됩니다.";
   }
   document.getElementById("qrModalTitle").textContent = title;
   document.getElementById("qrModalUrl").textContent = url;
