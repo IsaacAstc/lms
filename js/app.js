@@ -233,7 +233,15 @@ window.addEventListener("DOMContentLoaded", () => {
     try {
       await login(loginForm.email.value.trim(), loginForm.password.value);
     } catch (err) {
-      loginError.textContent = "로그인 실패: 이메일 또는 비밀번호를 확인하세요.";
+      // 기관마다 Firebase 프로젝트가 달라 계정도 따로다. 기관을 잘못 고르면
+      // 비밀번호가 맞아도 '없는 계정'이 되므로, 어느 기관으로 시도했는지 같이 보여준다.
+      const sel = document.getElementById("login-org");
+      const orgName = sel && sel.value
+        ? (sel.options[sel.selectedIndex]?.textContent || sel.value)
+        : "기본 기관";
+      loginError.innerHTML = `로그인 실패: 이메일 또는 비밀번호를 확인하세요.<br>`
+        + `<small>선택한 기관: <b>${escapeHtml(orgName)}</b> — 기관마다 계정이 따로입니다. `
+        + `기관을 잘못 고르면 같은 계정으로도 로그인되지 않습니다.</small>`;
     }
   });
 
