@@ -304,5 +304,13 @@ table.events-table .reward-toggle { margin: 0 auto; }
   word-break: break-all;
   margin: 12px 0 0;
 }
+/* QR 용도 안내(일반/키오스크) — 주소 아래 한 줄 */
+.qr-modal-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 8px 0 0;
+  text-align: left;
+}
 .qr-modal-actions { display: flex; gap: 8px; margin-top: 16px; }
 .qr-modal-actions .btn { margin-top: 0; padding: 10px 14px; font-size: 13px; }
