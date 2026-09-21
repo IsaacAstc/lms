@@ -130,6 +130,7 @@ function openDialog(id, kind) {
   document.getElementById("apply-course").textContent =
     `${c.name || ""}${c.round ? ` ${c.round}차수` : ""} · ${dot(c.startDate || "")}${c.endDate && c.endDate !== c.startDate ? " - " + dot(c.endDate) : ""}`;
   document.getElementById("apply-fields-apply").hidden = !apply;
+  document.getElementById("apply-guide").hidden = !apply; // 취소에는 공문 절차 안내가 필요 없다.
   document.getElementById("apply-fields-cancel").hidden = apply;
   if (apply) {
     const remaining = c.remaining != null ? c.remaining : Math.max(0, (c.capacity || 0) - (c.appliedCount || 0));
@@ -182,9 +183,16 @@ async function send() {
     const res = await httpsCallable(fns, "submitApplication")(payload);
     const r = res.data || {};
     if (current.kind === "apply") {
-      status.innerHTML = `✅ 접수 완료! <b>접수번호: ${esc(r.receiptCode || "")}</b><br>`
-        + `이 접수번호를 <b>사내 공문에 기재</b>해 발송하시면 접수가 마무리됩니다.<br>`
-        + `확인 메일을 발송했습니다. 접수번호는 취소 시에도 필요하니 보관하세요.`;
+      // 접수번호를 공문에 옮겨 적어야 하므로, 눈에 띄게 보여주고 다음에 할 일을 그대로 적는다.
+      document.getElementById("apply-guide").hidden = true;
+      status.innerHTML = `<span class="apply-done-title">✅ 자리가 확보되었습니다</span>`
+        + `<span class="apply-code">접수번호 <b>${esc(r.receiptCode || "")}</b></span>`
+        + `<span class="apply-next"><b>아직 끝난 것이 아닙니다.</b> 아래대로 공문을 보내 주세요.<br>`
+        + `① 사내 공문을 작성하면서 <b>제목이나 본문에 위 접수번호를 적습니다.</b><br>`
+        + `② 기존 <b>신청 양식</b>을 붙임으로 첨부합니다.<br>`
+        + `③ 공문을 발송하면 접수가 끝납니다.</span>`
+        + `<span class="apply-next">접수번호는 방금 입력하신 메일로도 보내 드렸습니다. `
+        + `신청을 취소할 때도 필요하니 보관하세요.</span>`;
     } else {
       status.textContent = r.mailFailed
         ? "✅ 취소 처리되었습니다. (확인 메일 발송은 실패 — 잔여석은 복구됨)"
