@@ -107,6 +107,13 @@ exports.submitApplication = onCall(
       if (!Number.isInteger(count) || count < 1 || count > MAX_COUNT) bad(`신청 인원은 1~${MAX_COUNT} 사이여야 합니다.`);
     } else {
       receiptCode = str(d.receiptCode, 16, "접수번호", true).toUpperCase().replace(/\s/g, "");
+      // 부분 취소: 취소할 인원. 보내지 않으면 전체 취소(기존 동작).
+      if (d.cancelCount != null) {
+        count = Number(d.cancelCount);
+        if (!Number.isInteger(count) || count < 1 || count > MAX_COUNT) {
+          bad(`취소 인원은 1~${MAX_COUNT} 사이여야 합니다.`);
+        }
+      }
     }
 
     // 첨부: 공문 필수(1개 이상), 최대 6개(공문+신청양식+기타 4), 파일당 5MB·전체 8MB.
@@ -250,6 +257,15 @@ exports.submitApplication = onCall(
     if (app.status !== "active") throw new HttpsError("failed-precondition", "이미 취소된 접수번호입니다.");
 
     let courseName = app.courseName || "";
+    // 취소 인원: 지정이 없으면 남은 인원 전체. 남은 인원보다 많이 취소할 수는 없다.
+    const remainBefore = app.count || 0;
+    let cancelCount = count > 0 ? count : remainBefore;
+    if (cancelCount > remainBefore) {
+      bad(`취소 인원이 신청 인원보다 많습니다. (현재 신청 ${remainBefore}명)`);
+    }
+    let remainAfter = remainBefore - cancelCount;
+    const partial = remainAfter > 0;
+
     await db.runTransaction(async (tx) => {
       // Firestore 트랜잭션 규칙: 읽기를 전부 먼저, 쓰기는 그 뒤에.
       const cRef = db.doc(`courses/${app.courseId}`);
@@ -258,19 +274,36 @@ exports.submitApplication = onCall(
       if (!aSnap.exists || aSnap.data().status !== "active") {
         throw new HttpsError("failed-precondition", "이미 취소된 접수번호입니다.");
       }
+      // 읽은 시점 기준으로 다시 계산한다(동시에 두 번 취소해도 초과 복구되지 않도록).
+      const cur = aSnap.data().count || 0;
+      if (cancelCount > cur) throw new HttpsError("failed-precondition", `취소 인원이 신청 인원보다 많습니다. (현재 신청 ${cur}명)`);
+      remainAfter = cur - cancelCount;
+
       if (cSnap.exists) {
         const c = cSnap.data();
-        const applied = Math.max(0, (c.appliedCount || 0) - (app.count || 0));
+        const applied = Math.max(0, (c.appliedCount || 0) - cancelCount);
         tx.update(cRef, { appliedCount: applied });
         if (bSnap.exists) {
           tx.update(bRef, { appliedCount: applied, remaining: Math.max(0, (c.capacity || 0) - applied), updatedAtMs: Date.now() });
         }
       }
-      // 취소 완료 건은 보관 목적이 사라지므로 이메일을 즉시 삭제한다.
-      tx.update(appDoc.ref, {
-        status: "cancelled", cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
-        email: admin.firestore.FieldValue.delete(),
-      });
+      // 취소 이력(수치만 — 개인정보 없음). 나중에 공문과 대조할 때 쓴다.
+      const logEntry = { atMs: Date.now(), count: cancelCount, remain: remainAfter };
+      if (remainAfter > 0) {
+        // 일부 취소: 접수번호는 그대로 살려 둔다(이미 발송한 공문과 대조해야 하므로).
+        tx.update(appDoc.ref, {
+          count: remainAfter,
+          cancelLog: admin.firestore.FieldValue.arrayUnion(logEntry),
+        });
+      } else {
+        // 전체 취소: 보관 목적이 사라지므로 이메일을 즉시 삭제한다.
+        tx.update(appDoc.ref, {
+          count: 0,
+          status: "cancelled", cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+          email: admin.firestore.FieldValue.delete(),
+          cancelLog: admin.firestore.FieldValue.arrayUnion(logEntry),
+        });
+      }
     });
 
     try {
@@ -278,19 +311,33 @@ exports.submitApplication = onCall(
         from: `"교육신청 접수" <${MAIL_USER.value()}>`,
         to: applyTo,
         cc: email,
-        subject: `[교육신청 취소] ${courseName} ${app.count}명 (접수번호 ${receiptCode})${title ? ` - ${title}` : ""}`,
+        subject: `[교육신청 ${partial ? "일부취소" : "취소"}] ${courseName} ${cancelCount}명 취소`
+          + `${partial ? ` (잔여 신청 ${remainAfter}명)` : ""} (접수번호 ${receiptCode})${title ? ` - ${title}` : ""}`,
         text: [
-          `과정: ${courseName}`, `취소 인원: ${app.count}명`, `접수번호: ${receiptCode}`,
+          `과정: ${courseName}`,
+          `취소 인원: ${cancelCount}명`,
+          partial ? `취소 후 신청 인원: ${remainAfter}명` : "신청 건 전체가 취소되었습니다.",
+          `접수번호: ${receiptCode}`,
           `요청자 이메일: ${email}`, "", body || "(내용 없음)", "",
           "※ 잔여석은 취소 즉시 공개 보드에 반영되었습니다.",
+          partial
+            ? [
+              `※ 접수번호(${receiptCode})는 그대로 유효합니다. 남은 ${remainAfter}명으로 계속 접수됩니다.`,
+              "※ 인원 변경 사실을 공문으로도 알려 주셔야 접수 처리가 마무리됩니다.",
+              `   (공문에 접수번호 ${receiptCode}와 변경 후 인원 ${remainAfter}명을 적어 주세요.)`,
+            ].join("\n")
+            : [
+              "※ 이 접수번호는 더 이상 사용할 수 없습니다.",
+              "※ 취소 사실을 공문으로도 알려 주셔야 접수 처리가 마무리됩니다.",
+            ].join("\n"),
         ].join("\n"),
         attachments,
       });
     } catch (e) {
       // 취소 자체는 성공 — 메일만 실패했음을 알린다(잔여석 이중 복구 방지 위해 원복하지 않음).
-      return { ok: true, cancelled: true, courseName, mailFailed: true };
+      return { ok: true, cancelled: true, partial, cancelCount, remainAfter, courseName, mailFailed: true };
     }
-    return { ok: true, cancelled: true, courseName };
+    return { ok: true, cancelled: true, partial, cancelCount, remainAfter, courseName };
   }
 );
 
