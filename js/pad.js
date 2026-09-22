@@ -105,7 +105,13 @@ function render() {
 
 function linkCard(url) {
   let host = "";
-  try { host = new URL(url).hostname; } catch { return ""; }
+  try {
+    const u = new URL(url);
+    // javascript:·data: 도 형식상 유효한 URL이라 그대로 두면 누른 사람의 브라우저에서
+    // 이 페이지 권한으로 실행된다. 참여는 익명이므로 http/https 외에는 링크로 만들지 않는다.
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+    host = u.hostname;
+  } catch { return ""; }
   const yt = url.match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([\w-]{11})/);
   if (yt) return `<div class="pad-embed"><iframe src="https://www.youtube.com/embed/${yt[1]}?rel=0" allowfullscreen loading="lazy"></iframe></div>`;
   return `<a class="pad-link" href="${esc(url)}" target="_blank" rel="noopener nofollow">🔗 ${esc(host)}</a>`;
