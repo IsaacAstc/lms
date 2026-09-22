@@ -139,6 +139,7 @@ function openDialog(id, kind) {
       Array.from({ length: maxN }, (_, i) => `<option value="${i + 1}">${i + 1}명</option>`).join("");
   }
   document.getElementById("apply-receipt").value = "";
+  document.getElementById("apply-cancel-count").value = "";
   document.getElementById("apply-subject").value = "";
   document.getElementById("apply-body").value = "";
   document.getElementById("apply-status").textContent = "";
@@ -175,6 +176,13 @@ async function send() {
   } else {
     payload.receiptCode = document.getElementById("apply-receipt").value.trim();
     if (!payload.receiptCode) { status.textContent = "접수번호를 입력하세요."; return; }
+    // 취소 인원: 비우면 전체 취소(서버가 남은 인원 전체로 처리).
+    const cc = document.getElementById("apply-cancel-count").value.trim();
+    if (cc) {
+      const n = Number(cc);
+      if (!Number.isInteger(n) || n < 1) { status.textContent = "취소 인원은 1명 이상의 숫자로 입력하세요."; return; }
+      payload.cancelCount = n;
+    }
   }
 
   btn.disabled = true;
@@ -194,9 +202,15 @@ async function send() {
         + `<span class="apply-next">접수번호는 방금 입력하신 메일로도 보내 드렸습니다. `
         + `신청을 취소할 때도 필요하니 보관하세요.</span>`;
     } else {
-      status.textContent = r.mailFailed
-        ? "✅ 취소 처리되었습니다. (확인 메일 발송은 실패 — 잔여석은 복구됨)"
-        : "✅ 취소 완료. 확인 메일을 발송했으며 잔여석이 복구되었습니다.";
+      const mailNote = r.mailFailed
+        ? "(확인 메일 발송은 실패 — 잔여석은 복구됨)"
+        : "확인 메일을 발송했으며 잔여석이 복구되었습니다.";
+      status.innerHTML = r.partial
+        ? `✅ ${r.cancelCount}명 취소 완료. <b>남은 신청 인원: ${r.remainAfter}명</b><br>`
+          + `접수번호는 그대로 유효합니다. <b>인원 변경 사실을 공문으로도 알려 주세요.</b><br>`
+          + `<span class="apply-next">${esc(mailNote)}</span>`
+        : `✅ 전체 취소 완료. ${esc(mailNote)}<br>`
+          + `<span class="apply-next">취소 사실을 공문으로도 알려 주셔야 처리가 마무리됩니다.</span>`;
     }
     btn.hidden = true; // 완료 후엔 닫기만 — 중복 발송 방지
   } catch (e) {
