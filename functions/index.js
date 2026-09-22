@@ -34,12 +34,27 @@ function todayKST() {
 
 // 관리자 판정(Admin SDK는 보안규칙을 우회하므로 함수에서 직접 확인).
 const BOOTSTRAP_ADMINS = ["isaac@airport.co.kr"];
-async function requireAdmin(req) {
+/* 쓰기 효과가 있는 호출의 공통 관문.
+ * 함수는 Admin SDK로 동작해 firestore.rules 를 거치지 않으므로, 규칙에서 막는
+ * 참관자(조회 전용)를 여기서 다시 막아야 한다. 탭 단위 제한이 필요한 호출은
+ * requiredTab 을 넘겨 계정의 tabs 까지 확인한다(마스터는 항상 통과). */
+async function requireAdmin(req, requiredTab = null) {
   const email = String(req.auth?.token?.email || "").toLowerCase();
   if (!email) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
   if (BOOTSTRAP_ADMINS.includes(email)) return email;
   const snap = await db.doc(`admins/${email}`).get();
   if (!snap.exists) throw new HttpsError("permission-denied", "관리자만 사용할 수 있습니다.");
+  const a = snap.data() || {};
+  if (a.role === "observer") {
+    throw new HttpsError("permission-denied", "참관자 계정은 조회만 할 수 있습니다.");
+  }
+  if (requiredTab && a.role !== "master") {
+    const tabs = Array.isArray(a.tabs) ? a.tabs : null;
+    // tabs 미지정은 기존 계정 호환(전체 허용) — firestore.rules 의 canTab 과 같은 기준.
+    if (tabs && !tabs.includes(requiredTab)) {
+      throw new HttpsError("permission-denied", "이 기능을 사용할 권한이 없는 계정입니다.");
+    }
+  }
   return email;
 }
 
@@ -349,7 +364,7 @@ exports.submitApplication = onCall(
 exports.rejectApplication = onCall(
   { region: "asia-northeast3", secrets: [MAIL_USER, MAIL_PASS], memory: "256MiB", timeoutSeconds: 60, maxInstances: 5 },
   async (req) => {
-    await requireAdmin(req);
+    await requireAdmin(req, "board");
     const d = req.data || {};
     const appId = str(d.applicationId, 64, "접수 ID", true);
     const reason = str(d.reason, 1000, "반려 사유", true);
@@ -444,7 +459,7 @@ exports.purgeApplicationEmails = onSchedule(
 exports.sendLogiPush = onCall(
   { region: "asia-northeast3", memory: "256MiB", timeoutSeconds: 30, maxInstances: 3 },
   async (req) => {
-    await requireAdmin(req);
+    await requireAdmin(req, "logi");
     const courseId = str(req.data?.courseId, 100, "과정 ID", true);
     const title = str(req.data?.title, 100, "제목", true);
     const body = str(req.data?.body, 300, "내용", false);
