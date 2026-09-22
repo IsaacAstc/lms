@@ -16,7 +16,7 @@
           }
         },
 
-        ".write": "auth != null"
+        ".write": "auth != null && auth.token.email != null"
       }
     },
 

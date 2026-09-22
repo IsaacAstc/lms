@@ -235,19 +235,47 @@ service cloud.firestore {
     }
 
     // 참가자(닉네임·점수만, 개인정보 없음): 리더보드용 공개 읽기.
+    //
+    // 참가자는 익명 로그인으로 무작위 식별자를 받고, 그 값을 ownerUid에 적어 둔다.
+    // 문서가 공개 읽기라 비밀값을 문서에 넣을 수는 없지만(열쇠를 자물쇠 옆에 두는 꼴),
+    // ownerUid는 Auth가 발급해 위조할 수 없으므로 공개돼도 무방하다.
     match /participants/{docId} {
+      function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+      // 점수 규칙: 총점은 숫자여야 하고, 내려갈 수 없으며, 만점(미션 3개 × 100점)을 넘지 못한다.
+      // 본인 확인과 별개로 걸어 두는 2차 방어선 — 남의 점수 깎기·부풀리기를 막는다.
+      function scoreOk() {
+        return !('totalScore' in changed())
+          || (request.resource.data.totalScore is number
+              && request.resource.data.totalScore >= resource.data.get('totalScore', 0)
+              && request.resource.data.totalScore <= 300);
+      }
+      // 기념품 지급 표시는 관리자만. 주인 표시는 한 번 정해지면 못 바꾼다.
+      function participantSafe() {
+        return !('rewardGiven' in changed())
+          && !('ownerUid' in changed())
+          && scoreOk();
+      }
+
       allow read: if true;
-      // 최초 생성: 닉네임·행사 형식만 검증, rewardGiven은 항상 false로 시작.
-      allow create: if request.resource.data.nickname is string
+      // 최초 생성: 익명 로그인 필수 + 주인 표시가 본인이어야 한다.
+      // 닉네임·행사 형식 검증, rewardGiven은 항상 false로 시작.
+      allow create: if request.auth != null
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.nickname is string
                     && request.resource.data.nickname.size() > 0
                     && request.resource.data.nickname.size() <= 20
                     && request.resource.data.eventId is string
                     && request.resource.data.eventId.size() > 0
                     && request.resource.data.eventId.size() <= 64
                     && request.resource.data.rewardGiven == false;
-      // 관리자는 전체 수정 가능. 비로그인 참가자는 rewardGiven(기념품 지급)만 변경 불가.
       allow update: if canWrite()
-                    || !("rewardGiven" in request.resource.data.diff(resource.data).affectedKeys());
+        // 본인 문서만.
+        || (request.auth != null
+            && resource.data.get('ownerUid', '') == request.auth.uid
+            && participantSafe())
+        // 이 규칙 이전에 만들어진 문서(주인 표시 없음)는 진행 중인 행사가 끊기지 않도록
+        // 종전대로 열어 두되, 점수 하향·초과는 막는다. 새 참가자는 위 조항으로만 쓴다.
+        || (resource.data.get('ownerUid', '') == '' && participantSafe());
       // 삭제(데이터 초기화)는 관리자만(참관자 제외).
       allow delete: if canWrite();
     }

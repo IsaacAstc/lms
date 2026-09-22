@@ -11,6 +11,10 @@ import {
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
+  getAuth,
+  signInAnonymously,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
   getFirestore,
   doc,
   getDoc,
@@ -26,9 +30,23 @@ import {
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-const app = initializeApp(firebaseConfig);
+// 이름 붙인 앱으로 초기화한다. 기본 앱을 쓰면 로그인 세션 저장소가 관리자 화면과
+// 같아져, 참가자 페이지의 익명 로그인이 관리자 로그인을 밀어낸다(같은 프로젝트·같은 도메인).
+const app = initializeApp(firebaseConfig, "scfe-player");
 setupAppCheck(app);
 const db = getFirestore(app);
+const auth = getAuth(app);
+
+/* 참가자 신원: 익명 로그인.
+ * 이름·연락처 등은 일절 받지 않고 무작위 식별자만 발급받는다. 이 식별자를 참가자
+ * 문서의 주인으로 적어 두면, 보안규칙이 '본인 문서만 수정'을 판정할 수 있다.
+ * (문서에 비밀값을 넣는 방식은 쓸 수 없다 — 리더보드 때문에 문서가 공개 읽기다) */
+const authReady = signInAnonymously(auth)
+  .then((cred) => cred.user.uid)
+  .catch((err) => {
+    console.error("참가자 인증 실패:", err);
+    return null;
+  });
 
 // ---------------------------------------------------------------------
 // 화면 전환 유틸
@@ -140,10 +158,18 @@ async function getOrCreateSession(nickname) {
       ? window.crypto.randomUUID()
       : "p_" + Date.now() + "_" + Math.random().toString(36).slice(2);
 
+  const uid = await authReady;
+  if (!uid) {
+    const err = new Error("auth failed");
+    err.code = "auth-failed";
+    throw err;
+  }
+
   const ref = doc(db, "participants", sessionId);
   const data = {
     nickname,
     eventId: state.eventId,
+    ownerUid: uid,               // 이 문서를 수정할 수 있는 기기(익명 계정)
     createdAt: serverTimestamp(),
     mission1: null,
     mission2: null,
@@ -391,6 +417,8 @@ document.getElementById("btnStart").addEventListener("click", async () => {
   } catch (e) {
     if (e && e.code === "play-limit") {
       toast(`이 기기에서는 ${MAX_PLAYS_PER_EVENT}회까지만 참여할 수 있어요.`);
+    } else if (e && e.code === "auth-failed") {
+      toast("접속 준비에 실패했습니다. 네트워크를 확인하고 새로고침해 주세요.");
     } else {
       console.error(e);
       toast("연결에 실패했습니다. firebase-config.js 설정을 확인하세요.");
