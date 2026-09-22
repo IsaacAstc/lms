@@ -295,7 +295,12 @@ async function loadApplications() {
       const t = a.createdAt?.toDate ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "short" }).format(a.createdAt.toDate()) : "-";
       const tr = document.createElement("tr");
       const via = a.channel === "internal" ? `<small>내부 · ${esc(a.orgUnit || "-")}</small>` : `<small>공개</small>`;
-      tr.innerHTML = `<td>${t}</td><td>${esc(a.courseName || a.courseId)}<br>${via}</td><td>${a.count || 0}명</td>
+      // 일부 취소가 있었던 건은 원래 인원과 취소분을 같이 보여준다(공문 대조용).
+      const cancelled = (a.cancelLog || []).reduce((n, x) => n + (x.count || 0), 0);
+      const countCell = cancelled && a.status === "active"
+        ? `${a.count || 0}명 <small>(취소 ${cancelled}명)</small>`
+        : `${a.count || 0}명`;
+      tr.innerHTML = `<td>${t}</td><td>${esc(a.courseName || a.courseId)}<br>${via}</td><td>${countCell}</td>
         <td>${label[a.status] || "신청"}${a.rejectReason ? ` <small>(${esc(a.rejectReason)})</small>` : ""}</td>
         <td class="actions">${a.status === "active" ? `<button type="button" class="reject">반려</button>` : ""}</td>`;
       const btn = tr.querySelector(".reject");
