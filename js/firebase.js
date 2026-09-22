@@ -1,6 +1,10 @@
 // Firebase 초기화 및 공용 인스턴스 export.
 // 기관(테넌트) 분리: 코드는 하나, 데이터는 기관별 Firebase 프로젝트.
-// 기관 결정 우선순위: URL ?org= (공개 페이지 링크) > localStorage(관리자 선택) > 기본(허브).
+// 기관 결정 우선순위:
+//   관리자 화면(<html data-app="admin">): URL ?org= > localStorage(관리자 선택) > 기본(허브)
+//   공개 페이지(현황 보드·설문 등):       URL ?org= > 기본(허브)
+// 공개 페이지는 localStorage를 보지 않는다. 같은 브라우저에서 관리자가 다른 기관을
+// 선택해 두면, 주소만 보고 들어온 방문자에게 엉뚱한 기관의 (빈) 화면이 보이기 때문이다.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -33,7 +37,7 @@ if (urlOrg) {
       cfg = d.config;
     }
   } catch { /* 허브 조회 실패 → 기본 기관으로 동작 */ }
-} else {
+} else if (document.documentElement.dataset.app === "admin") {
   const s = storedOrg();
   if (s?.config?.apiKey) {
     org = { id: s.id, name: s.name || s.id, features: s.features };
