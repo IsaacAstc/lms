@@ -240,6 +240,8 @@
     lastSpecial = specialActive();
     if (lastSpecial) {
       specialEl.style.backgroundImage = 'url("' + mediaSrc(didCfg.specialUrl).replace(/"/g, "") + '")';
+      // 이미지 비율이 화면과 다를 때 남는 여백의 색. 관리자 설정값이 없으면 검정.
+      specialEl.style.backgroundColor = /^#[0-9a-f]{6}$/i.test(String(didCfg.specialBg || "")) ? didCfg.specialBg : "#000";
       specialEl.style.display = "block";
       $("wrap").style.display = "none";
       $("idle").style.display = "none";

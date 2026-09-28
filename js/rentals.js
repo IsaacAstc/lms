@@ -332,6 +332,8 @@ function initDidConfig() {
         bgUrl: document.getElementById("did-bg").value.trim(),
         specialOn: document.getElementById("did-special-on").checked,
         specialUrl: document.getElementById("did-special").value.trim(),
+        // 이미지 비율이 화면과 다를 때 남는 여백의 색(기본 검정).
+        specialBg: document.getElementById("did-special-bg").value || "#000000",
         specialStart: document.getElementById("did-special-start").value,
         specialEnd: document.getElementById("did-special-end").value,
         updatedAtMs: Date.now(),
@@ -367,6 +369,7 @@ async function loadDidConfig() {
     document.getElementById("did-bg").value = c.bgUrl || "";
     document.getElementById("did-special-on").checked = !!c.specialOn;
     document.getElementById("did-special").value = c.specialUrl || "";
+    document.getElementById("did-special-bg").value = c.specialBg || "#000000";
     // 과거(날짜만) 저장값 호환: datetime-local에 넣을 수 있게 시각 보정.
     const dt = (v, t) => (v && !v.includes("T") ? `${v}T${t}` : (v || ""));
     document.getElementById("did-special-start").value = dt(c.specialStart, "00:00");
