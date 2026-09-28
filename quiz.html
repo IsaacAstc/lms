@@ -1557,13 +1557,18 @@ function rankedPlayers() {
     .map(([pid, p]) => ({ pid, name: p.name, score: p.score || 0 }))
     .sort((a, b) => b.score - a.score);
 }
-function boardRowsHtml(list, limit) {
+// startRank: 목록의 첫 줄이 몇 위인지. 최종 화면처럼 상위권을 잘라내고 넘길 때,
+// 잘라낸 배열의 인덱스를 그대로 쓰면 4위가 1위로 표시된다.
+function boardRowsHtml(list, limit, startRank = 1) {
   const medals = ["gold", "silver", "bronze"];
-  return list.slice(0, limit).map((p, i) => `
-    <div class="board-row ${medals[i] || ""}">
-      <span class="rank">${i + 1}</span><span class="name">${esc(p.name)}</span>
+  return list.slice(0, limit).map((p, i) => {
+    const rank = startRank + i;
+    return `
+    <div class="board-row ${medals[rank - 1] || ""}">
+      <span class="rank">${rank}</span><span class="name">${esc(p.name)}</span>
       <span class="score">${p.score.toLocaleString()}${tr("pts")}</span>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 }
 function hostShowBoard() {
   const isLast = host.qIdx >= host.quiz.questions.length - 1;
@@ -1641,7 +1646,8 @@ function hostFinish() {
       <div class="pod-score">${x.p.score.toLocaleString()}${tr("pts")}</div>
       <div class="pod-block">${x.n}</div>
     </div>`).join("");
-  $("hf-board").innerHTML = boardRowsHtml(ranked.slice(3), 7);
+  // 1~3위는 시상대에 있으므로 목록은 4위부터. 메달 색도 4위 이후에는 붙지 않는다.
+  $("hf-board").innerHTML = boardRowsHtml(ranked.slice(3), 7, 4);
   show("view-hf");
   $("btn-hf-done").onclick = () => {
     hostCleanup(true);
