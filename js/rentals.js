@@ -184,10 +184,21 @@ async function uploadDidImage(file, { maxDim, keepAlpha, prefix }) {
     b64 = btoa(bin);
     ext = "svg";
   } else {
-    const dataUrl = await compressImage(file, { maxDim, keepAlpha });
+    // keepAlpha "auto": 투명을 담을 수 있는 형식으로 올린 파일만 PNG로 저장한다.
+    // 사진을 PNG로 저장하면 용량이 몇 배로 뛰어 상한에 걸리므로 JPEG로 둔다.
+    const alpha = keepAlpha === "auto"
+      ? /^image\/(png|webp|gif)$/.test(file.type) || /\.(png|webp|gif)$/i.test(file.name)
+      : keepAlpha;
+    // PNG는 압축이 없어 같은 해상도에서도 훨씬 크다. TV가 1080p이므로 1920px면 충분하다.
+    const dim = alpha && keepAlpha === "auto" ? Math.min(maxDim, 1920) : maxDim;
+    const dataUrl = await compressImage(file, { maxDim: dim, keepAlpha: alpha });
     b64 = dataUrl.split(",")[1];
-    if (b64.length > 2 * 1024 * 1024) throw new Error("이미지가 너무 큽니다. 더 작은 이미지를 사용하세요.");
-    ext = keepAlpha ? "png" : "jpg";
+    if (b64.length > 2 * 1024 * 1024) {
+      throw new Error(alpha
+        ? "이미지가 너무 큽니다. 투명 배경(PNG)은 용량이 크게 잡힙니다 — 더 작은 이미지를 쓰거나, 배경색을 넣어 JPG로 저장해 올리세요."
+        : "이미지가 너무 큽니다. 더 작은 이미지를 사용하세요.");
+    }
+    ext = alpha ? "png" : "jpg";
   }
   const path = `media/${prefix}-${Date.now().toString(36)}.${ext}`;
   const resp = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${path}`, {
@@ -297,7 +308,9 @@ function initDidConfig() {
   wireDidUpload("did-logo-upload", "did-logo-file", "did-logo", { maxDim: 1200, keepAlpha: true, prefix: "logo" });
   wireDidUpload("did-logo2-upload", "did-logo2-file", "did-logo2", { maxDim: 1200, keepAlpha: true, prefix: "logo" });
   wireDidUpload("did-bg-upload", "did-bg-file", "did-bg", { maxDim: 3840, keepAlpha: false, prefix: "bg" });
-  wireDidUpload("did-special-upload", "did-special-file", "did-special", { maxDim: 3840, keepAlpha: false, prefix: "special" });
+  // 특별일정은 글자가 든 배너·공지가 올라오므로 PNG로 올린 파일은 PNG로 저장한다.
+  // JPEG 재압축을 거치지 않아 글자 가장자리가 뭉개지지 않는다.
+  wireDidUpload("did-special-upload", "did-special-file", "did-special", { maxDim: 3840, keepAlpha: "auto", prefix: "special" });
   const base = location.origin + location.pathname.replace(/[^/]*$/, "");
   const url = `${base}did.html${orgQuery(true)}`;
   document.getElementById("did-url").value = url;
