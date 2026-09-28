@@ -172,7 +172,7 @@ async function saveApplyEmail() {
   } catch (e) { alert("저장 실패: " + e.message); }
 }
 
-// 접수 이력 + 반려 처리. 문서에는 접수번호 해시·수치·상태만 남고,
+// 접수 이력 + 반려 처리. 문서에는 접수번호·수치·상태만 남고,
 // 신청자 이메일은 반려 통지용으로 마감일까지만 보관된다(서버가 자동 파기).
 const fns = getFunctions(app, "asia-northeast3");
 
@@ -180,7 +180,7 @@ async function loadApplications() {
   const body = document.getElementById("board-apps-body");
   try {
     const snap = await getDocs(query(collection(db, "applications"), orderBy("createdAt", "desc"), limit(50)));
-    if (snap.empty) { body.innerHTML = `<tr><td colspan="5" class="empty">접수 이력이 없습니다.</td></tr>`; return; }
+    if (snap.empty) { body.innerHTML = `<tr><td colspan="6" class="empty">접수 이력이 없습니다.</td></tr>`; return; }
     const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const label = { cancelled: "취소됨", rejected: "반려됨" };
     body.innerHTML = "";
@@ -195,14 +195,16 @@ async function loadApplications() {
       const countCell = cancelled && a.status === "active"
         ? `${a.count || 0}명 <small>(취소 ${cancelled}명)</small>`
         : `${a.count || 0}명`;
-      tr.innerHTML = `<td>${t}</td><td>${esc(a.courseName || a.courseId)}<br>${via}</td><td>${countCell}</td>
+      // 접수번호 원문은 이 기능이 들어오기 전 건에는 없다(해시만 저장했다).
+      const code = a.code ? `<code class="receipt-code">${esc(a.code)}</code>` : `<small class="muted">기록 없음</small>`;
+      tr.innerHTML = `<td>${t}</td><td>${code}</td><td>${esc(a.courseName || a.courseId)}<br>${via}</td><td>${countCell}</td>
         <td>${label[a.status] || "신청"}${a.rejectReason ? ` <small>(${esc(a.rejectReason)})</small>` : ""}</td>
         <td class="actions">${a.status === "active" ? `<button type="button" class="reject">반려</button>` : ""}</td>`;
       const btn = tr.querySelector(".reject");
       if (btn) btn.addEventListener("click", () => rejectApplication(d.id, a, btn));
       body.appendChild(tr);
     });
-  } catch (e) { body.innerHTML = `<tr><td colspan="5" class="empty">불러오기 실패: ${e.message}</td></tr>`; }
+  } catch (e) { body.innerHTML = `<tr><td colspan="6" class="empty">불러오기 실패: ${e.message}</td></tr>`; }
 }
 
 // 반려: 잔여석 복구 + 상태 변경 + 신청자에게 사유 통지(서버에서 일괄 처리).

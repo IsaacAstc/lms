@@ -182,11 +182,14 @@ exports.submitApplication = onCall(
           remaining: Math.max(0, cap - (applied + count)),
           updatedAtMs: Date.now(),
         });
-        // 접수 기록: 접수번호 해시·수치·상태.
+        // 접수 기록: 접수번호·수치·상태.
         // email은 '반려 통지' 목적으로만 보관하며, 반려·취소 처리 즉시 삭제하고
         // 남은 건도 신청 마감일(교육 시작일) 경과 후 자동 삭제한다(purgeAfter).
+        // code는 접수 이력 화면에서 공문과 대조하기 위한 표시용. 취소 대조는
+        // 종전대로 codeHash로 한다. applications는 관리자만 읽을 수 있고,
+        // 접수번호 자체는 개인 식별정보가 아니다.
         tx.set(appRef, {
-          codeHash: sha256(code), courseId, courseName, count,
+          code, codeHash: sha256(code), courseId, courseName, count,
           status: "active", createdAt: admin.firestore.FieldValue.serverTimestamp(),
           email, purgeAfter: c.startDate || "",
         });
@@ -392,7 +395,7 @@ exports.rejectApplication = onCall(
 /* ================================================================
  *  신청자 이메일 자동 파기 (매일 03:00 KST)
  *  신청 마감일(= 교육 시작일)이 지난 접수 기록의 email 필드를 삭제한다.
- *  개인정보 최소 보관 원칙 — 수치·상태·접수번호 해시는 그대로 남는다.
+ *  개인정보 최소 보관 원칙 — 수치·상태·접수번호는 그대로 남는다.
  * ================================================================ */
 exports.purgeApplicationEmails = onSchedule(
   { region: "asia-northeast3", schedule: "0 3 * * *", timeZone: "Asia/Seoul" },
