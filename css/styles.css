@@ -776,6 +776,17 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
 .stat-fold > summary { cursor: pointer; font-size: 0.8rem; color: var(--muted); }
 .stat-fold table { margin-top: 0.4rem; }
 
+/* 한 번 정해두면 거의 손대지 않는 설정 묶음. 기본은 접어 두고, 자주 보는
+   목록(예: 신청 접수 이력)이 화면 위쪽에 바로 보이도록 한다. */
+.setting-fold { border-top: 1px solid var(--border); }
+.setting-fold > summary {
+  cursor: pointer; font-size: 1rem; font-weight: 600;
+  margin: 0; padding: 0.7rem 0;
+}
+.setting-fold > summary:hover { color: var(--primary); }
+.setting-fold > :last-child { margin-bottom: 1rem; }
+.setting-fold > .hint:first-of-type { margin-top: 0; }
+
 /* 되돌릴 수 없는 조작은 접어 둔다 — 자주 쓰지 않는데 잘못 눌리면 복구가 안 된다.
    펼쳐야 버튼이 나오므로 클릭 한 번으로는 실행되지 않는다. */
 .danger-fold { margin: 1.2rem 0 0; }
