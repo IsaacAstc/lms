@@ -614,6 +614,15 @@ if (fbReady) {
   document.getElementById("fb-warning").style.display = "block";
 }
 
+/* 진행 시각은 반드시 서버 시계로 다룬다.
+ * 문제 시작 시각은 진행자 기기가 적고 남은 시간은 참가자 기기가 계산하는데, 두 기기의
+ * 시계가 어긋나 있으면 참가자 화면이 시작하자마자 '시간 종료'로 넘어간다(휴대폰이
+ * 앞서 있는 경우). 점수도 응답 시각으로 매기므로 같은 문제가 생긴다.
+ * RTDB가 알려주는 서버와의 시차를 더해, 모든 기기가 같은 시계를 보게 한다. */
+let timeOffset = 0;
+if (fbReady) db.ref(".info/serverTimeOffset").on("value", (s) => { timeOffset = s.val() || 0; });
+const now = () => Date.now() + timeOffset;
+
 /* URL ?pin= 으로 진입하면(QR 스캔) PIN을 미리 채우고 닉네임 입력에 포커스.
  * &en=1 이면(영문 진행 퀴즈의 QR) 참가 입력 화면부터 영어로 표시. */
 const urlParams = new URLSearchParams(location.search);
@@ -1252,7 +1261,7 @@ async function hostGame(quiz) {
     pin = String(Math.floor(100000 + Math.random() * 900000));
     ref = db.ref("games/" + pin);
     const snap = await ref.get();
-    if (!snap.exists() || (snap.val().createdAt || 0) < Date.now() - GAME_TTL) break;
+    if (!snap.exists() || (snap.val().createdAt || 0) < now() - GAME_TTL) break;
     pin = null;
   }
   if (!pin) return toast("PIN 생성에 실패했습니다. 다시 시도해 주세요.");
@@ -1385,7 +1394,7 @@ function hostShowSlide(q) {
 function hostShowQuestion(q) {
   host.revealed = false;
   host.answers = {};
-  const startAt = Date.now();
+  const startAt = now();
   host.ref.update({ status: "question", questionStartAt: startAt });
 
   $("hq-progress").textContent = `${host.qIdx + 1} / ${host.quiz.questions.length}`
@@ -1431,7 +1440,7 @@ function hostShowQuestion(q) {
   $("hq-timer").textContent = q.timeLimit;
   let lastLeft = q.timeLimit;
   host.timer = setInterval(() => {
-    const left = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+    const left = Math.max(0, Math.ceil((endAt - now()) / 1000));
     $("hq-timer").textContent = left;
     if (left !== lastLeft) {
       lastLeft = left;
@@ -1447,7 +1456,7 @@ function hostReveal(q) {
   clearInterval(host.timer);
 
   // 점수 계산 & 기록
-  const startAt = Date.now() - q.timeLimit * 1000; // fallback
+  const startAt = now() - q.timeLimit * 1000; // fallback
   host.ref.child("questionStartAt").get().then(s => {
     const qStart = s.val() || startAt;
     const limitMs = q.timeLimit * 1000;
@@ -1677,7 +1686,7 @@ $("btn-join").onclick = async () => {
     const gRef = db.ref("games/" + pin);
     const snap = await gRef.get();
     const game = snap.val();
-    if (!game || (game.createdAt || 0) < Date.now() - GAME_TTL) throw new Error(tr("errNoGame"));
+    if (!game || (game.createdAt || 0) < now() - GAME_TTL) throw new Error(tr("errNoGame"));
     if (game.status !== "lobby") throw new Error(tr("errStarted"));
     const dup = Object.values(game.players || {}).some(p => p.name === name);
     if (dup) throw new Error(tr("errDupName"));
@@ -1794,10 +1803,10 @@ function playerShowQuestion(game) {
   // 타이머 바
   clearInterval(player.timer);
   const limitMs = q.timeLimit * 1000;
-  const startAt = game.questionStartAt || Date.now();
+  const startAt = game.questionStartAt || now();
   const bar = $("pq-timerbar");
   player.timer = setInterval(() => {
-    const remain = Math.max(0, limitMs - (Date.now() - startAt));
+    const remain = Math.max(0, limitMs - (now() - startAt));
     bar.style.width = (100 * remain / limitMs) + "%";
     if (remain <= 0) {
       clearInterval(player.timer);
@@ -1814,7 +1823,7 @@ function playerAnswer(qi, payload) {
   if (player.answeredQ === qi) return;
   player.answeredQ = qi;
   clearInterval(player.timer);
-  player.ref.child(`answers/${qi}/${player.id}`).set({ ...payload, at: Date.now() });
+  player.ref.child(`answers/${qi}/${player.id}`).set({ ...payload, at: now() });
   const isPoll = player.quiz?.questions?.[qi]?.type === "poll";
   $("pw-icon").textContent = isPoll ? "🗳" : "🤞";
   $("pw-msg").textContent = isPoll ? tr("votedWait") : tr("answeredWait");
