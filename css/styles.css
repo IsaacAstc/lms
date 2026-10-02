@@ -373,23 +373,55 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
 .board-title { font-size: 1.4rem; margin-bottom: 0.25rem; }
 .board-updated { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.75rem; }
 .board-controls { margin-bottom: 1rem; font-size: 0.9rem; }
-.board-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.85rem; }
-.board-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.9rem; background: #fff; }
-.board-card.full { opacity: 0.7; }
-.board-card-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+/* 과정 목록: 한 과정 = 한 행. 좁은 화면에서는 같은 행을 카드로 바꿔 보여 준다. */
+.board-table { width: 100%; border-collapse: collapse; background: #fff; font-size: 0.88rem; }
+.board-table th, .board-table td { padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+.board-table thead th { background: #f3f6fa; color: var(--muted); font-weight: 600; font-size: 0.8rem; white-space: nowrap; }
+.board-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.board-table tbody tr:hover { background: #fafcff; }
+.board-table tr.full { opacity: 0.6; }
+.board-table .bt-name { font-weight: 600; }
+.board-table .bt-name small { color: var(--muted); font-weight: 400; }
+.board-table .bt-period { white-space: nowrap; }
+.board-table .bt-remain { min-width: 4.5rem; font-weight: 700; }
+.board-table .bt-remain .board-bar { margin-top: 0.3rem; height: 4px; }
+.board-table td.board-actions { display: table-cell; margin: 0; white-space: nowrap; text-align: right; }
+.board-table td.board-actions .board-apply-btn { padding: 0.35rem 0.7rem; font-size: 0.82rem; }
+.board-table td.board-actions .board-apply-btn + .board-apply-btn { margin-left: 0.3rem; }
 .board-badge { background: var(--primary); color: #fff; border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.75rem; white-space: nowrap; }
-.board-card h3 { font-size: 1rem; margin: 0; }
-.board-card h3 small { color: var(--muted); font-weight: 400; }
 /* 예정(계획) 차수 표기 — 과정명 앞에 붙는다. */
 .board-planned { color: var(--muted); font-weight: 600; }
-.board-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 0.75rem; margin: 0.5rem 0; }
-.board-meta div { display: flex; justify-content: space-between; font-size: 0.85rem; border-bottom: 1px dotted var(--border); padding-bottom: 0.15rem; }
-.board-meta dt { color: var(--muted); margin: 0; }
-.board-meta dd { margin: 0; font-weight: 600; }
 .board-open { color: #1a7f37; }
 .board-full { color: #b3261e; }
 .board-bar { height: 6px; background: #eee; border-radius: 3px; overflow: hidden; }
 .board-bar span { display: block; height: 100%; background: var(--primary); }
+
+@media (max-width: 720px) {
+  .board-table, .board-table tbody, .board-table tr, .board-table td { display: block; width: 100%; }
+  .board-table thead { display: none; }
+  .board-table { background: transparent; }
+  .board-table tr {
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.75rem 0.85rem; margin-bottom: 0.75rem;
+  }
+  .board-table tbody tr:hover { background: #fff; }
+  .board-table td { border: none; padding: 0.2rem 0; display: flex; justify-content: space-between; gap: 0.75rem; text-align: right; }
+  .board-table td::before { content: attr(data-label); color: var(--muted); font-weight: 400; text-align: left; flex: 0 0 auto; }
+  /* 유형·과정명은 카드 머리글처럼 한 줄로, 항목명 없이 */
+  .board-table td.bt-type, .board-table td.bt-name { display: inline; padding: 0; text-align: left; }
+  .board-table td.bt-type::before, .board-table td.bt-name::before { content: none; }
+  .board-table td.bt-name { font-size: 1rem; margin-left: 0.4rem; }
+  .board-table td.bt-period { margin-top: 0.5rem; border-top: 1px solid var(--border); padding-top: 0.45rem; }
+  .board-table .bt-remain { display: block; text-align: left; }
+  .board-table .bt-remain::before { display: inline-block; margin-right: 0.75rem; }
+  .board-table .bt-remain > span { float: right; }
+  .board-table .bt-remain .board-bar { clear: both; height: 6px; margin-top: 0.4rem; }
+  .board-table td.board-actions { display: flex; justify-content: stretch; gap: 0.4rem; margin-top: 0.6rem; }
+  .board-table td.board-actions::before { content: none; }
+  .board-table td.board-actions .board-apply-btn { flex: 1; padding: 0.45rem 0.6rem; font-size: 0.9rem; }
+  .board-table td.board-actions .board-apply-btn.ghost { flex: 0 0 auto; }
+  .board-table td.board-actions .board-apply-btn + .board-apply-btn { margin-left: 0; }
+}
 .board-apply { margin-top: 1.5rem; }
 
 /* 관리자별 사용 가능 탭 지정 */

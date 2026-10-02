@@ -72,10 +72,19 @@ function render() {
     root.innerHTML = `<p class="empty">${ranged ? "해당 기간에 교육 과정이 없습니다." : "현재 안내 중인 교육 과정이 없습니다."}</p>`;
     return;
   }
-  root.innerHTML = `<div class="board-grid">${list.map(card).join("")}</div>`;
+  // 넓은 화면은 표, 좁은 화면(휴대폰)은 CSS가 같은 행을 카드 모양으로 바꿔 보여 준다.
+  root.innerHTML = `
+    <table class="board-table">
+      <thead><tr>
+        <th>유형</th><th>과정명</th><th>교육기간</th><th>교육장</th>
+        <th class="num">정원</th><th class="num">신청</th><th class="num">잔여</th>
+        ${applyEnabled ? `<th class="no-print" aria-label="신청"></th>` : ""}
+      </tr></thead>
+      <tbody>${list.map(row).join("")}</tbody>
+    </table>`;
 }
 
-function card(c) {
+function row(c) {
   const cap = c.capacity || 0;
   const applied = c.appliedCount || 0;
   const remaining = c.remaining != null ? c.remaining : Math.max(0, cap - applied);
@@ -84,27 +93,26 @@ function card(c) {
   const closed = !!c.startDate && c.startDate < todayStr();
   const pct = cap ? Math.min(100, Math.round((applied / cap) * 100)) : 0;
   const period = c.startDate ? `${esc(dot(c.startDate))}${c.endDate && c.endDate !== c.startDate ? " - " + esc(dot(c.endDate)) : ""}` : "-";
+  // data-label: 좁은 화면에서 카드로 바뀔 때 각 칸 앞에 붙는 항목명.
   return `
-    <article class="board-card${full ? " full" : ""}">
-      <div class="board-card-head">
-        <span class="board-badge">${esc(c.courseType || "과정")}</span>
-        <h3>${c.planned ? `<span class="board-planned">(예정)</span> ` : ""}${esc(c.name || "")}${c.round ? ` <small>${esc(String(c.round))}차수</small>` : ""}</h3>
-      </div>
-      <dl class="board-meta">
-        <div><dt>교육기간</dt><dd>${period}</dd></div>
-        <div><dt>교육장</dt><dd>${esc(c.venue || "-")}</dd></div>
-        <div><dt>정원</dt><dd>${cap || "-"}</dd></div>
-        <div><dt>신청</dt><dd>${applied}</dd></div>
-        <div><dt>잔여</dt><dd class="${full ? "board-full" : "board-open"}">${full ? "마감" : remaining}</dd></div>
-      </dl>
-      <div class="board-bar"><span style="width:${pct}%"></span></div>
-      ${applyEnabled ? `<div class="board-actions no-print">
+    <tr class="${full ? "full" : ""}">
+      <td class="bt-type" data-label="유형"><span class="board-badge">${esc(c.courseType || "과정")}</span></td>
+      <td class="bt-name" data-label="과정명">${c.planned ? `<span class="board-planned">(예정)</span> ` : ""}${esc(c.name || "")}${c.round ? ` <small>${esc(String(c.round))}차수</small>` : ""}</td>
+      <td class="bt-period" data-label="교육기간">${period}</td>
+      <td data-label="교육장">${esc(c.venue || "-")}</td>
+      <td class="num" data-label="정원">${cap || "-"}</td>
+      <td class="num" data-label="신청">${applied}</td>
+      <td class="num bt-remain" data-label="잔여">
+        <span class="${full ? "board-full" : "board-open"}">${full ? "마감" : remaining}</span>
+        <div class="board-bar" title="신청률 ${pct}%"><span style="width:${pct}%"></span></div>
+      </td>
+      ${applyEnabled ? `<td class="board-actions no-print">
         ${closed
           ? `<button type="button" class="board-apply-btn" disabled title="교육 시작일이 지나 접수가 마감되었습니다">접수 마감</button>`
           : (!full ? `<button type="button" class="board-apply-btn" data-id="${esc(c.id)}" data-kind="apply">신청</button>` : "")}
         <button type="button" class="board-apply-btn ghost" data-id="${esc(c.id)}" data-kind="cancel">신청 취소</button>
-      </div>` : ""}
-    </article>`;
+      </td>` : ""}
+    </tr>`;
 }
 
 // ── 온라인 신청/취소 양식 ──
