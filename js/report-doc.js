@@ -173,11 +173,15 @@ async function expensesHTML(month) {
         <td>${escapeHtml(n.reason || "")}</td></tr>`).join("")}</tbody></table>` : ""}`;
 }
 
+// 마지막으로 생성한 보고서의 월 — 인쇄 파일명에 쓴다(생성 뒤 월 입력을 바꿔도 내용과 맞게).
+let reportMonth = "";
+
 async function run() {
   const month = document.getElementById("rd-month").value;
   const box = document.getElementById("rd-doc");
   if (!month) return alert("월을 선택하세요.");
   box.innerHTML = "보고서 생성 중…";
+  reportMonth = month;
 
   // 설문 원문(기간) → 없으면 스냅샷.
   let responses = [];
@@ -243,5 +247,7 @@ async function run() {
 function printDoc() {
   const box = document.getElementById("rd-doc");
   if (!box || box.querySelector(".empty") && box.children.length <= 1) return alert("먼저 보고서를 생성하세요.");
-  openPrintWindow("운영 결과 보고서", box.innerHTML);
+  // 창 제목이 PDF 저장 파일명이 된다: '운영 결과 보고서 (2026년 09월)'.
+  const label = reportMonth ? ` (${reportMonth.slice(0, 4)}년 ${reportMonth.slice(5, 7)}월)` : "";
+  openPrintWindow(`운영 결과 보고서${label}`, box.innerHTML);
 }
