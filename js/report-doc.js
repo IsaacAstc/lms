@@ -132,9 +132,9 @@ function operationsHTML(month) {
     .filter((c) => (c.startDate || "").slice(0, 7) === month)
     .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   if (!list.length) return `<p class="empty">해당 월에 시작한 차수가 없습니다.</p>`;
-  // 운영 결과는 차수마다 한 줄(4·8번과 달리 묶지 않는다) — 과정명 옆에 그 차수 일정.
+  // 운영 결과는 차수마다 한 줄(4·8번과 달리 묶지 않는다). 일정은 교육기간 열에 있으므로 과정명에는 붙이지 않는다.
   const rows = list.map((c) => `<tr>
-    <td>${nameWithPeriods(c.name || "", [c])}</td>
+    <td>${escapeHtml(c.name || "")}</td>
     <td>${escapeHtml(courseTypeOf(c.id))}</td>
     <td style="text-align:right">${c.round ?? ""}</td>
     <td style="text-align:right">${c.capacity ?? 0}</td>
