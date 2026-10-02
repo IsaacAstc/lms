@@ -37,6 +37,20 @@ export function resolveInstructorAt(inst, dateStr) {
   };
 }
 
+// 여비기준 선택지. 기준표(설정 > 여비)에 있는 값만 고를 수 있게 한다 — 자유 입력이면
+// 빈 값·오타가 그대로 저장돼 강사료 집계에서 여비가 '수동확인'으로 빠진다.
+// 기준표에 없는 기존 값은 지우지 않고 '기준표에 없음'으로 보여 고치게 한다.
+function travelBasisOptions(sel) {
+  const keys = Object.keys(getTravelRates());
+  const opts = [`<option value="">선택</option>`];
+  if (sel && !keys.includes(sel)) {
+    opts.push(`<option value="${escapeHtml(sel)}" selected>${escapeHtml(sel)} (기준표에 없음)</option>`);
+  }
+  for (const k of keys) opts.push(`<option value="${escapeHtml(k)}"${k === sel ? " selected" : ""}>${escapeHtml(k)}</option>`);
+  return opts.join("");
+}
+function isKnownBasis(v) { return !!v && Object.keys(getTravelRates()).includes(v); }
+
 export function initInstructors() {
   watchCollection("instructors");
   const form = document.getElementById("instructor-form");
@@ -58,15 +72,10 @@ export function initInstructors() {
     }
     if (prev) form.instructorType.value = prev;
   };
-  // 여비기준 datalist (설정값 기반).
+  // 여비기준 선택 목록(설정값 기반). 수정 중인 값은 유지한다.
   const refreshTravelList = () => {
-    const dl = document.getElementById("travel-basis-list");
-    dl.innerHTML = "";
-    for (const k of Object.keys(getTravelRates())) {
-      const o = document.createElement("option");
-      o.value = k;
-      dl.appendChild(o);
-    }
+    const prev = form.travelBasis.value;
+    form.travelBasis.innerHTML = travelBasisOptions(prev);
   };
   onCollection("settings", () => { refreshTypeList(); refreshTravelList(); });
 
@@ -75,7 +84,7 @@ export function initInstructors() {
     const data = {
       name: form.name.value.trim(),
       affiliation: form.affiliation.value.trim(),
-      travelBasis: form.travelBasis.value.trim(),
+      travelBasis: form.travelBasis.value,
       instructorType: form.instructorType.value,
       position: form.position.value.trim(),
       careerYears: form.careerYears.value ? Number(form.careerYears.value) : null,
@@ -87,6 +96,7 @@ export function initInstructors() {
     };
     if (!data.name) return alert("강사명을 입력하세요.");
     if (!data.instructorType) return alert("강사유형을 선택하세요.");
+    if (!isKnownBasis(data.travelBasis)) return alert("여비기준을 목록에서 선택하세요.");
     if ((data.adjustTravelPerDay != null || data.adjustMonthlyCap != null) && !data.adjustReason)
       return alert("상시조정 값을 입력한 경우 사유를 반드시 기재하세요.");
     try {
@@ -138,7 +148,7 @@ function renderHistoryEditor(td, inst) {
       <tr>
         <td><input type="date" class="h-from" data-i="${idx}" value="${escapeHtml(h.from)}"></td>
         <td><select class="h-type" data-i="${idx}">${typeOpts(h.instructorType)}</select></td>
-        <td><input class="h-basis" data-i="${idx}" list="travel-basis-list" value="${escapeHtml(h.travelBasis)}"></td>
+        <td><select class="h-basis" data-i="${idx}">${travelBasisOptions(h.travelBasis)}</select></td>
         <td class="actions"><button type="button" class="del h-del" data-i="${idx}">삭제</button></td>
       </tr>`).join("");
     td.innerHTML = `
@@ -158,7 +168,7 @@ function renderHistoryEditor(td, inst) {
 
     td.querySelectorAll(".h-from").forEach((el) => el.addEventListener("change", (e) => { draft[+e.target.dataset.i].from = e.target.value; }));
     td.querySelectorAll(".h-type").forEach((el) => el.addEventListener("change", (e) => { draft[+e.target.dataset.i].instructorType = e.target.value; }));
-    td.querySelectorAll(".h-basis").forEach((el) => el.addEventListener("input", (e) => { draft[+e.target.dataset.i].travelBasis = e.target.value; }));
+    td.querySelectorAll(".h-basis").forEach((el) => el.addEventListener("change", (e) => { draft[+e.target.dataset.i].travelBasis = e.target.value; }));
     td.querySelectorAll(".h-del").forEach((el) => el.addEventListener("click", (e) => { draft.splice(+e.target.dataset.i, 1); paint(); }));
 
     td.querySelector(".h-add").addEventListener("click", () => {
@@ -178,6 +188,8 @@ function renderHistoryEditor(td, inst) {
         .filter((h) => h.from || h.instructorType || h.travelBasis);
       if (clean.some((h) => !h.from)) return alert("발효일자를 모두 입력하세요.");
       if (clean.some((h) => !h.instructorType)) return alert("강사유형을 모두 선택하세요.");
+      // 비워 두면 최신 이력이 마스터 여비기준까지 빈 값으로 덮어써, 집계에서 '수동확인'이 된다.
+      if (clean.some((h) => !isKnownBasis(h.travelBasis))) return alert("여비기준을 모두 목록에서 선택하세요.");
       const froms = clean.map((h) => h.from);
       if (new Set(froms).size !== froms.length) return alert("발효일자가 중복되었습니다.");
       clean.sort((a, b) => a.from.localeCompare(b.from));
@@ -233,7 +245,8 @@ function render(tbody, form, submitBtn, cancelBtn, keyword) {
       editingId = i.id;
       form.name.value = i.name ?? "";
       form.affiliation.value = i.affiliation ?? "";
-      form.travelBasis.value = i.travelBasis ?? "";
+      // 기준표에 없는 옛 값도 선택지에 넣어 보여 준다(그대로 두면 select가 빈 값이 된다).
+      form.travelBasis.innerHTML = travelBasisOptions(i.travelBasis ?? "");
       form.instructorType.value = i.instructorType ?? "";
       form.position.value = i.position ?? "";
       form.careerYears.value = i.careerYears ?? "";
