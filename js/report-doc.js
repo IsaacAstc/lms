@@ -20,6 +20,18 @@ function courseTypeOf(id) {
   return prog?.category || "미분류";
 }
 function courseNameOf(id) { return coursesCache.find((c) => c.id === id)?.name || id || "-"; }
+// 과정명 옆 괄호에 붙이는 교육 일정(월은 보고서 기준이라 생략하지 않고 MM.DD로 짧게).
+// 같은 과정명이 한 달에 여러 차수 있을 때 어느 차수인지 구분된다.
+function periodOf(c) {
+  const md = (d) => (d ? `${d.slice(5, 7)}.${d.slice(8, 10)}` : "");
+  const s = md(c?.startDate || ""), e = md(c?.endDate || "");
+  if (!s) return "";
+  return e && e !== s ? `${s}-${e}` : s;
+}
+function nameWithPeriod(c, fallback = "-") {
+  const p = periodOf(c);
+  return `${escapeHtml(c?.name || fallback)}${p ? ` <span class="muted">(${escapeHtml(p)})</span>` : ""}`;
+}
 const won = (n) => (n || 0).toLocaleString("ko-KR");
 const fmt = (v) => (v == null ? "-" : v.toFixed(2));
 
@@ -72,19 +84,22 @@ function summaryTableHTML(sm) {
 
 // 주관식 원문(과정명 그룹 + 기타).
 function freetextHTML(responses) {
+  // 차수(courseId) 단위로 묶는다 — 같은 과정명의 다른 차수가 섞이지 않게.
   const byCourse = {};
   for (const r of responses) {
-    const name = courseNameOf(r.courseId);
-    const items = byCourse[name] = byCourse[name] || [];
+    const items = byCourse[r.courseId || ""] = byCourse[r.courseId || ""] || [];
     if (r.freeDissatisfied) items.push({ kind: "불만족", text: r.freeDissatisfied });
     if (r.freeSuggestion) items.push({ kind: "제안·개선", text: r.freeSuggestion });
     for (const t of r.freeExtra || []) if (t?.text) items.push({ kind: "추가주관식", text: `[${t.label}] ${t.text}` });
     for (const t of r.fuTexts || []) if (t?.text) items.push({ kind: "조건부", text: `[${t.label}] ${t.text}` });
   }
-  const names = Object.keys(byCourse).filter((n) => byCourse[n].length).sort();
-  if (!names.length) return `<p class="empty">주관식 원문이 없습니다.</p>`;
-  return names.map((n) => `
-    <h4>${escapeHtml(n)}</h4>
+  const byId = (id) => coursesCache.find((c) => c.id === id);
+  const ids = Object.keys(byCourse).filter((id) => byCourse[id].length).sort((a, b) =>
+    (byId(a)?.startDate || "").localeCompare(byId(b)?.startDate || "")
+    || courseNameOf(a).localeCompare(courseNameOf(b)));
+  if (!ids.length) return `<p class="empty">주관식 원문이 없습니다.</p>`;
+  return ids.map((n) => `
+    <h4>${byId(n) ? nameWithPeriod(byId(n)) : escapeHtml(courseNameOf(n))}</h4>
     <table><thead><tr><th>종류</th><th>원문</th></tr></thead><tbody>${
       byCourse[n].map((e) => `<tr><td>${escapeHtml(e.kind)}</td><td class="raw-free">${escapeHtml(e.text)}</td></tr>`).join("")
     }</tbody></table>`).join("");
@@ -97,7 +112,7 @@ function operationsHTML(month) {
     .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   if (!list.length) return `<p class="empty">해당 월에 시작한 차수가 없습니다.</p>`;
   const rows = list.map((c) => `<tr>
-    <td>${escapeHtml(c.name || "")}</td>
+    <td>${nameWithPeriod(c, "")}</td>
     <td>${escapeHtml(courseTypeOf(c.id))}</td>
     <td style="text-align:right">${c.round ?? ""}</td>
     <td style="text-align:right">${c.capacity ?? 0}</td>
@@ -116,8 +131,9 @@ function passRateHTML(month) {
   if (!list.length) return `<p class="empty">해당 월에 평가가 포함된 과정이 없습니다.</p>`;
   const byName = {};
   for (const c of list) {
-    const g = byName[c.name || "(과정명 없음)"] = byName[c.name || "(과정명 없음)"] || { rounds: 0, applied: 0, completed: 0 };
+    const g = byName[c.name || "(과정명 없음)"] = byName[c.name || "(과정명 없음)"] || { rounds: 0, applied: 0, completed: 0, periods: [] };
     g.rounds++;
+    if (periodOf(c)) g.periods.push({ at: c.startDate || "", p: periodOf(c) });
     g.applied += c.appliedCount || 0;
     g.completed += c.completedCount || 0;
   }
@@ -126,7 +142,7 @@ function passRateHTML(month) {
   const rows = names.map((n) => {
     const g = byName[n];
     return `<tr>
-      <td>${escapeHtml(n)}${g.rounds > 1 ? ` <small>(${g.rounds}개 차수 합산)</small>` : ""}</td>
+      <td>${escapeHtml(n)}${g.periods.length ? ` <span class="muted">(${escapeHtml(g.periods.sort((a, b) => a.at.localeCompare(b.at)).map((x) => x.p).join(", "))})</span>` : ""}${g.rounds > 1 ? ` <small>(${g.rounds}개 차수 합산)</small>` : ""}</td>
       <td style="text-align:right">${g.applied}</td>
       <td style="text-align:right">${g.completed}</td>
       <td style="text-align:right"><b>${rate(g)}</b></td></tr>`;
