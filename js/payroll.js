@@ -10,6 +10,7 @@ import { getInstructors, getInstructorById, resolveInstructorAt } from "./instru
 import { getHiddenCourseIds, coursesCache } from "./courses.js";
 import { isPayExcludedSubject } from "./constants.js";
 import { fmtDot } from "./time.js";
+import { openPrintWindow } from "./print-window.js";
 
 // ── 순수 계산 함수 (엑셀 '계산' 시트 로직) ──
 
@@ -121,6 +122,7 @@ export function initPayroll() {
   };
   periodType.addEventListener("change", syncInputType);
   runBtn.addEventListener("click", () => renderAggregate(periodType.value, periodInput.value));
+  document.getElementById("pay-print").addEventListener("click", printPayroll);
   document.getElementById("pay-adj-save").addEventListener("click", () => saveAdjust(false));
   document.getElementById("pay-adj-clear").addEventListener("click", () => {
     if (confirm("이 달의 건별 조정을 해제할까요? (상시 규칙·자동 계산으로 복귀)")) saveAdjust(true);
@@ -289,6 +291,24 @@ async function renderAggregate(type, value) {
   }
   document.getElementById("pay-total").textContent =
     `강사료 ${won(totFee)} + 여비(자동분) ${won(totTravel)} = ${won(totFee + totTravel)}`;
+}
+
+// 인쇄(PDF): 현재 집계 표를 그대로 옮기되 세부·조정 버튼은 뺀다.
+// 펼쳐 둔 세부 내역 행은 계산근거라 그대로 함께 인쇄한다.
+function printPayroll() {
+  const tbody = document.getElementById("pay-tbody");
+  if (!lastPeriod || !tbody.children.length) return alert("먼저 집계를 실행하세요.");
+  const table = tbody.closest("table").cloneNode(true);
+  table.querySelectorAll("button").forEach((b) => b.remove());
+  const { type, value } = lastPeriod;
+  const label = type === "year" ? `${value}년` : `${value.slice(0, 4)}년 ${value.slice(5, 7)}월`;
+  const total = document.getElementById("pay-total").textContent;
+  const printedAt = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" }).format(new Date());
+  openPrintWindow(`강사료·강의시간 집계 (${label})`, `
+    <h1>강사료·강의시간 집계 <small class="muted">${escapeHtml(label)}</small></h1>
+    ${table.outerHTML}
+    <p><b>${escapeHtml(total)}</b></p>
+    <p class="muted">출력: ${escapeHtml(printedAt)} · 강사료는 강사유형별 기준·월상한 적용, 점심시간(12:00-13:00) 차감, 운영 안내·평가 성격 과목 제외.</p>`);
 }
 
 function won(n) {
