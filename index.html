@@ -250,7 +250,7 @@
               <label>강사명<input name="name" required /></label>
               <label>소속<input name="affiliation" /></label>
               <label>강사유형<select name="instructorType" required><option value="">선택</option></select></label>
-              <label>여비기준<input name="travelBasis" list="travel-basis-list" /></label>
+              <label>여비기준<select name="travelBasis" required><option value="">선택</option></select></label>
               <label>직책<input name="position" /></label>
               <label>경력(년)<input name="careerYears" type="number" min="0" /></label>
               <label>경력산정상세<input name="careerDetail" /></label>
@@ -263,7 +263,6 @@
               <button id="instructor-cancel" type="button" hidden>취소</button>
             </div>
           </form>
-          <datalist id="travel-basis-list"></datalist>
           <label class="course-picker">검색 <input id="instructor-search" placeholder="강사명·소속·유형·직책" /></label>
           <div class="table-wrap">
             <table>
