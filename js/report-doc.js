@@ -28,10 +28,22 @@ function periodOf(c) {
   if (!s) return "";
   return e && e !== s ? `${s}-${e}` : s;
 }
-function nameWithPeriod(c, fallback = "-") {
-  const p = periodOf(c);
-  return `${escapeHtml(c?.name || fallback)}${p ? ` <span class="muted">(${escapeHtml(p)})</span>` : ""}`;
+// 같은 과정명은 한 줄·한 표로 묶는다. 공백 차이(끝 공백, 두 칸 띄움)로 같은
+// 과정이 따로 갈라지지 않도록 비교용 키는 공백을 정규화한다.
+const nameKey = (n) => String(n || "").replace(/\s+/g, " ").trim();
+function groupByName(courses) {
+  const g = {};
+  for (const c of courses) (g[nameKey(c.name)] = g[nameKey(c.name)] || []).push(c);
+  return Object.entries(g)
+    .map(([name, list]) => ({ name, list: list.sort((a, b) => (a.startDate || "").localeCompare(b.startDate || "")) }))
+    .sort((a, b) => (a.list[0].startDate || "").localeCompare(b.list[0].startDate || "") || a.name.localeCompare(b.name));
 }
+// 과정명 (09.28, 09.30) — 묶인 차수들의 일정을 쉼표로 나열.
+function nameWithPeriods(name, courses) {
+  const ps = courses.map(periodOf).filter(Boolean);
+  return `${escapeHtml(name || "-")}${ps.length ? ` <span class="muted">(${escapeHtml(ps.join(", "))})</span>` : ""}`;
+}
+const uniq = (arr) => [...new Set(arr.filter((v) => v !== "" && v != null))];
 const won = (n) => (n || 0).toLocaleString("ko-KR");
 const fmt = (v) => (v == null ? "-" : v.toFixed(2));
 
@@ -84,42 +96,57 @@ function summaryTableHTML(sm) {
 
 // 주관식 원문(과정명 그룹 + 기타).
 function freetextHTML(responses) {
-  // 차수(courseId) 단위로 묶는다 — 같은 과정명의 다른 차수가 섞이지 않게.
-  const byCourse = {};
-  for (const r of responses) {
-    const items = byCourse[r.courseId || ""] = byCourse[r.courseId || ""] || [];
-    if (r.freeDissatisfied) items.push({ kind: "불만족", text: r.freeDissatisfied });
-    if (r.freeSuggestion) items.push({ kind: "제안·개선", text: r.freeSuggestion });
-    for (const t of r.freeExtra || []) if (t?.text) items.push({ kind: "추가주관식", text: `[${t.label}] ${t.text}` });
-    for (const t of r.fuTexts || []) if (t?.text) items.push({ kind: "조건부", text: `[${t.label}] ${t.text}` });
-  }
+  // 과정명이 같으면 한 표로 묶고, 원문마다 그 차수의 일정을 붙인다.
   const byId = (id) => coursesCache.find((c) => c.id === id);
-  const ids = Object.keys(byCourse).filter((id) => byCourse[id].length).sort((a, b) =>
-    (byId(a)?.startDate || "").localeCompare(byId(b)?.startDate || "")
-    || courseNameOf(a).localeCompare(courseNameOf(b)));
-  if (!ids.length) return `<p class="empty">주관식 원문이 없습니다.</p>`;
-  return ids.map((n) => `
-    <h4>${byId(n) ? nameWithPeriod(byId(n)) : escapeHtml(courseNameOf(n))}</h4>
-    <table><thead><tr><th>종류</th><th>원문</th></tr></thead><tbody>${
-      byCourse[n].map((e) => `<tr><td>${escapeHtml(e.kind)}</td><td class="raw-free">${escapeHtml(e.text)}</td></tr>`).join("")
+  const groups = {};
+  for (const r of responses) {
+    const c = byId(r.courseId);
+    const key = c ? nameKey(c.name) : (r.courseId || "-");
+    const g = groups[key] = groups[key] || { name: key, courses: new Map(), items: [] };
+    if (c) g.courses.set(c.id, c);
+    const at = c?.startDate || "";
+    const p = periodOf(c);
+    const push = (kind, text) => g.items.push({ at, p, kind, text });
+    if (r.freeDissatisfied) push("불만족", r.freeDissatisfied);
+    if (r.freeSuggestion) push("제안·개선", r.freeSuggestion);
+    for (const t of r.freeExtra || []) if (t?.text) push("추가주관식", `[${t.label}] ${t.text}`);
+    for (const t of r.fuTexts || []) if (t?.text) push("조건부", `[${t.label}] ${t.text}`);
+  }
+  const list = Object.values(groups).filter((g) => g.items.length).map((g) => {
+    const courses = [...g.courses.values()].sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+    return { ...g, courses, first: courses[0]?.startDate || "" };
+  }).sort((a, b) => a.first.localeCompare(b.first) || a.name.localeCompare(b.name));
+  if (!list.length) return `<p class="empty">주관식 원문이 없습니다.</p>`;
+  return list.map((g) => `
+    <h4>${nameWithPeriods(g.name, g.courses)}</h4>
+    <table><thead><tr><th>일정</th><th>종류</th><th>원문</th></tr></thead><tbody>${
+      // 차수(일정) 순으로 — 같은 차수 안에서는 들어온 순서 유지(정렬은 안정적).
+      g.items.sort((a, b) => a.at.localeCompare(b.at)).map((e) =>
+        `<tr><td style="white-space:nowrap">${escapeHtml(e.p || "-")}</td><td>${escapeHtml(e.kind)}</td><td class="raw-free">${escapeHtml(e.text)}</td></tr>`).join("")
     }</tbody></table>`).join("");
 }
 
 // 운영결과(회차·계획/이수 인원·강의실).
 function operationsHTML(month) {
-  const list = coursesCache
-    .filter((c) => (c.startDate || "").slice(0, 7) === month)
-    .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+  const list = coursesCache.filter((c) => (c.startDate || "").slice(0, 7) === month);
   if (!list.length) return `<p class="empty">해당 월에 시작한 차수가 없습니다.</p>`;
-  const rows = list.map((c) => `<tr>
-    <td>${nameWithPeriod(c, "")}</td>
-    <td>${escapeHtml(courseTypeOf(c.id))}</td>
-    <td style="text-align:right">${c.round ?? ""}</td>
-    <td style="text-align:right">${c.capacity ?? 0}</td>
-    <td style="text-align:right">${c.appliedCount ?? 0}</td>
-    <td style="text-align:right">${c.completedCount ?? 0}</td>
-    <td>${escapeHtml(c.venue || "")}</td>
-    <td>${escapeHtml(fmtDot(c.startDate || ""))} - ${escapeHtml(fmtDot(c.endDate || ""))}</td></tr>`).join("");
+  // 같은 과정명은 한 줄로: 인원은 합산, 차수·교육장·교육기간은 쉼표로 나열.
+  const rows = groupByName(list).map(({ name, list: cs }) => {
+    const sum = (k) => cs.reduce((n, c) => n + (c[k] || 0), 0);
+    const range = (c) => {
+      const s = fmtDot(c.startDate || ""), e = fmtDot(c.endDate || "");
+      return e && e !== s ? `${s} - ${e}` : s;
+    };
+    return `<tr>
+    <td>${nameWithPeriods(name, cs)}</td>
+    <td>${escapeHtml(uniq(cs.map((c) => courseTypeOf(c.id))).join(", "))}</td>
+    <td style="text-align:right">${escapeHtml(uniq(cs.map((c) => c.round)).join(", "))}</td>
+    <td style="text-align:right">${sum("capacity")}</td>
+    <td style="text-align:right">${sum("appliedCount")}</td>
+    <td style="text-align:right">${sum("completedCount")}</td>
+    <td>${escapeHtml(uniq(cs.map((c) => c.venue || "")).join(", "))}</td>
+    <td>${escapeHtml(cs.map(range).filter(Boolean).join(", "))}</td></tr>`;
+  }).join("");
   return `<table><thead><tr><th>과정명</th><th>유형</th><th>차수</th><th>정원</th><th>신청</th><th>이수</th><th>교육장</th><th>교육기간</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -129,25 +156,18 @@ function passRateHTML(month) {
   const list = coursesCache.filter((c) =>
     (c.startDate || "").slice(0, 7) === month && c.hasEvaluation && !c.hidden);
   if (!list.length) return `<p class="empty">해당 월에 평가가 포함된 과정이 없습니다.</p>`;
-  const byName = {};
-  for (const c of list) {
-    const g = byName[c.name || "(과정명 없음)"] = byName[c.name || "(과정명 없음)"] || { rounds: 0, applied: 0, completed: 0, periods: [] };
-    g.rounds++;
-    if (periodOf(c)) g.periods.push({ at: c.startDate || "", p: periodOf(c) });
-    g.applied += c.appliedCount || 0;
-    g.completed += c.completedCount || 0;
-  }
   const rate = (g) => (g.applied ? ((g.completed / g.applied) * 100).toFixed(2) + "%" : "-");
-  const names = Object.keys(byName).sort();
-  const rows = names.map((n) => {
-    const g = byName[n];
-    return `<tr>
-      <td>${escapeHtml(n)}${g.periods.length ? ` <span class="muted">(${escapeHtml(g.periods.sort((a, b) => a.at.localeCompare(b.at)).map((x) => x.p).join(", "))})</span>` : ""}${g.rounds > 1 ? ` <small>(${g.rounds}개 차수 합산)</small>` : ""}</td>
+  const groups = groupByName(list).map(({ name, list: cs }) => ({
+    name, cs,
+    applied: cs.reduce((n, c) => n + (c.appliedCount || 0), 0),
+    completed: cs.reduce((n, c) => n + (c.completedCount || 0), 0),
+  }));
+  const rows = groups.map((g) => `<tr>
+      <td>${nameWithPeriods(g.name || "(과정명 없음)", g.cs)}${g.cs.length > 1 ? ` <small>(${g.cs.length}개 차수 합산)</small>` : ""}</td>
       <td style="text-align:right">${g.applied}</td>
       <td style="text-align:right">${g.completed}</td>
-      <td style="text-align:right"><b>${rate(g)}</b></td></tr>`;
-  }).join("");
-  const t = names.reduce((s, n) => ({ applied: s.applied + byName[n].applied, completed: s.completed + byName[n].completed }), { applied: 0, completed: 0 });
+      <td style="text-align:right"><b>${rate(g)}</b></td></tr>`).join("");
+  const t = groups.reduce((s, g) => ({ applied: s.applied + g.applied, completed: s.completed + g.completed }), { applied: 0, completed: 0 });
   return `<table><thead><tr><th>과정명</th><th>신청(출석) 인원</th><th>이수 인원</th><th>합격률</th></tr></thead><tbody>${rows}
     <tr class="sum-row"><td><b>전체</b></td>
       <td style="text-align:right"><b>${t.applied}</b></td>
@@ -156,7 +176,6 @@ function passRateHTML(month) {
     <p class="hint">산식: 합격률(%) = 이수 인원 ÷ 신청(출석) 인원 × 100 (소수점 둘째 자리, 평가 포함 과정만 집계)</p>`;
 }
 
-// 소요경비(1인당 단가).
 async function expensesHTML(month) {
   let e = null;
   try { const d = await getDoc(doc(db, "expenses", month)); if (d.exists()) e = d.data(); } catch { /* */ }
