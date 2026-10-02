@@ -32,7 +32,21 @@ function endOfNextMonthStr() {
 function applyDefaultRange() {
   document.getElementById("board-from").value = todayStr();
   document.getElementById("board-to").value = endOfNextMonthStr();
-  document.getElementById("board-past").checked = false;
+}
+
+// 이미 끝난 과정(종료일이 오늘보다 앞)은 공개 보드에 내보이지 않는다.
+// 교육 중인 과정은 신청은 막혀도 취소는 받으므로 계속 보여야 한다.
+function ended(c) {
+  const e = c.endDate || c.startDate || "";
+  return !!e && e < todayStr();
+}
+
+// 날짜 입력은 오늘 이전을 고르지 못하게 한다(min). 키보드 입력 등으로 min을
+// 넘겨 들어온 값은 오늘로 되돌린다 — 목록은 어차피 ended()로 거른다.
+function clampFrom(el) {
+  const t = todayStr();
+  el.min = t;
+  if (el.value && el.value < t) el.value = t;
 }
 
 // 교육기간이 지정 범위와 겹치면 표시(여러 날 과정이 경계에 걸쳐도 포함).
@@ -45,11 +59,9 @@ function inRange(c, from, to) {
 }
 
 function render() {
-  const includePast = document.getElementById("board-past").checked;
   const from = document.getElementById("board-from").value;
   const to = document.getElementById("board-to").value;
   const note = document.getElementById("board-filter-note");
-  const today = todayStr();
 
   if (from && to && to < from) {
     root.innerHTML = `<p class="empty">종료일자가 시작일자보다 빠릅니다. 기간을 다시 선택하세요.</p>`;
@@ -60,13 +72,13 @@ function render() {
   const ranged = !!(from || to);
   // 기간을 지정하면 그 범위를 기준으로 하고, 아니면 '지난 과정 포함' 여부로 판단.
   const list = items
-    .filter((c) => (ranged ? inRange(c, from, to) : (includePast || !c.endDate || c.endDate >= today)))
+    .filter((c) => !ended(c) && (!ranged || inRange(c, from, to)))
     .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || "") || (a.name || "").localeCompare(b.name || ""));
 
   const isDefault = ranged && from === todayStr() && to === endOfNextMonthStr();
   note.textContent = ranged
     ? `${dot(from) || "처음"} - ${dot(to) || "끝"}${isDefault ? " (기본: 다음 달 말일까지)" : ""} · ${list.length}건`
-    : (includePast ? `전체 기간 · ${list.length}건` : `진행 예정·진행 중 · ${list.length}건`);
+    : `진행 예정·진행 중 · ${list.length}건`;
 
   if (!list.length) {
     root.innerHTML = `<p class="empty">${ranged ? "해당 기간에 교육 과정이 없습니다." : "현재 안내 중인 교육 과정이 없습니다."}</p>`;
@@ -295,9 +307,11 @@ function main() {
     render();
   }, () => { root.innerHTML = `<p class="empty">현황을 불러오지 못했습니다. 잠시 후 다시 시도하세요.</p>`; });
 
-  document.getElementById("board-past").addEventListener("change", render);
-  document.getElementById("board-from").addEventListener("change", render);
-  document.getElementById("board-to").addEventListener("change", render);
+  const fromEl = document.getElementById("board-from");
+  const toEl = document.getElementById("board-to");
+  clampFrom(fromEl); clampFrom(toEl);
+  fromEl.addEventListener("change", () => { clampFrom(fromEl); render(); });
+  toEl.addEventListener("change", () => { clampFrom(toEl); render(); });
   document.getElementById("board-reset").addEventListener("click", () => {
     applyDefaultRange(); // 기본 범위로 복귀.
     render();
