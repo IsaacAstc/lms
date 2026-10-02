@@ -128,25 +128,20 @@ function freetextHTML(responses) {
 
 // 운영결과(회차·계획/이수 인원·강의실).
 function operationsHTML(month) {
-  const list = coursesCache.filter((c) => (c.startDate || "").slice(0, 7) === month);
+  const list = coursesCache
+    .filter((c) => (c.startDate || "").slice(0, 7) === month)
+    .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   if (!list.length) return `<p class="empty">해당 월에 시작한 차수가 없습니다.</p>`;
-  // 같은 과정명은 한 줄로: 인원은 합산, 차수·교육장·교육기간은 쉼표로 나열.
-  const rows = groupByName(list).map(({ name, list: cs }) => {
-    const sum = (k) => cs.reduce((n, c) => n + (c[k] || 0), 0);
-    const range = (c) => {
-      const s = fmtDot(c.startDate || ""), e = fmtDot(c.endDate || "");
-      return e && e !== s ? `${s} - ${e}` : s;
-    };
-    return `<tr>
-    <td>${nameWithPeriods(name, cs)}</td>
-    <td>${escapeHtml(uniq(cs.map((c) => courseTypeOf(c.id))).join(", "))}</td>
-    <td style="text-align:right">${escapeHtml(uniq(cs.map((c) => c.round)).join(", "))}</td>
-    <td style="text-align:right">${sum("capacity")}</td>
-    <td style="text-align:right">${sum("appliedCount")}</td>
-    <td style="text-align:right">${sum("completedCount")}</td>
-    <td>${escapeHtml(uniq(cs.map((c) => c.venue || "")).join(", "))}</td>
-    <td>${escapeHtml(cs.map(range).filter(Boolean).join(", "))}</td></tr>`;
-  }).join("");
+  // 운영 결과는 차수마다 한 줄(4·8번과 달리 묶지 않는다) — 과정명 옆에 그 차수 일정.
+  const rows = list.map((c) => `<tr>
+    <td>${nameWithPeriods(c.name || "", [c])}</td>
+    <td>${escapeHtml(courseTypeOf(c.id))}</td>
+    <td style="text-align:right">${c.round ?? ""}</td>
+    <td style="text-align:right">${c.capacity ?? 0}</td>
+    <td style="text-align:right">${c.appliedCount ?? 0}</td>
+    <td style="text-align:right">${c.completedCount ?? 0}</td>
+    <td>${escapeHtml(c.venue || "")}</td>
+    <td>${escapeHtml(fmtDot(c.startDate || ""))} - ${escapeHtml(fmtDot(c.endDate || ""))}</td></tr>`).join("");
   return `<table><thead><tr><th>과정명</th><th>유형</th><th>차수</th><th>정원</th><th>신청</th><th>이수</th><th>교육장</th><th>교육기간</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
