@@ -5,6 +5,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { escapeHtml } from "./app.js";
+import { openPrintWindow } from "./print-window.js";
 import { coursesCache } from "./courses.js";
 import { getProgramById } from "./programs.js";
 import {
@@ -242,30 +243,5 @@ async function run() {
 function printDoc() {
   const box = document.getElementById("rd-doc");
   if (!box || box.querySelector(".empty") && box.children.length <= 1) return alert("먼저 보고서를 생성하세요.");
-  const w = window.open("", "_blank");
-  if (!w) return alert("팝업이 차단되었습니다. 팝업을 허용하세요.");
-  w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8">
-    <title>운영 결과 보고서</title>
-    <style>
-      body{font-family:'Malgun Gothic',sans-serif;margin:24px;color:#111;font-size:12px;}
-      h1{font-size:18px;} h3{font-size:14px;margin-top:18px;border-bottom:2px solid #333;padding-bottom:4px;}
-      h4{font-size:12px;margin:8px 0 4px;}
-      table{border-collapse:collapse;width:100%;margin:6px 0;}
-      th,td{border:1px solid #999;padding:4px 6px;font-size:11px;}
-      th{background:#eee;} .sum-row{background:#f6f6f6;font-weight:bold;}
-      .report-narr{white-space:pre-wrap;border:1px solid #ccc;padding:8px;min-height:32px;}
-      .warn{color:#a30;} .empty{color:#888;} .raw-free{white-space:pre-wrap;}
-    </style></head><body>${box.innerHTML}</body></html>`);
-  w.document.close();
-  w.focus();
-  // onload와 보조 타이머가 둘 다 실행돼 인쇄창이 두 번 뜨지 않도록 1회 가드.
-  let printed = false;
-  const printOnce = () => {
-    if (printed) return;
-    printed = true;
-    try { w.print(); } catch { /* */ }
-  };
-  w.onload = printOnce;
-  // onload가 이미 지났을 수 있어 보조 호출(가드로 중복 방지).
-  setTimeout(printOnce, 300);
+  openPrintWindow("운영 결과 보고서", box.innerHTML);
 }
