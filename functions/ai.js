@@ -177,16 +177,16 @@ function actionMessages(categories, actionText) {
 // 공문·안내문 초안. 사실(facts)은 화면이 데이터로 만들어 넘기고, 모델은 문장만 쓴다.
 const DOC_KINDS = {
   dispatch: { label: "출강 요청 공문", guide:
-    "강사(또는 강사 소속기관)에게 보내는 출강 요청 공문. 구성: 제목, 1. 관련, 2. 요청 취지(과정명·차수·교육기간), " +
-    "3. 출강 일정(일자·시간·과목·강의실을 항목으로), 4. 협조 요청(강의자료 사전 송부 등 일반 문구), 붙임 없음이면 '끝.'. " +
-    "강사 이름 자리는 '○○○'로 비워 둔다." },
+    "한 소속기관(affiliation)에 보내는 그 달 출강 요청 공문(그 기관 강사들의 일정을 한 문서로). 구성: 제목, 1. 관련, " +
+    "2. 요청 취지(대상 월, 과정 교육을 위한 강사 출강 요청), 3. 출강 일정(강사별로 묶어 일자·시간·과정명·차수·과목·강의실을 항목으로), " +
+    "4. 협조 요청(강의자료 사전 송부 등 일반 문구), '끝.'. 강사 이름은 자료의 강사 표기(○○○ 강사A 등)를 그대로 쓴다." },
   notice: { label: "교육 안내 공문", guide:
-    "교육 대상 기관에 보내는 교육 실시 안내 공문. 구성: 제목, 1. 관련, 2. 교육 개요(과정명·차수·기간·장소·정원), " +
-    "3. 주요 교육 내용(과목 목록 요약), 4. 협조 사항(대상자 선발·입과 안내 등 일반 문구), '끝.'." },
+    "교육 대상 기관에 보내는 그 달 교육 실시 안내 공문. 구성: 제목, 1. 관련, 2. 교육 개요(대상 월), " +
+    "3. 교육 일정(과정별로 과정명·차수·기간·장소·정원·주요 과목을 항목으로), 4. 협조 사항(대상자 선발·입과 안내 등 일반 문구), '끝.'." },
   result: { label: "결과 보고 본문", guide:
-    "내부 결재용 교육 결과 보고 본문. 구성: 제목, 1. 교육 개요(과정명·차수·기간·장소), 2. 운영 결과(정원·신청·이수 인원), " +
-    "3. 만족도 결과(있을 때만, 100점 환산값 그대로), 4. 향후 조치(일반 문구 1~2개). " +
-    "만족도 응답자가 10명 미만이면 '응답 표본이 적어 참고용'임을 밝힌다." },
+    "내부 결재용 월간 교육 결과 보고 본문. 구성: 제목, 1. 교육 개요(대상 월, 운영 차수 수), 2. 운영 결과(과정별 정원·신청·이수 인원과 합계 — 자료의 totals 값 그대로), " +
+    "3. 만족도 결과(자료에 있는 과정만, 100점 환산값 그대로), 4. 향후 조치(일반 문구 1~2개). " +
+    "만족도 응답자가 10명 미만인 과정은 '응답 표본이 적어 참고용'임을 밝힌다." },
 };
 function docMessages(kind, facts) {
   const k = DOC_KINDS[kind];
@@ -416,12 +416,12 @@ module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin }) {
       if (!DOC_KINDS[kind]) throw new HttpsError("invalid-argument", "문서 종류가 올바르지 않습니다.");
       const facts = req.data?.facts;
       if (!facts || typeof facts !== "object") throw new HttpsError("invalid-argument", "자료가 없습니다.");
-      if (JSON.stringify(facts).length > 20000) throw new HttpsError("invalid-argument", "자료가 너무 큽니다.");
+      if (JSON.stringify(facts).length > 40000) throw new HttpsError("invalid-argument", "자료가 너무 큽니다.");
       const { provider, key } = await loadProvider(String(req.data?.providerId || ""));
       const t0 = Date.now();
-      const month = String(facts.course?.startDate || "").slice(0, 7);
+      const month = String(facts.month || "");
       try {
-        const r = await chat(provider, key, docMessages(kind, facts), { maxTokens: 1800 });
+        const r = await chat(provider, key, docMessages(kind, facts), { maxTokens: 3500 });
         const out = extractJson(r.content);
         const title = String(out.title || "").trim();
         const body = String(out.body || "").trim();
