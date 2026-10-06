@@ -14,6 +14,7 @@ import { initReports } from "./reports.js";
 import { initStats } from "./stats.js";
 import { initReportDoc } from "./report-doc.js";
 import { initFreetext } from "./freetext.js";
+import { initAiAdmin } from "./ai-admin.js";
 import { initDataAdmin } from "./data-admin.js";
 import { initAdmins } from "./admins.js";
 import { initBoardAdmin } from "./board-admin.js";
@@ -205,6 +206,7 @@ function initApp() {
   initStats();
   initReportDoc();
   initFreetext();
+  initAiAdmin();
   if (masterMode) initDataAdmin(); // 데이터 관리는 마스터 전용(불필요한 조회도 방지).
   if (masterMode) initOrgAdmin(); // 기관 관리(마스터 전용, 편집은 허브에서만).
   initAdmins();
