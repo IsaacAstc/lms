@@ -485,6 +485,35 @@
           <div class="table-wrap" id="stat-cmp"></div>
         </section>
 
+        <!-- 개선 효과 추적 -->
+        <section class="tab-panel" data-tab="improve" hidden>
+          <h2>개선 효과 추적</h2>
+          <p class="hint">피드백 반영계획의 조치를 등록하고 이행 상태를 관리합니다. 조치를 <b>완료</b>로 바꾸고 완료 월을 넣으면, 같은 분류의 <b>불만족 의견 비율(응답자 100명당 건수)</b>을 완료 월 <b>이전 3개월과 이후 3개월</b>로 비교해 효과를 표시합니다(응답 10명 미만이면 '데이터 부족').
+            효과 판정은 AI가 아니라 시스템이 설문 데이터로 계산합니다. 분류는 주관식 원문의 분류(AI 분석의 '분류 적용' 또는 수동 분류)를 씁니다.</p>
+
+          <h3>반영계획에서 조치 가져오기 (AI)</h3>
+          <div class="load-row">
+            <label>반영계획 월 <input id="im-month" type="month" /></label>
+            <label>모델 <select id="im-provider" class="ai-provider-select"><option value="">(AI 연결 없음)</option></select></label>
+            <button id="im-extract" type="button">AI로 조치 추출</button>
+          </div>
+          <div id="im-preview"></div>
+
+          <h3>직접 추가</h3>
+          <div class="load-row">
+            <input id="im-new-action" placeholder="조치 내용 (예: CBT 실습 PC 교체)" style="min-width:260px;flex:1" />
+            <label>분류 <select id="im-new-cat"></select></label>
+            <button id="im-add" type="button">추가</button>
+          </div>
+          <p class="hint">직접 추가한 조치의 계획 월은 위 '반영계획 월'로 들어갑니다.</p>
+
+          <h3>조치 목록</h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>조치</th><th>분류</th><th>계획 월</th><th>상태</th><th>완료 월</th><th>효과 (전 3개월 → 후 3개월)</th><th>관리</th></tr></thead>
+            <tbody id="im-body"><tr><td colspan="7" class="empty">-</td></tr></tbody>
+          </table></div>
+        </section>
+
         <!-- 운영 결과 보고서 -->
         <section class="tab-panel" data-tab="reportdoc" hidden>
           <h2>운영 결과 보고서</h2>

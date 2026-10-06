@@ -163,6 +163,17 @@ function unverifiedNumbers(texts, metrics, month) {
   return [...out];
 }
 
+function actionMessages(categories, actionText) {
+  return [
+    { role: "system", content:
+      "너는 교육 운영 개선 조치를 정리하는 보조자다. 피드백 반영계획 글에서 '실행할 조치'만 뽑아 각각 하나의 분류를 붙인다.\n" +
+      "규칙: 1) 조치는 글에 있는 내용만, 한 문장(30자 안팎)으로 다듬는다. 새 조치를 지어내지 않는다. " +
+      "2) 분류는 반드시 주어진 목록 중 하나. 3) 같은 조치를 중복해 뽑지 않는다. " +
+      "출력은 JSON 하나만: {\"actions\":[{\"action\":\"...\",\"category\":\"...\"}]} — 코드펜스 금지." },
+    { role: "user", content: `분류 목록: ${JSON.stringify(categories)}\n\n피드백 반영계획:\n${actionText}` },
+  ];
+}
+
 module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin }) {
   async function loadProvider(providerId) {
     const cfg = (await db.doc("settings/ai").get()).data() || {};
@@ -336,7 +347,41 @@ module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin }) {
       }
     });
 
-  return { aiTestProvider, aiAnalyzeFreetext, aiReportNarrative };
+  // 피드백 반영계획 → 개선 조치 항목(분류 포함) 추출. 저장은 화면에서 사람이 고른 것만.
+  const aiExtractActions = onCall(
+    { region: "asia-northeast3", memory: "256MiB", timeoutSeconds: 180, maxInstances: 3 },
+    async (req) => {
+      const email = await requireAdmin(req, "improve");
+      const month = String(req.data?.month || "");
+      if (!/^\d{4}-\d{2}$/.test(month)) throw new HttpsError("invalid-argument", "기간(월)이 올바르지 않습니다.");
+      const [aggDoc, catDoc] = await Promise.all([db.doc(`surveyAggregates/${month}`).get(), db.doc("settings/surveyCategories").get()]);
+      const actionText = String(aggDoc.exists ? (aggDoc.data().actionTaken || "") : "").trim();
+      if (!actionText) throw new HttpsError("failed-precondition", `${month}의 피드백 반영계획이 비어 있습니다. 주관식 원문 탭이나 운영 보고서에서 먼저 작성하세요.`);
+      const categories = (catDoc.exists && Array.isArray(catDoc.data().list) && catDoc.data().list.length)
+        ? catDoc.data().list.map(String)
+        : ["현업 활용", "강의 방식", "교재/자료", "시설/환경", "운영/진행", "기타"];
+      const { provider, key } = await loadProvider(String(req.data?.providerId || ""));
+      const t0 = Date.now();
+      try {
+        const r = await chat(provider, key, actionMessages(categories, actionText.slice(0, 4000)), { maxTokens: 1200 });
+        const out = extractJson(r.content);
+        const seen = new Set();
+        const actions = (Array.isArray(out.actions) ? out.actions : [])
+          .map((x) => ({ action: String(x?.action || "").trim().slice(0, 120), category: String(x?.category || "").trim() }))
+          .filter((x) => x.action && !seen.has(x.action) && seen.add(x.action))
+          .map((x) => ({ ...x, category: categories.includes(x.category) ? x.category : "" })); // 목록 밖 분류는 비워 사람이 고르게
+        await logRun({ kind: "actions", by: email, month, providerId: provider.id, providerName: provider.name || "", model: provider.model,
+          servedModel: r.servedModel, ok: true, elapsedMs: Date.now() - t0, count: actions.length });
+        return { ok: true, month, categories, actions, provider: { name: provider.name || "", model: provider.model, servedModel: r.servedModel }, elapsedMs: Date.now() - t0 };
+      } catch (e) {
+        await logRun({ kind: "actions", by: email, month, providerId: provider.id, providerName: provider.name || "", model: provider.model, ok: false,
+          error: String(e.message || e).slice(0, 300), elapsedMs: Date.now() - t0 });
+        if (e instanceof HttpsError) throw e;
+        throw new HttpsError("internal", `조치 추출 실패(${provider.name || provider.model}): ${e.message || e}`);
+      }
+    });
+
+  return { aiTestProvider, aiAnalyzeFreetext, aiReportNarrative, aiExtractActions };
 };
 
 // 단위 시험용(함수 배포와 무관).
