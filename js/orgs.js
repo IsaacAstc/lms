@@ -37,7 +37,7 @@ const TAB_FEATURE = {
   surveys: "surveys", surveyitems: "surveys",
   reports: "survey-result", freetext: "survey-result",
   stats: "stats",
-  reportdoc: "reportdoc",
+  reportdoc: "reportdoc", improve: "reportdoc",
   rentals: "rentals",
   board: "board",
   downloads: "downloads",
