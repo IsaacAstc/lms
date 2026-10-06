@@ -174,6 +174,33 @@ function actionMessages(categories, actionText) {
   ];
 }
 
+// 공문·안내문 초안. 사실(facts)은 화면이 데이터로 만들어 넘기고, 모델은 문장만 쓴다.
+const DOC_KINDS = {
+  dispatch: { label: "출강 요청 공문", guide:
+    "강사(또는 강사 소속기관)에게 보내는 출강 요청 공문. 구성: 제목, 1. 관련, 2. 요청 취지(과정명·차수·교육기간), " +
+    "3. 출강 일정(일자·시간·과목·강의실을 항목으로), 4. 협조 요청(강의자료 사전 송부 등 일반 문구), 붙임 없음이면 '끝.'. " +
+    "강사 이름 자리는 '○○○'로 비워 둔다." },
+  notice: { label: "교육 안내 공문", guide:
+    "교육 대상 기관에 보내는 교육 실시 안내 공문. 구성: 제목, 1. 관련, 2. 교육 개요(과정명·차수·기간·장소·정원), " +
+    "3. 주요 교육 내용(과목 목록 요약), 4. 협조 사항(대상자 선발·입과 안내 등 일반 문구), '끝.'." },
+  result: { label: "결과 보고 본문", guide:
+    "내부 결재용 교육 결과 보고 본문. 구성: 제목, 1. 교육 개요(과정명·차수·기간·장소), 2. 운영 결과(정원·신청·이수 인원), " +
+    "3. 만족도 결과(있을 때만, 100점 환산값 그대로), 4. 향후 조치(일반 문구 1~2개). " +
+    "만족도 응답자가 10명 미만이면 '응답 표본이 적어 참고용'임을 밝힌다." },
+};
+function docMessages(kind, facts) {
+  const k = DOC_KINDS[kind];
+  return [
+    { role: "system", content:
+      `너는 한국 공공기관(교육훈련센터)의 ${k.label} 초안 작성을 돕는다. 공문서 문체(개조식, '~함', '~바람', 날짜는 2026. 10. 6. 형식)를 쓴다.\n` +
+      `${k.guide}\n` +
+      "규칙: 1) 일자·시간·인원·점수 등 사실은 주어진 자료(JSON)에 있는 것만 그대로 쓴다. 없는 사실(연락처·담당자·문서번호·예산 등)은 지어내지 말고 '○○○' 자리로 둔다. " +
+      "2) 개인 식별정보를 쓰지 않는다. " +
+      "출력은 JSON 하나만: {\"title\":\"제목\",\"body\":\"본문(줄바꿈 \\n)\"} — 코드펜스 금지." },
+    { role: "user", content: `자료(JSON):\n${JSON.stringify(facts)}` },
+  ];
+}
+
 module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin }) {
   async function loadProvider(providerId) {
     const cfg = (await db.doc("settings/ai").get()).data() || {};
@@ -381,8 +408,38 @@ module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin }) {
       }
     });
 
-  return { aiTestProvider, aiAnalyzeFreetext, aiReportNarrative, aiExtractActions };
+  const aiDraftDocument = onCall(
+    { region: "asia-northeast3", memory: "256MiB", timeoutSeconds: 240, maxInstances: 3 },
+    async (req) => {
+      const email = await requireAdmin(req, "docdraft");
+      const kind = String(req.data?.kind || "");
+      if (!DOC_KINDS[kind]) throw new HttpsError("invalid-argument", "문서 종류가 올바르지 않습니다.");
+      const facts = req.data?.facts;
+      if (!facts || typeof facts !== "object") throw new HttpsError("invalid-argument", "자료가 없습니다.");
+      if (JSON.stringify(facts).length > 20000) throw new HttpsError("invalid-argument", "자료가 너무 큽니다.");
+      const { provider, key } = await loadProvider(String(req.data?.providerId || ""));
+      const t0 = Date.now();
+      const month = String(facts.course?.startDate || "").slice(0, 7);
+      try {
+        const r = await chat(provider, key, docMessages(kind, facts), { maxTokens: 1800 });
+        const out = extractJson(r.content);
+        const title = String(out.title || "").trim();
+        const body = String(out.body || "").trim();
+        const unverified = unverifiedNumbers([title, body], facts, /^\d{4}-\d{2}$/.test(month) ? month : "2000-01");
+        await logRun({ kind: "doc", docKind: kind, by: email, providerId: provider.id, providerName: provider.name || "", model: provider.model,
+          servedModel: r.servedModel, ok: true, elapsedMs: Date.now() - t0, unverified });
+        return { ok: true, kind, label: DOC_KINDS[kind].label, title, body, unverified,
+          provider: { name: provider.name || "", model: provider.model, servedModel: r.servedModel }, elapsedMs: Date.now() - t0 };
+      } catch (e) {
+        await logRun({ kind: "doc", docKind: kind, by: email, providerId: provider.id, providerName: provider.name || "", model: provider.model, ok: false,
+          error: String(e.message || e).slice(0, 300), elapsedMs: Date.now() - t0 });
+        if (e instanceof HttpsError) throw e;
+        throw new HttpsError("internal", `초안 작성 실패(${provider.name || provider.model}): ${e.message || e}`);
+      }
+    });
+
+  return { aiTestProvider, aiAnalyzeFreetext, aiReportNarrative, aiExtractActions, aiDraftDocument };
 };
 
 // 단위 시험용(함수 배포와 무관).
-module.exports._test = { maskPII, extractJson, normBaseUrl, chat, classifyMessages, summaryMessages, reportMessages, unverifiedNumbers };
+module.exports._test = { maskPII, extractJson, normBaseUrl, chat, classifyMessages, summaryMessages, reportMessages, unverifiedNumbers, docMessages };

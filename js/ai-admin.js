@@ -55,7 +55,7 @@ export function initAiAdmin() {
   document.getElementById("ai-prov-body").addEventListener("click", onProvClick);
   document.getElementById("ai-run").addEventListener("click", runAnalysis);
   document.addEventListener("tabshown", (e) => {
-    if (e.detail === "settings" || e.detail === "freetext" || e.detail === "reportdoc" || e.detail === "improve") loadProviders();
+    if (e.detail === "settings" || e.detail === "freetext" || e.detail === "reportdoc" || e.detail === "improve" || e.detail === "docdraft") loadProviders();
     if (e.detail === "settings") loadRuns();
   });
 }
@@ -178,10 +178,11 @@ async function loadRuns() {
       const res = r.ok
         ? (r.kind === "freetext" ? `✅ 분류 ${r.classified ?? "-"}/${r.classifiable ?? "-"}건 · 가림 ${r.maskedCount ?? 0}건`
           : r.kind === "actions" ? `✅ 조치 ${r.count ?? 0}건 추출`
+          : r.kind === "doc" ? `✅ 공문 초안${r.unverified?.length ? ` · <span class='warn'>확인 안 된 숫자 ${r.unverified.length}개</span>` : " · 숫자 대조 통과"}`
           : r.kind === "report" ? `✅ 보고서 초안${r.unverified?.length ? ` · <span class='warn'>확인 안 된 숫자 ${r.unverified.length}개</span>` : " · 숫자 대조 통과"}`
           : "✅ 연결 정상")
         : `❌ ${escapeHtml(r.error || "")}`;
-      return `<tr><td>${fmt.format(new Date(r.at))}</td><td>${r.kind === "freetext" ? `주관식 분석 ${escapeHtml(r.month || "")}` : r.kind === "report" ? `보고서 ${escapeHtml(r.month || "")}` : r.kind === "actions" ? `조치 추출 ${escapeHtml(r.month || "")}` : "연결 테스트"}</td>
+      return `<tr><td>${fmt.format(new Date(r.at))}</td><td>${r.kind === "freetext" ? `주관식 분석 ${escapeHtml(r.month || "")}` : r.kind === "report" ? `보고서 ${escapeHtml(r.month || "")}` : r.kind === "actions" ? `조치 추출 ${escapeHtml(r.month || "")}` : r.kind === "doc" ? "공문 초안" : "연결 테스트"}</td>
         <td>${escapeHtml(r.providerName || "")}</td><td>${escapeHtml(r.servedModel || r.model || "")}</td>
         <td>${res}</td><td style="text-align:right">${r.elapsedMs != null ? (r.elapsedMs / 1000).toFixed(1) + "초" : "-"}</td></tr>`;
     }).join("");
