@@ -118,6 +118,51 @@ function summaryMessages(month, counts, samples) {
   ];
 }
 
+function reportMessages(month, metrics, samples) {
+  return [
+    { role: "system", content:
+      "너는 공공기관 교육훈련센터의 월간 '교육 운영 결과 보고서' 작성을 돕는다. " +
+      "주어진 지표(JSON)와 주관식 응답을 근거로 [총평]·[시사점]·[피드백 반영계획] 초안을 쓴다.\n" +
+      "규칙:\n" +
+      "1) 숫자는 지표 JSON에 있는 값만 그대로 쓴다. 새로 계산하거나 반올림을 바꾸거나 추정하지 않는다(증감도 지표의 delta 값만).\n" +
+      "2) 개인·특정 강사를 지목하지 않는다. 지표·응답에 없는 사실을 지어내지 않는다.\n" +
+      "3) 총평은 3~5문장의 한 단락(전반 만족도 수준, 전월 대비 변화, 눈에 띄는 과정·항목, 운영 실적).\n" +
+      "4) 시사점 3~5개, 반영계획은 시사점에 대응하는 실행 가능한 조치 3~5개. 각 항목은 한 문장, '- '로 시작.\n" +
+      "출력은 JSON 하나만: {\"overview\":\"...\",\"summary\":\"...\",\"action\":\"...\"} — 항목 구분은 줄바꿈(\\n), 코드펜스 금지." },
+    { role: "user", content:
+      `대상 기간: ${month}\n지표(JSON):\n${JSON.stringify(metrics)}\n\n` +
+      `주관식 응답(종류|과정|내용):\n${samples.map((x) => `${x.kind}|${x.course}|${x.text}`).join("\n") || "(없음)"}` },
+  ];
+}
+
+// 초안 속 숫자가 지표에 실제로 있는지 대조(모델의 숫자 지어내기 감지).
+// 날짜·월(2026, 09 등)·항목 번호 같은 작은 정수는 오탐이 많아 제외한다.
+function numbersIn(text) {
+  return (String(text || "").match(/\d[\d,]*(?:\.\d+)?/g) || []).map((x) => x.replace(/,/g, ""));
+}
+function unverifiedNumbers(texts, metrics, month) {
+  const known = new Set();
+  const walk = (v) => {
+    if (typeof v === "number" && Number.isFinite(v)) {
+      known.add(String(v));
+      known.add(String(Math.round(v)));
+      known.add(v.toFixed(1)); known.add(v.toFixed(2));
+      known.add(String(Math.abs(v))); known.add(Math.abs(v).toFixed(1)); known.add(Math.abs(v).toFixed(2));
+    } else if (typeof v === "string") numbersIn(v).forEach((n) => known.add(n));
+    else if (v && typeof v === "object") Object.values(v).forEach(walk);
+  };
+  walk(metrics);
+  const [y, m] = month.split("-");
+  [y, m, String(Number(m))].forEach((n) => known.add(n));
+  const out = new Set();
+  for (const t of texts) for (const n of numbersIn(t)) {
+    const num = Number(n);
+    if (!Number.isFinite(num) || (Number.isInteger(num) && num <= 12)) continue;
+    if (!known.has(n) && !known.has(String(num))) out.add(n);
+  }
+  return [...out];
+}
+
 module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin }) {
   async function loadProvider(providerId) {
     const cfg = (await db.doc("settings/ai").get()).data() || {};
@@ -128,6 +173,40 @@ module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin }) {
     if (!p.baseUrl || !p.model) throw new HttpsError("failed-precondition", `'${p.name || p.id}'의 접속 주소·모델명이 비어 있습니다.`);
     const k = await db.doc(`aiKeys/${p.id}`).get();
     return { provider: p, key: k.exists ? String(k.data().key || "") : "" };
+  }
+
+  // 그 달 주관식을 모아 가림 처리한다(원문은 이 함수 밖으로 나가지 않는다).
+  async function collectFreetext(month) {
+    const [snap, catDoc, instSnap, courseSnap] = await Promise.all([
+      db.collection("surveyResponses").where("collectedDate", ">=", `${month}-01`).where("collectedDate", "<=", `${month}-31`).get(),
+      db.doc("settings/surveyCategories").get(),
+      db.collection("instructors").get(),
+      db.collection("courses").get(),
+    ]);
+    const categories = (catDoc.exists && Array.isArray(catDoc.data().list) && catDoc.data().list.length)
+      ? catDoc.data().list.map(String)
+      : ["현업 활용", "강의 방식", "교재/자료", "시설/환경", "운영/진행", "기타"];
+    const knownNames = instSnap.docs.map((d) => String(d.data().name || "").trim()).filter((n) => n.length >= 2);
+    const courseName = Object.fromEntries(courseSnap.docs.map((d) => [d.id, String(d.data().name || "")]));
+
+    // 분석 대상: 분류 칸이 있는 불만족·제안개선(분류 대상) + 그 밖의 주관식(시사점 참고용).
+    const items = [];
+    let masked = 0;
+    for (const d of snap.docs) {
+      const r = d.data();
+      const course = courseName[r.courseId] || "-";
+      const add = (kind, field, raw) => {
+        if (!raw || !String(raw).trim()) return;
+        const m = maskPII(String(raw).slice(0, MAX_TEXT), knownNames);
+        masked += m.count;
+        items.push({ rid: d.id, field, kind, course, text: m.text.replace(/\s+/g, " ").trim() });
+      };
+      add("불만족", "catDissatisfied", r.freeDissatisfied);
+      add("제안개선", "catSuggestion", r.freeSuggestion);
+      for (const t of r.freeExtra || []) add("추가주관식", "", t?.text);
+      for (const t of r.fuTexts || []) add("조건부", "", t?.text);
+    }
+    return { items, masked, categories };
   }
 
   async function logRun(doc) {
@@ -164,35 +243,7 @@ module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin }) {
       const { provider, key } = await loadProvider(String(req.data?.providerId || ""));
       const t0 = Date.now();
 
-      const [snap, catDoc, instSnap, courseSnap] = await Promise.all([
-        db.collection("surveyResponses").where("collectedDate", ">=", `${month}-01`).where("collectedDate", "<=", `${month}-31`).get(),
-        db.doc("settings/surveyCategories").get(),
-        db.collection("instructors").get(),
-        db.collection("courses").get(),
-      ]);
-      const categories = (catDoc.exists && Array.isArray(catDoc.data().list) && catDoc.data().list.length)
-        ? catDoc.data().list.map(String)
-        : ["현업 활용", "강의 방식", "교재/자료", "시설/환경", "운영/진행", "기타"];
-      const knownNames = instSnap.docs.map((d) => String(d.data().name || "").trim()).filter((n) => n.length >= 2);
-      const courseName = Object.fromEntries(courseSnap.docs.map((d) => [d.id, String(d.data().name || "")]));
-
-      // 분석 대상: 분류 칸이 있는 불만족·제안개선(분류 대상) + 그 밖의 주관식(시사점 참고용).
-      const items = [];
-      let masked = 0;
-      for (const d of snap.docs) {
-        const r = d.data();
-        const course = courseName[r.courseId] || "-";
-        const add = (kind, field, raw) => {
-          if (!raw || !String(raw).trim()) return;
-          const m = maskPII(String(raw).slice(0, MAX_TEXT), knownNames);
-          masked += m.count;
-          items.push({ rid: d.id, field, kind, course, text: m.text.replace(/\s+/g, " ").trim() });
-        };
-        add("불만족", "catDissatisfied", r.freeDissatisfied);
-        add("제안개선", "catSuggestion", r.freeSuggestion);
-        for (const t of r.freeExtra || []) add("추가주관식", "", t?.text);
-        for (const t of r.fuTexts || []) add("조건부", "", t?.text);
-      }
+      const { items, masked, categories } = await collectFreetext(month);
       if (!items.length) throw new HttpsError("failed-precondition", "이 달에는 주관식 응답이 없습니다.");
       const skipped = Math.max(0, items.length - MAX_ITEMS);
       const target = items.slice(0, MAX_ITEMS).map((x, i) => ({ ...x, i: i + 1 }));
@@ -245,8 +296,48 @@ module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin }) {
       }
     });
 
-  return { aiTestProvider, aiAnalyzeFreetext };
+  // 운영 결과 보고서 총평·시사점·반영계획 초안. 수치는 화면이 계산해 넘긴 지표만 쓴다.
+  const aiReportNarrative = onCall(
+    { region: "asia-northeast3", memory: "512MiB", timeoutSeconds: 300, maxInstances: 3 },
+    async (req) => {
+      const email = await requireAdmin(req, "reportdoc");
+      const month = String(req.data?.month || "");
+      if (!/^\d{4}-\d{2}$/.test(month)) throw new HttpsError("invalid-argument", "기간(월)이 올바르지 않습니다.");
+      const metrics = req.data?.metrics;
+      if (!metrics || typeof metrics !== "object") throw new HttpsError("invalid-argument", "지표가 없습니다. 보고서를 먼저 생성하세요.");
+      if (JSON.stringify(metrics).length > 30000) throw new HttpsError("invalid-argument", "지표가 너무 큽니다.");
+      const { provider, key } = await loadProvider(String(req.data?.providerId || ""));
+      const t0 = Date.now();
+      const { items, masked } = await collectFreetext(month);
+      const samples = items
+        .filter((x) => x.text.replace(/[\s.!~]/g, "").length > 3 && !/^(없(음|습니다)|감사합니다|-)$/.test(x.text.trim()))
+        .slice(0, 80);
+      try {
+        const r = await chat(provider, key, reportMessages(month, metrics, samples), { maxTokens: 1800 });
+        const out = extractJson(r.content);
+        const overview = String(out.overview || "").trim();
+        const summary = String(out.summary || "").trim();
+        const action = String(out.action || "").trim();
+        const unverified = unverifiedNumbers([overview, summary, action], metrics, month);
+        const result = {
+          ok: true,
+          provider: { id: provider.id, name: provider.name || "", model: provider.model, servedModel: r.servedModel },
+          month, overview, summary, action, unverified,
+          sampleCount: samples.length, maskedCount: masked, elapsedMs: Date.now() - t0,
+        };
+        await logRun({ kind: "report", by: email, month, providerId: provider.id, providerName: provider.name || "", model: provider.model,
+          servedModel: r.servedModel, ok: true, elapsedMs: result.elapsedMs, maskedCount: masked, unverified, overview, summary, action });
+        return result;
+      } catch (e) {
+        await logRun({ kind: "report", by: email, month, providerId: provider.id, providerName: provider.name || "", model: provider.model, ok: false,
+          error: String(e.message || e).slice(0, 300), elapsedMs: Date.now() - t0 });
+        if (e instanceof HttpsError) throw e;
+        throw new HttpsError("internal", `AI 보고서 작성 실패(${provider.name || provider.model}): ${e.message || e}`);
+      }
+    });
+
+  return { aiTestProvider, aiAnalyzeFreetext, aiReportNarrative };
 };
 
 // 단위 시험용(함수 배포와 무관).
-module.exports._test = { maskPII, extractJson, normBaseUrl, chat, classifyMessages, summaryMessages };
+module.exports._test = { maskPII, extractJson, normBaseUrl, chat, classifyMessages, summaryMessages, reportMessages, unverifiedNumbers };

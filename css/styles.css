@@ -849,3 +849,6 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
 .ai-prov-table td.actions button { padding: 0.3rem 0.55rem; font-size: 0.8rem; }
 .ai-prov-table .ai-test-out { word-break: break-all; }
 .ai-runs-table th, .ai-runs-table td { white-space: normal; overflow-wrap: anywhere; }
+
+/* 운영 보고서: AI 총평 작성 컨트롤 */
+.rd-ai-ctl { display: inline-flex; gap: 0.4rem; align-items: center; margin-left: auto; }
