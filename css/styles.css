@@ -805,7 +805,16 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
 .col-bar { width: 100%; max-width: 24px; background: var(--primary); border-radius: 4px 4px 0 0; min-height: 2px; }
 /* 0건인 달은 막대를 그리지 않는다 — 2px 조각이 남으면 값이 있는 것처럼 읽힌다. */
 .col-bar.zero { min-height: 0; }
-.col-v { position: absolute; top: -1.05rem; font-size: 0.72rem; font-weight: 600; color: var(--primary); }
+.col-v { position: absolute; top: -1.05rem; font-size: 0.72rem; font-weight: 600; color: var(--primary); white-space: nowrap; visibility: hidden; }
+.col-v.peak { visibility: visible; }
+.col:hover .col-v { visibility: visible; z-index: 1; background: var(--card, #fff); padding: 0 3px; border-radius: 3px; }
+.col:hover .col-bar { filter: brightness(1.25); }
+.col:hover .col-x { color: var(--text, #222); font-weight: 600; }
+/* 예/아니오 띠: 마우스를 올린 조각에 건수·비율 표시. */
+.ox-bar > span { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; }
+.ox-tip { font-size: 0.75rem; color: #fff; white-space: nowrap; overflow: hidden; visibility: hidden; }
+.ox-bar > span:hover .ox-tip { visibility: visible; }
+.ox-bar > span:hover { filter: brightness(1.15); }
 .col-x { font-size: 0.66rem; color: var(--muted); margin-top: 0.3rem; white-space: nowrap; }
 
 /* 정확한 수치가 필요할 때만 펼치는 표. */
