@@ -114,12 +114,25 @@ service cloud.firestore {
 
     // 기준값 설정(강사료·여비): 관리자 전용.
     // 단 데이터 보존정책(dataPolicy)·과정유형 목록(courseTypes)은 마스터만 변경.
+    // ── AI(LLM) 연동 ──
+    // API 키: 클라이언트는 절대 읽지 못한다(함수만 Admin SDK로 읽음). 등록·교체는 마스터만.
+    match /aiKeys/{providerId} {
+      allow read: if false;
+      allow write: if isMaster();
+    }
+    // AI 실행 기록(모델·소요시간·결과만, 원문 없음): 함수가 쓰고 관리자가 본다.
+    match /aiRuns/{runId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     match /settings/{docId} {
       allow read: if isAdmin();
     // 문서별 담당 탭:
-    //   dataPolicy·courseTypes = 마스터, apply = 공개 보드, surveyCategories = 주관식 원문,
+    //   dataPolicy·courseTypes·ai = 마스터, apply = 공개 보드, surveyCategories = 주관식 원문,
     //   그 외(feeRates·travelRates·surveyItems) = 기준값 설정
-      allow write: if (docId == 'dataPolicy' || docId == 'courseTypes') ? isMaster()
+    //   ai: AI(LLM) 연결 목록(접속 주소·모델명) — 키는 여기 두지 않는다(aiKeys).
+      allow write: if (docId == 'dataPolicy' || docId == 'courseTypes' || docId == 'ai') ? isMaster()
         : docId == 'apply' ? canTab('board')
         : docId == 'surveyCategories' ? canTab('freetext')
         : docId == 'logiPush' ? canTab('logi')

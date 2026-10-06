@@ -1361,3 +1361,11 @@ exports.publicFileDelete = onCall(FILE_OPTS, async (req) => {
   console.log(`${GH_DIRS[dir].label} 삭제: ${path} by ${email}`);
   return { deleted: true };
 });
+
+/* ================================================================
+ *  AI(LLM) 연동 — 주관식 원문 분석 (functions/ai.js)
+ *  OpenAI 호환 규격 하나로 호출해 모델 교체가 설정만으로 된다(모델 비종속).
+ * ================================================================ */
+const ai = require("./ai")({ db, onCall, HttpsError, requireAdmin });
+exports.aiTestProvider = ai.aiTestProvider;
+exports.aiAnalyzeFreetext = ai.aiAnalyzeFreetext;

@@ -832,3 +832,12 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
   border: 1px solid #e8c4bf; border-radius: 8px; background: #fdf5f4;
   padding: 0.7rem 0.9rem;
 }
+
+/* ---------- AI 분석 결과 카드(모델별로 쌓여 비교) ---------- */
+.ai-card { border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: 8px; background: #fff; padding: 0.7rem 0.9rem; margin: 0.6rem 0; }
+.ai-card-head { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+.ai-card-head .ai-close { margin-left: auto; background: transparent; color: var(--muted); border: none; font-size: 1.1rem; cursor: pointer; padding: 0 0.3rem; }
+.ai-card .ai-draft { margin: 0.4rem 0; }
+.ai-card .ai-draft pre { white-space: pre-wrap; margin: 0.2rem 0 0; font-family: inherit; font-size: 0.88rem; }
+.ai-card details { margin-top: 0.5rem; }
+.ai-card details summary { cursor: pointer; font-size: 0.85rem; color: var(--muted); }
