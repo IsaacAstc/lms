@@ -1,15 +1,16 @@
 // 운영 결과 보고서 자동 생성 (CLAUDE.md 2-2). 월별. 화면 미리보기 + 인쇄(PDF) + 표별 CSV.
 // 기존 집계/소요경비 데이터를 조립: 만족도 요약 → 세부항목 → 주관식 원문 → 시사점·피드백 → 운영결과 → 소요경비.
 import {
-  collection, getDocs, getDoc, doc, query, where,
+  collection, getDocs, getDoc, doc, query, where, setDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { db } from "./firebase.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+import { db, app } from "./firebase.js";
 import { escapeHtml } from "./app.js";
 import { openPrintWindow } from "./print-window.js";
 import { coursesCache } from "./courses.js";
 import { getProgramById } from "./programs.js";
 import {
-  computeAgg, deserializeAgg, renderEduHTML, renderInstMergedHTML, renderOxHTML, renderExtraHTML, renderChoiceHTML, renderDatesHTML, renderFtxHTML,
+  computeAgg, deserializeAgg, eduItemsOf, renderEduHTML, renderInstMergedHTML, renderOxHTML, renderExtraHTML, renderChoiceHTML, renderDatesHTML, renderFtxHTML,
 } from "./agg.js";
 import { fmtDot } from "./time.js";
 
@@ -52,6 +53,7 @@ export function initReportDoc() {
   document.getElementById("rd-month").value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   document.getElementById("rd-run").addEventListener("click", run);
   document.getElementById("rd-print").addEventListener("click", printDoc);
+  document.getElementById("rd-ai-run").addEventListener("click", runAiNarrative);
 }
 
 // 과정유형 × (교육/강사) 만족도 요약 — 원문 응답 기준(100점 환산).
@@ -205,6 +207,8 @@ async function expensesHTML(month) {
 
 // 마지막으로 생성한 보고서의 월 — 인쇄 파일명에 쓴다(생성 뒤 월 입력을 바꿔도 내용과 맞게).
 let reportMonth = "";
+// 마지막으로 생성한 보고서의 원자료 — AI 총평에 넘길 지표를 여기서 만든다.
+let lastReport = null; // { month, responses, agg }
 
 async function run() {
   const month = document.getElementById("rd-month").value;
@@ -212,6 +216,9 @@ async function run() {
   if (!month) return alert("월을 선택하세요.");
   box.innerHTML = "보고서 생성 중…";
   reportMonth = month;
+  lastReport = null;
+  const aiBtn = document.getElementById("rd-ai-run");
+  aiBtn.disabled = true;
 
   // 설문 원문(기간) → 없으면 스냅샷.
   let responses = [];
@@ -223,7 +230,7 @@ async function run() {
   } catch (e) { box.innerHTML = "설문 조회 실패: " + escapeHtml(e.message); return; }
 
   let summaryHtml, detailEdu, detailInst, freetext;
-  let narrative = { summary: "", actionTaken: "" };
+  let narrative = { overview: "", summary: "", actionTaken: "" };
   if (responses.length) {
     agg = computeAgg(responses);
     summaryHtml = summaryTableHTML(summaryFromResponses(responses));
@@ -249,7 +256,7 @@ async function run() {
   // 시사점·피드백 반영계획(surveyAggregates/{month}).
   try {
     const nd = await getDoc(doc(db, "surveyAggregates", month));
-    if (nd.exists()) narrative = { summary: nd.data().summary || "", actionTaken: nd.data().actionTaken || "" };
+    if (nd.exists()) narrative = { overview: nd.data().overview || "", summary: nd.data().summary || "", actionTaken: nd.data().actionTaken || "" };
   } catch { /* */ }
 
   const ops = operationsHTML(month);
@@ -260,6 +267,7 @@ async function run() {
       <h1>${escapeHtml(month)} 교육 운영 결과 보고서</h1>
       ${snapshot ? `<p class="warn">※ 이 달의 설문 원문은 파기되어 집계 스냅샷 기준으로 작성되었습니다.</p>` : ""}
     </div>
+    ${narrative.overview ? `<section><h3>총평</h3><div class="report-narr">${escapeHtml(narrative.overview).replace(/\n/g, "<br>")}</div></section>` : ""}
     <section><h3>1. 만족도 요약 (과정유형 × 교육/강사, 100점 환산)</h3>${summaryHtml}</section>
     <section><h3>2. 교육 만족도 세부항목</h3>${detailEdu}</section>
     ${agg && (renderExtraHTML(agg) || renderOxHTML(agg) || renderChoiceHTML(agg) || renderDatesHTML(agg))
@@ -271,6 +279,148 @@ async function run() {
     <section><h3>7. 운영 결과</h3>${ops}</section>
     <section><h3>8. 평가 결과 (합격률)</h3>${passRateHTML(month)}</section>
     <section><h3>9. 소요경비</h3>${exp}</section>`;
+  lastReport = { month, responses, agg };
+  aiBtn.disabled = false;
+  aiBtn.title = "";
+}
+
+// ── AI 총평·시사점·반영계획 ──
+// 숫자는 여기서(시스템이) 계산해 넘기고, 모델은 해석과 문장만 쓴다. 서버는 초안 속 숫자가
+// 이 지표에 실제로 있는지 대조해 '확인 안 된 숫자'를 돌려준다(지어낸 수치 감지).
+// 강사 개인별 점수는 넘기지 않는다(특정 강사 지목 방지).
+const r2 = (v) => (v == null || !Number.isFinite(v) ? null : Number(v.toFixed(2)));
+function prevMonthOf(month) {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(y, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+async function buildMetrics(month, responses, agg) {
+  const m = { month };
+  if (responses.length) {
+    const sm = summaryFromResponses(responses);
+    m.satisfaction = {
+      responses: sm.total.n, overall: r2(sm.total.overall), education: r2(sm.total.edu), instructor: r2(sm.total.inst),
+      byCourseType: sm.rows.map((x) => ({ type: x.type, responses: x.n, overall: r2(x.overall), education: r2(x.edu), instructor: r2(x.inst) })),
+    };
+    // 전월 대비(원문이 남아 있을 때만).
+    const pm = prevMonthOf(month);
+    try {
+      const ps = await getDocs(query(collection(db, "surveyResponses"),
+        where("collectedDate", ">=", `${pm}-01`), where("collectedDate", "<=", `${pm}-31`)));
+      if (!ps.empty) {
+        const p = summaryFromResponses(ps.docs.map((d) => d.data())).total;
+        m.previousMonth = { month: pm, responses: p.n, overall: r2(p.overall) };
+        if (p.overall != null && sm.total.overall != null) m.previousMonth.delta = r2(sm.total.overall - p.overall);
+      }
+    } catch { /* 전월 비교 생략 */ }
+    // 교육 만족도 문항별(100점) — 높은 순.
+    if (agg) {
+      m.educationItems = eduItemsOf(agg).map((label, i) => {
+        const c = agg.edu.all[i];
+        return { item: label, score: c && c.count ? r2((c.sum / c.count) * 20) : null };
+      }).filter((x) => x.score != null).sort((a, b) => b.score - a.score);
+    }
+    // 차수별 종합 점수 — 높은·낮은 순으로 비교할 수 있게.
+    const byCourse = {};
+    for (const r of responses) {
+      const g = byCourse[r.courseId] = byCourse[r.courseId] || { n: 0, vals: [] };
+      g.n++;
+      Object.values(r.edu || {}).forEach((v) => Number.isFinite(v) && g.vals.push(v));
+      (r.instructors || []).forEach((it) => [0, 1, 2].forEach((i) => Number.isFinite(it[`q${i}`]) && g.vals.push(it[`q${i}`])));
+    }
+    m.courses = Object.entries(byCourse).map(([id, g]) => {
+      const c = coursesCache.find((x) => x.id === id);
+      return { course: c?.name || "-", round: c?.round ?? null, period: periodOf(c), responses: g.n,
+        overall: g.vals.length ? r2((g.vals.reduce((a, b) => a + b, 0) / g.vals.length) * 20) : null };
+    }).sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0)).slice(0, 40);
+    // 주관식 분류별 건수(분류해 둔 것만).
+    const cats = {};
+    for (const r of responses) for (const f of ["catDissatisfied", "catSuggestion"]) if (r[f]) cats[r[f]] = (cats[r[f]] || 0) + 1;
+    if (Object.keys(cats).length) m.feedbackCategories = cats;
+  }
+  // 운영 실적·합격률(그 달 시작 차수).
+  const started = coursesCache.filter((c) => (c.startDate || "").slice(0, 7) === month && !c.hidden);
+  m.operations = {
+    rounds: started.length,
+    applied: started.reduce((n, c) => n + (c.appliedCount || 0), 0),
+    completed: started.reduce((n, c) => n + (c.completedCount || 0), 0),
+  };
+  const ev = started.filter((c) => c.hasEvaluation);
+  if (ev.length) {
+    const a = ev.reduce((n, c) => n + (c.appliedCount || 0), 0), d = ev.reduce((n, c) => n + (c.completedCount || 0), 0);
+    m.passRate = { applied: a, completed: d, ratePercent: a ? r2((d / a) * 100) : null };
+  }
+  try {
+    const e = await getDoc(doc(db, "expenses", month));
+    if (e.exists()) {
+      const x = e.data();
+      const enrolled = x.enrolled ?? x.completed ?? 0;
+      m.expenses = { totalWon: x.total ?? 0, enrolled, perPersonWon: enrolled ? Math.round((x.total ?? 0) / enrolled) : null };
+    }
+  } catch { /* */ }
+  return m;
+}
+
+async function runAiNarrative() {
+  if (!lastReport) return alert("보고서를 먼저 생성하세요.");
+  const providerId = document.getElementById("rd-ai-provider").value;
+  if (!providerId) return alert("설정 → AI 연결에서 모델을 먼저 등록하세요.");
+  const btn = document.getElementById("rd-ai-run");
+  const box = document.getElementById("rd-ai");
+  btn.disabled = true;
+  const t0 = Date.now();
+  const status = document.createElement("p");
+  status.className = "hint";
+  box.prepend(status);
+  const tick = setInterval(() => { status.textContent = `AI 작성 중… ${Math.round((Date.now() - t0) / 1000)}초`; }, 1000);
+  try {
+    const { month, responses, agg } = lastReport;
+    const metrics = await buildMetrics(month, responses, agg);
+    const fn = httpsCallable(getFunctions(app, "asia-northeast3"), "aiReportNarrative", { timeout: 320000 });
+    const r = (await fn({ month, providerId, metrics })).data;
+    renderAiDraft(r, metrics);
+  } catch (e) {
+    alert(e.message || e);
+  } finally { clearInterval(tick); status.remove(); btn.disabled = false; }
+}
+
+function renderAiDraft(r, metrics) {
+  const card = document.createElement("div");
+  card.className = "ai-card";
+  const warn = r.unverified?.length
+    ? `<p class="warn">⚠ 지표에서 확인되지 않은 숫자: <b>${r.unverified.map(escapeHtml).join(", ")}</b> — 모델이 지어냈을 수 있으니 고치거나 지우세요.</p>`
+    : `<p class="hint">✅ 초안의 숫자를 모두 지표와 대조했습니다(확인 안 된 숫자 없음).</p>`;
+  card.innerHTML = `
+    <div class="ai-card-head">
+      <b>${escapeHtml(r.provider.name || r.provider.model)}</b>
+      <span class="muted">${escapeHtml(r.provider.servedModel || r.provider.model)} · ${escapeHtml(r.month)} · ${(r.elapsedMs / 1000).toFixed(1)}초 · 주관식 ${r.sampleCount}건 참고 · 가림 ${r.maskedCount}건</span>
+      <button type="button" class="ai-close" title="닫기">×</button>
+    </div>
+    ${warn}
+    <label class="ta-label">총평<textarea class="d-ov" rows="4">${escapeHtml(r.overview || "")}</textarea></label>
+    <label class="ta-label">시사점<textarea class="d-sum" rows="5">${escapeHtml(r.summary || "")}</textarea></label>
+    <label class="ta-label">피드백 반영계획<textarea class="d-act" rows="5">${escapeHtml(r.action || "")}</textarea></label>
+    <div class="form-actions"><button type="button" class="d-apply">보고서에 반영</button></div>
+    <details><summary>AI에 넘긴 지표 보기</summary><pre class="report-narr" style="white-space:pre-wrap;font-size:0.78rem">${escapeHtml(JSON.stringify(metrics, null, 2))}</pre></details>`;
+  card.querySelector(".ai-close").addEventListener("click", () => card.remove());
+  card.querySelector(".d-apply").addEventListener("click", async () => {
+    if (!confirm(`${r.month} 보고서의 총평·시사점·피드백 반영계획을 이 내용(수정본 포함)으로 저장합니다.\n기존 내용은 바뀝니다. 계속할까요?`)) return;
+    try {
+      await setDoc(doc(db, "surveyAggregates", r.month), {
+        yearMonth: r.month,
+        overview: card.querySelector(".d-ov").value.trim(),
+        summary: card.querySelector(".d-sum").value.trim(),
+        actionTaken: card.querySelector(".d-act").value.trim(),
+        aiDraft: { model: r.provider.servedModel || r.provider.model, providerName: r.provider.name || "", at: Date.now() },
+      }, { merge: true });
+      card.remove();
+      document.getElementById("rd-month").value = r.month;
+      await run();
+    } catch (e) {
+      alert("저장 실패: " + e.message + "\n(시사점 저장은 '주관식 원문' 탭 권한이 있는 계정만 가능합니다)");
+    }
+  });
+  document.getElementById("rd-ai").prepend(card);
 }
 
 // 인쇄: 보고서 영역만 새 창으로 열어 print(전역 CSS 충돌 회피).

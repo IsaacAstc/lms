@@ -492,9 +492,14 @@
             <label>월 <input id="rd-month" type="month" /></label>
             <button id="rd-run" type="button">보고서 생성</button>
             <button id="rd-print" type="button">인쇄(PDF)</button>
+            <span class="rd-ai-ctl">
+              <select id="rd-ai-provider" class="ai-provider-select" title="AI 모델"><option value="">(AI 연결 없음)</option></select>
+              <button id="rd-ai-run" type="button" disabled title="보고서를 먼저 생성하세요">AI 총평·시사점 작성</button>
+            </span>
             <button class="csv-export" type="button" data-target="#rd-doc" data-name="운영결과보고서">CSV 내보내기</button>
           </div>
           <p class="hint no-print">선택한 월의 설문 집계·주관식·운영현황·소요경비를 운영 결과 보고서 양식으로 조립합니다. 설문 원문이 파기된 달은 집계 스냅샷으로 표시됩니다.</p>
+          <div id="rd-ai"></div>
           <div id="rd-doc" class="report-doc"><p class="empty">월을 선택하고 ‘보고서 생성’을 누르세요.</p></div>
         </section>
 
