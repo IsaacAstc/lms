@@ -120,6 +120,11 @@ service cloud.firestore {
       allow read: if false;
       allow write: if isMaster();
     }
+    // 개선 조치 추적: 피드백 반영계획에서 나온 조치와 이행 상태(개인정보 없음).
+    match /improvements/{id} {
+      allow read: if isAdmin();
+      allow write: if canTab('improve');
+    }
     // AI 실행 기록(모델·소요시간·결과만, 원문 없음): 함수가 쓰고 관리자가 본다.
     match /aiRuns/{runId} {
       allow read: if isAdmin();

@@ -1370,3 +1370,4 @@ const ai = require("./ai")({ db, onCall, HttpsError, requireAdmin });
 exports.aiTestProvider = ai.aiTestProvider;
 exports.aiAnalyzeFreetext = ai.aiAnalyzeFreetext;
 exports.aiReportNarrative = ai.aiReportNarrative;
+exports.aiExtractActions = ai.aiExtractActions;

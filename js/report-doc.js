@@ -13,6 +13,7 @@ import {
   computeAgg, deserializeAgg, eduItemsOf, renderEduHTML, renderInstMergedHTML, renderOxHTML, renderExtraHTML, renderChoiceHTML, renderDatesHTML, renderFtxHTML,
 } from "./agg.js";
 import { fmtDot } from "./time.js";
+import { monthlyCategoryStats, effectOf, effectCell, addMonths } from "./improve.js";
 
 function courseTypeOf(id) {
   const c = coursesCache.find((x) => x.id === id);
@@ -260,6 +261,7 @@ async function run() {
   } catch { /* */ }
 
   const ops = operationsHTML(month);
+  const improve = await improvementsHTML(month);
   const exp = await expensesHTML(month);
 
   box.innerHTML = `
@@ -276,6 +278,7 @@ async function run() {
     <section><h3>4. 주관식 원문</h3>${freetext}</section>
     <section><h3>5. 시사점</h3><div class="report-narr">${narrative.summary ? escapeHtml(narrative.summary).replace(/\n/g, "<br>") : `<span class="empty">주관식 원문 탭에서 시사점을 입력하면 표시됩니다.</span>`}</div></section>
     <section><h3>6. 피드백 반영계획</h3><div class="report-narr">${narrative.actionTaken ? escapeHtml(narrative.actionTaken).replace(/\n/g, "<br>") : `<span class="empty">주관식 원문 탭에서 피드백 반영계획을 입력하면 표시됩니다.</span>`}</div></section>
+    ${improve}
     <section><h3>7. 운영 결과</h3>${ops}</section>
     <section><h3>8. 평가 결과 (합격률)</h3>${passRateHTML(month)}</section>
     <section><h3>9. 소요경비</h3>${exp}</section>`;
@@ -421,6 +424,29 @@ function renderAiDraft(r, metrics) {
     }
   });
   document.getElementById("rd-ai").prepend(card);
+}
+
+// 6-1. 개선 조치 이행·효과: 보고 월 기준 최근 6개월 안에 완료된 조치의 전·후 비교 + 진행 중 조치.
+// 효과는 보고 월 시점까지의 데이터로만 계산한다(나중에 다시 뽑아도 그 달 관점이 유지되게).
+async function improvementsHTML(month) {
+  let list = [];
+  try { list = (await getDocs(collection(db, "improvements"))).docs.map((d) => d.data()); } catch { return ""; }
+  const from = addMonths(month, -5);
+  const done = list.filter((x) => x.status === "완료" && x.doneMonth && x.doneMonth >= from && x.doneMonth <= month)
+    .sort((a, b) => a.doneMonth.localeCompare(b.doneMonth));
+  const doing = list.filter((x) => x.status !== "완료" && (x.planMonth || "") <= month);
+  if (!done.length && !doing.length) return "";
+  let rows = "";
+  if (done.length) {
+    let stats = {};
+    try { stats = await monthlyCategoryStats(addMonths(done[0].doneMonth, -3), month); } catch { /* 효과 생략 */ }
+    rows += done.map((x) => `<tr><td>${escapeHtml(x.action)}</td><td>${escapeHtml(x.category || "-")}</td><td>완료 (${escapeHtml(x.doneMonth)})</td>
+      <td>${x.category ? effectCell(effectOf(stats, x.category, x.doneMonth, month)) : "-"}</td></tr>`).join("");
+  }
+  rows += doing.map((x) => `<tr><td>${escapeHtml(x.action)}</td><td>${escapeHtml(x.category || "-")}</td><td>${escapeHtml(x.status || "계획")} (계획 ${escapeHtml(x.planMonth || "-")})</td><td>-</td></tr>`).join("");
+  return `<section><h3>6-1. 개선 조치 이행·효과</h3>
+    <table><thead><tr><th>조치</th><th>분류</th><th>상태</th><th>효과 (해당 분류 불만족, 응답자 100명당)</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="hint">효과: 완료 월 이전 3개월과 이후 3개월(보고 월까지)의 불만족 의견 비율 비교. 응답 10명 미만은 '데이터 부족'.</p></section>`;
 }
 
 // 인쇄: 보고서 영역만 새 창으로 열어 print(전역 CSS 충돌 회피).
