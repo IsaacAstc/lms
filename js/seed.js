@@ -6,6 +6,7 @@ import { db } from "./firebase.js";
 import {
   SEED_ROOMS, SEED_INSTRUCTORS, SEED_PROGRAMS, SEED_FEE_RATES, SEED_TRAVEL_RATES,
 } from "./seed-data.js";
+import { initSeedDemo } from "./seed-demo.js";
 
 async function isEmpty(name) {
   const snap = await getDocs(collection(db, name));
@@ -23,6 +24,7 @@ async function seedCollection(name, rows) {
 export function initSeed() {
   const btn = document.getElementById("seed-btn");
   const log = document.getElementById("seed-log");
+  initSeedDemo(); // 데모 기관에서만 '모의데이터 생성' 섹션이 붙는다.
   btn.addEventListener("click", async () => {
     if (!confirm("초기 데이터(강의실·강사·과정 커리큘럼·강사료/여비 기준)를 등록합니다.\n이미 있는 항목은 건너뜁니다. 진행할까요?")) return;
     btn.disabled = true;
