@@ -79,18 +79,20 @@ function paintProviders() {
     body.innerHTML = `<tr><td colspan="7" class="empty">등록된 모델이 없습니다. 예시에서 추가하거나 빈 행을 추가하세요.</td></tr>`;
     return;
   }
-  body.innerHTML = providers.map((p, i) => `<tr data-i="${i}">
-    <td style="text-align:center"><input type="radio" name="ai-default" data-f="default" ${p.id === defaultId ? "checked" : ""}></td>
-    <td><input data-f="name" value="${escapeHtml(p.name || "")}" placeholder="표시 이름" style="min-width:150px"></td>
-    <td><input data-f="baseUrl" value="${escapeHtml(p.baseUrl || "")}" placeholder="https://…/v1" style="min-width:230px"></td>
-    <td><input data-f="model" value="${escapeHtml(p.model || "")}" placeholder="모델명" style="min-width:150px"></td>
-    <td style="text-align:center"><input type="checkbox" data-f="jsonMode" ${p.jsonMode ? "checked" : ""}></td>
-    <td><input type="password" data-f="key" autocomplete="new-password" placeholder="${p.hasKey ? "등록됨 — 바꿀 때만 입력" : "필요한 경우 입력"}" style="min-width:140px"></td>
+  // 한 화면에 들어오도록 입력칸은 칸 너비를 따르고(width:100%), 연결 테스트 결과는
+  // 바로 아래 줄 전체 폭으로 보여 준다(관리 열이 결과 글자로 넓어지지 않게).
+  body.innerHTML = providers.map((p, i) => `<tr data-i="${i}" class="ai-prov-row">
+    <td style="text-align:center"><input type="radio" name="ai-default" data-f="default" ${p.id === defaultId ? "checked" : ""} title="기본 모델"></td>
+    <td><input data-f="name" value="${escapeHtml(p.name || "")}" placeholder="표시 이름"></td>
+    <td><input data-f="baseUrl" value="${escapeHtml(p.baseUrl || "")}" placeholder="https://…/v1"></td>
+    <td><input data-f="model" value="${escapeHtml(p.model || "")}" placeholder="모델명"></td>
+    <td style="text-align:center"><input type="checkbox" data-f="jsonMode" ${p.jsonMode ? "checked" : ""} title="JSON 모드"></td>
+    <td><input type="password" data-f="key" autocomplete="new-password" placeholder="${p.hasKey ? "등록됨(바꿀 때만)" : "필요 시 입력"}"></td>
     <td class="actions">
-      <button type="button" data-act="test">연결 테스트</button>
+      <button type="button" data-act="test">테스트</button>
       <button type="button" class="del" data-act="del">삭제</button>
-      <div class="hint ai-test-out" style="max-width:260px"></div>
-    </td></tr>`).join("");
+    </td></tr>
+    <tr data-out="${i}" hidden><td></td><td colspan="6" class="hint ai-test-out"></td></tr>`).join("");
 }
 
 function onProvInput(e) {
@@ -118,7 +120,9 @@ async function onProvClick(e) {
     return;
   }
   // 연결 테스트는 '저장된' 설정으로 서버에서 실행한다(키가 서버에만 있으므로).
-  const out = tr.querySelector(".ai-test-out");
+  const outRow = tr.nextElementSibling;
+  const out = outRow.querySelector(".ai-test-out");
+  outRow.hidden = false;
   out.textContent = "테스트 중…";
   btn.disabled = true;
   try {

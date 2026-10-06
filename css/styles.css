@@ -841,3 +841,11 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
 .ai-card .ai-draft pre { white-space: pre-wrap; margin: 0.2rem 0 0; font-family: inherit; font-size: 0.88rem; }
 .ai-card details { margin-top: 0.5rem; }
 .ai-card details summary { cursor: pointer; font-size: 0.85rem; color: var(--muted); }
+
+/* AI 연결 표: 고정 레이아웃으로 한 화면 폭에 맞춘다(가로 스크롤 없이). */
+.ai-prov-table, .ai-runs-table { table-layout: fixed; width: 100%; }
+.ai-prov-table td input:not([type="radio"]):not([type="checkbox"]) { width: 100%; min-width: 0; box-sizing: border-box; }
+.ai-prov-table td.actions { white-space: nowrap; }
+.ai-prov-table td.actions button { padding: 0.3rem 0.55rem; font-size: 0.8rem; }
+.ai-prov-table .ai-test-out { word-break: break-all; }
+.ai-runs-table th, .ai-runs-table td { white-space: normal; overflow-wrap: anywhere; }
