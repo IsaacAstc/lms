@@ -16,6 +16,7 @@ import { initReportDoc } from "./report-doc.js";
 import { initFreetext } from "./freetext.js";
 import { initAiAdmin } from "./ai-admin.js";
 import { initImprove } from "./improve.js";
+import { initDocDraft } from "./doc-draft.js";
 import { initDataAdmin } from "./data-admin.js";
 import { initAdmins } from "./admins.js";
 import { initBoardAdmin } from "./board-admin.js";
@@ -49,7 +50,7 @@ const TAB_GROUPS = [
   { id: "surveys", label: "설문", tabs: [["surveys", "설문 관리"], ["surveyitems", "문항 설정"], ["reports", "설문 집계"], ["freetext", "주관식 원문"]] },
   // 기명 조사는 개인정보 처리 경로라 익명 설문 그룹과 나란히 두지 않고 별도 그룹으로 분리한다.
   { id: "named", label: "기명 조사", tabs: [["named", "기명 조사"]] },
-  { id: "stats", label: "통계·보고서", tabs: [["stats", "통계 대시보드"], ["reportdoc", "운영 보고서"], ["improve", "개선 추적"]] },
+  { id: "stats", label: "통계·보고서", tabs: [["stats", "통계 대시보드"], ["reportdoc", "운영 보고서"], ["improve", "개선 추적"], ["docdraft", "공문 초안"]] },
   { id: "site", label: "현장·공개", tabs: [["board", "공개 현황 보드"], ["rentals", "현장 안내(DID)"], ["downloads", "자료실"]] },
   { id: "class", label: "수업 지원", tabs: [["pad", "수업 보드"], ["logi", "ICAO 로지보드"]] },
   { id: "admin", label: "설정", tabs: [["settings", "기준값 설정"], ["admins", "관리자 계정"], ["data", "데이터 관리"], ["orgs", "기관 관리"]] },
@@ -209,6 +210,7 @@ function initApp() {
   initFreetext();
   initAiAdmin();
   initImprove();
+  initDocDraft();
   if (masterMode) initDataAdmin(); // 데이터 관리는 마스터 전용(불필요한 조회도 방지).
   if (masterMode) initOrgAdmin(); // 기관 관리(마스터 전용, 편집은 허브에서만).
   initAdmins();

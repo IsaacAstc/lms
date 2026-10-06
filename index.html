@@ -514,6 +514,26 @@
           </table></div>
         </section>
 
+        <!-- 공문·안내문 초안 (AI) -->
+        <section class="tab-panel" data-tab="docdraft" hidden>
+          <h2>공문·안내문 초안</h2>
+          <p class="hint">차수·시간표·설문 데이터를 자료로 넘겨 AI가 <b>출강 요청 공문 · 교육 안내 공문 · 결과 보고 본문</b> 초안을 씁니다.
+            강사 이름 등 개인정보는 넘기지 않으며(이름 자리는 ○○○), 초안 속 숫자는 넘긴 자료와 대조해 확인 안 된 숫자를 표시합니다. 초안은 저장되지 않으니 복사해 쓰세요.</p>
+          <div class="load-row">
+            <label>문서 <select id="dd-kind">
+              <option value="dispatch">출강 요청 공문</option>
+              <option value="notice">교육 안내 공문</option>
+              <option value="result">결과 보고 본문</option>
+            </select></label>
+            <label>차수 <select id="dd-course"><option value="">차수 선택</option></select></label>
+            <label id="dd-inst-wrap">강사 <select id="dd-inst"><option value="">(차수 선택 후)</option></select></label>
+            <label>보내는 기관 <input id="dd-org" placeholder="예: 항공보안교육훈련센터" /></label>
+            <label>모델 <select id="dd-provider" class="ai-provider-select"><option value="">(AI 연결 없음)</option></select></label>
+            <button id="dd-run" type="button">AI 초안 작성</button>
+          </div>
+          <div id="dd-out"></div>
+        </section>
+
         <!-- 운영 결과 보고서 -->
         <section class="tab-panel" data-tab="reportdoc" hidden>
           <h2>운영 결과 보고서</h2>
