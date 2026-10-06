@@ -627,8 +627,8 @@ function oxChart(label, yes, no) {
     <figcaption>${esc(label)} <span class="muted">— 응답 ${sum}건</span></figcaption>
     <p class="stat-hero">${yp}<span class="unit">%</span> <span class="stat-hero-sub">예</span></p>
     <div class="ox-bar" role="img" aria-label="예 ${yes}건 ${yp}%, 아니오 ${no}건">
-      ${yes ? `<span class="ox-yes" style="flex:${yes}"></span>` : ""}
-      ${no ? `<span class="ox-no" style="flex:${no}"></span>` : ""}
+      ${yes ? `<span class="ox-yes" style="flex:${yes}" title="예 ${yes}건 (${yp}%)"><b class="ox-tip">예 ${yes}건 · ${yp}%</b></span>` : ""}
+      ${no ? `<span class="ox-no" style="flex:${no}" title="아니오 ${no}건 (${pct1(no, sum)}%)"><b class="ox-tip">아니오 ${no}건 · ${pct1(no, sum)}%</b></span>` : ""}
     </div>
     <p class="ox-key">
       <span><i class="sw sw-yes"></i>예 ${yes}건</span>
@@ -661,9 +661,9 @@ function monthChart(label, months, total) {
     <div class="col-chart" role="img" aria-label="${esc(label)} 월별 건수">
       ${all.map((k) => {
         const v = val(k);
-        // 값은 최고치에만 붙인다. 막대마다 숫자를 달면 읽히지 않는다.
+        // 값은 최고치에만 늘 붙이고, 나머지는 마우스를 올린 막대만 보인다.
         return `<span class="col" title="${esc(k)} · ${v}건">
-          <span class="col-v">${v === max && v ? v : ""}</span>
+          <span class="col-v${v === max && v ? " peak" : ""}">${v}건</span>
           <span class="col-bar${v ? "" : " zero"}" style="height:${Math.round((v / max) * 100)}%"></span>
           <span class="col-x">${esc(k.slice(2).replace("-", "."))}</span>
         </span>`;
