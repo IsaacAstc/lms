@@ -199,7 +199,7 @@ async function loadApplications() {
       const code = a.code ? `<code class="receipt-code">${esc(a.code)}</code>` : `<small class="muted">기록 없음</small>`;
       tr.innerHTML = `<td>${t}</td><td>${code}</td><td>${a.org ? `<b>${esc(a.org)}</b><br>` : ""}${esc(a.courseName || a.courseId)}<br>${via}</td><td>${countCell}</td>
         <td>${label[a.status] || "신청"}${a.rejectReason ? ` <small>(${esc(a.rejectReason)})</small>` : ""}</td>
-        <td><input type="text" class="app-memo" maxlength="300" placeholder="메모" value="${esc(a.memo || "")}" style="width:100%;min-width:9rem"></td>
+        <td><input type="text" class="app-memo" maxlength="300" placeholder="메모" value="${esc(a.memo || "")}" style="width:100%;min-width:7rem;box-sizing:border-box"></td>
         <td class="actions">${a.status === "active" ? `<button type="button" class="reject">반려</button>` : ""}</td>`;
       // 관리자 메모: 칸을 벗어나면 저장(바뀐 경우만). 개인정보는 적지 않는다.
       const memo = tr.querySelector(".app-memo");
