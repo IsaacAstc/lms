@@ -153,6 +153,7 @@ function openDialog(id, kind) {
   document.getElementById("apply-extra-files").innerHTML = "";
   document.getElementById("apply-receipt").value = "";
   document.getElementById("apply-cancel-count").value = "";
+  document.getElementById("apply-org").value = "";
   document.getElementById("apply-subject").value = "";
   document.getElementById("apply-body").value = "";
   document.getElementById("apply-status").textContent = "";
@@ -178,8 +179,11 @@ async function send() {
   const email = document.getElementById("apply-email").value.trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { status.textContent = "이메일 주소를 확인하세요."; return; }
 
+  const org = document.getElementById("apply-org").value.trim();
+  if (!org) { status.textContent = "신청기관명을 입력하세요."; return; }
   const payload = {
     kind: current.kind,
+    org,
     courseId: current.id,
     email,
     title: document.getElementById("apply-subject").value.trim(),

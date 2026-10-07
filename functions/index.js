@@ -113,6 +113,8 @@ exports.submitApplication = onCall(
     const courseId = str(d.courseId, 64, "과정", true);
     const email = str(d.email, 254, "이메일", true);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) bad("이메일 주소 형식이 올바르지 않습니다.");
+    const org = str(d.org, 100, "신청기관명", true).replace(/[\r\n"]+/g, " ").trim();
+    if (!org) bad("신청기관명을 입력하세요.");
     const title = str(d.title, 200, "제목", false);
     const body = str(d.body, 5000, "내용", false);
     let count = 0;
@@ -189,7 +191,7 @@ exports.submitApplication = onCall(
         // 종전대로 codeHash로 한다. applications는 관리자만 읽을 수 있고,
         // 접수번호 자체는 개인 식별정보가 아니다.
         tx.set(appRef, {
-          code, codeHash: sha256(code), courseId, courseName, count,
+          code, codeHash: sha256(code), courseId, courseName, count, org,
           status: "active", createdAt: admin.firestore.FieldValue.serverTimestamp(),
           email, purgeAfter: c.startDate || "",
         });
@@ -200,11 +202,13 @@ exports.submitApplication = onCall(
           from: `"교육신청 접수" <${MAIL_USER.value()}>`,
           to: applyTo,
           cc: email,
-          subject: `[교육신청] ${courseName} ${count}명 (접수번호 ${code})${title ? ` - ${title}` : ""}`,
+          // 제목(사용자 입력)은 메일 제목에 넣지 않고 본문에만 둔다.
+          subject: `[교육신청] ${org} - ${courseName} ${count}명 (접수번호 ${code})`,
           text: [
+            `신청기관: ${org}`,
             `과정: ${courseName}`,
             `신청 인원: ${count}명`, `접수번호: ${code}`,
-            `신청자 이메일: ${email}`, "", body || "(내용 없음)", "",
+            `신청자 이메일: ${email}`, "", ...(title ? [`제목: ${title}`] : []), body || "(내용 없음)", "",
             "※ 이 메일은 공개 현황 보드의 신청 양식에서 자동 발송되었습니다.",
             "※ 취소는 신청한 페이지의 '신청 취소'에서 접수번호로 가능합니다.",
           ].join("\n"),
@@ -292,14 +296,15 @@ exports.submitApplication = onCall(
         from: `"교육신청 접수" <${MAIL_USER.value()}>`,
         to: applyTo,
         cc: email,
-        subject: `[교육신청 ${partial ? "일부취소" : "취소"}] ${courseName} ${cancelCount}명 취소`
-          + `${partial ? ` (잔여 신청 ${remainAfter}명)` : ""} (접수번호 ${receiptCode})${title ? ` - ${title}` : ""}`,
+        subject: `[교육신청 ${partial ? "일부취소" : "취소"}] ${org} - ${courseName} ${cancelCount}명 취소`
+          + `${partial ? ` (잔여 신청 ${remainAfter}명)` : ""} (접수번호 ${receiptCode})`,
         text: [
+          `신청기관: ${org}`,
           `과정: ${courseName}`,
           `취소 인원: ${cancelCount}명`,
           partial ? `취소 후 신청 인원: ${remainAfter}명` : "신청 건 전체가 취소되었습니다.",
           `접수번호: ${receiptCode}`,
-          `요청자 이메일: ${email}`, "", body || "(내용 없음)", "",
+          `요청자 이메일: ${email}`, "", ...(title ? [`제목: ${title}`] : []), body || "(내용 없음)", "",
           "※ 잔여석은 취소 즉시 공개 보드에 반영되었습니다.",
           partial
             ? [

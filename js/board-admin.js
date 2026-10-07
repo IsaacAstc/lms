@@ -197,7 +197,7 @@ async function loadApplications() {
         : `${a.count || 0}명`;
       // 접수번호 원문은 이 기능이 들어오기 전 건에는 없다(해시만 저장했다).
       const code = a.code ? `<code class="receipt-code">${esc(a.code)}</code>` : `<small class="muted">기록 없음</small>`;
-      tr.innerHTML = `<td>${t}</td><td>${code}</td><td>${esc(a.courseName || a.courseId)}<br>${via}</td><td>${countCell}</td>
+      tr.innerHTML = `<td>${t}</td><td>${code}</td><td>${a.org ? `<b>${esc(a.org)}</b><br>` : ""}${esc(a.courseName || a.courseId)}<br>${via}</td><td>${countCell}</td>
         <td>${label[a.status] || "신청"}${a.rejectReason ? ` <small>(${esc(a.rejectReason)})</small>` : ""}</td>
         <td class="actions">${a.status === "active" ? `<button type="button" class="reject">반려</button>` : ""}</td>`;
       const btn = tr.querySelector(".reject");
