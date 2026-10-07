@@ -381,7 +381,7 @@ exports.rejectApplication = onCall(
         from: `"교육신청 접수" <${MAIL_USER.value()}>`,
         to: applyTo,
         cc: applicantEmail || undefined,
-        subject: `[교육신청 반려] ${app.courseName || ""} ${app.count}명`,
+        subject: `[교육신청 반려] ${app.org ? `${headerSafe(app.org)} - ` : ""}${app.courseName || ""} ${app.count}명`,
         text: [
           `과정: ${app.courseName || ""}`, `신청 인원: ${app.count}명`, "",
           "아래 사유로 접수가 반려되었습니다. 보완 후 다시 신청해 주세요.", "",

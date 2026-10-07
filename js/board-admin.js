@@ -1,6 +1,6 @@
 // 공개 현황 보드 관리(관리자): 전체 동기화 + 신청 안내 문구 편집 + 공개 주소 안내.
 import {
-  collection, getDocs, getDoc, doc, setDoc, writeBatch, query, orderBy, limit,
+  collection, getDocs, getDoc, doc, setDoc, writeBatch, updateDoc, query, orderBy, limit,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 import { db, app } from "./firebase.js";
@@ -180,7 +180,7 @@ async function loadApplications() {
   const body = document.getElementById("board-apps-body");
   try {
     const snap = await getDocs(query(collection(db, "applications"), orderBy("createdAt", "desc"), limit(50)));
-    if (snap.empty) { body.innerHTML = `<tr><td colspan="6" class="empty">접수 이력이 없습니다.</td></tr>`; return; }
+    if (snap.empty) { body.innerHTML = `<tr><td colspan="7" class="empty">접수 이력이 없습니다.</td></tr>`; return; }
     const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const label = { cancelled: "취소됨", rejected: "반려됨" };
     body.innerHTML = "";
@@ -199,12 +199,21 @@ async function loadApplications() {
       const code = a.code ? `<code class="receipt-code">${esc(a.code)}</code>` : `<small class="muted">기록 없음</small>`;
       tr.innerHTML = `<td>${t}</td><td>${code}</td><td>${a.org ? `<b>${esc(a.org)}</b><br>` : ""}${esc(a.courseName || a.courseId)}<br>${via}</td><td>${countCell}</td>
         <td>${label[a.status] || "신청"}${a.rejectReason ? ` <small>(${esc(a.rejectReason)})</small>` : ""}</td>
+        <td><input type="text" class="app-memo" maxlength="300" placeholder="메모" value="${esc(a.memo || "")}" style="width:100%;min-width:9rem"></td>
         <td class="actions">${a.status === "active" ? `<button type="button" class="reject">반려</button>` : ""}</td>`;
+      // 관리자 메모: 칸을 벗어나면 저장(바뀐 경우만). 개인정보는 적지 않는다.
+      const memo = tr.querySelector(".app-memo");
+      memo.addEventListener("change", async () => {
+        try {
+          await updateDoc(doc(db, "applications", d.id), { memo: memo.value.trim().slice(0, 300), memoAtMs: Date.now() });
+          memo.style.background = "#eaf6ea"; setTimeout(() => { memo.style.background = ""; }, 1200);
+        } catch (e) { alert("메모 저장 실패: " + e.message); }
+      });
       const btn = tr.querySelector(".reject");
       if (btn) btn.addEventListener("click", () => rejectApplication(d.id, a, btn));
       body.appendChild(tr);
     });
-  } catch (e) { body.innerHTML = `<tr><td colspan="6" class="empty">불러오기 실패: ${e.message}</td></tr>`; }
+  } catch (e) { body.innerHTML = `<tr><td colspan="7" class="empty">불러오기 실패: ${e.message}</td></tr>`; }
 }
 
 // 반려: 잔여석 복구 + 상태 변경 + 신청자에게 사유 통지(서버에서 일괄 처리).
