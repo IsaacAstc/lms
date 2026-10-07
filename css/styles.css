@@ -870,3 +870,8 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
 
 /* 운영 보고서: AI 총평 작성 컨트롤 */
 .rd-ai-ctl { display: inline-flex; gap: 0.4rem; align-items: center; margin-left: auto; }
+
+/* 신청 접수 이력: 과정명·반려 사유는 줄바꿈해 표가 한 화면에 들어오게. */
+.apps-table td { white-space: normal; word-break: keep-all; }
+.apps-table td:first-child, .apps-table td:nth-child(2), .apps-table td:nth-child(4), .apps-table td.actions { white-space: nowrap; }
+.apps-table td:nth-child(5) { min-width: 6rem; }
