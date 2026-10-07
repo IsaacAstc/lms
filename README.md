@@ -260,15 +260,22 @@ A 레코드는 GitHub Pages의 IP를 고정하므로, GitHub이 IP를 바꾸면 
 1회 준비:
 
 1. **Blaze 요금제 전환** — Cloud Functions는 종량제에서만 배포된다.
-2. **시크릿 2개 등록** (해당 프로젝트에서):
+2. **함수 시크릿 4개 등록** (해당 프로젝트에서 — 하나라도 없으면 배포 실패):
    ```bash
    firebase functions:secrets:set MAIL_USER --project <프로젝트ID>
    firebase functions:secrets:set MAIL_PASS --project <프로젝트ID>
+   firebase functions:secrets:set GH_FILES_TOKEN --project <프로젝트ID>   # 자료실 미사용이면 아무 값
+   openssl rand -hex 32 | firebase functions:secrets:set SURVEY_ID_SALT --project <프로젝트ID> --data-file=-
    ```
-   기명 조사가 응답자 식별자를 해시로 저장하던 때 쓰던 `SURVEY_ID_SALT`는 더 이상
-   필요하지 않다(중복 응답 허용으로 해시 자체를 만들지 않는다). 이미 등록해 둔
-   프로젝트는 그대로 두어도 무방하다 — 함수가 참조하지 않는다.
-3. **서비스 계정 생성 + GitHub 시크릿 등록** — 기본 기관과 같은 역할을 부여한 뒤,
+   `SURVEY_ID_SALT`는 기명 조사의 중복 응답 표시(해시)에 쓰는 기관별 임의값이다.
+3. **서비스 계정 생성 + GitHub 시크릿 등록** — 기본 기관과 같은 역할에 더해 **서비스 사용량 관리자**
+   (`roles/serviceusage.serviceUsageAdmin`)를 부여한다. 새 프로젝트는 API가 꺼져 있어, 이 역할이 없으면
+   배포가 API를 만날 때마다 `Permissions denied enabling …`으로 멈춘다. 아래로 미리 켜 두면 확실하다(소유자 계정으로 Cloud Shell에서):
+   ```bash
+   gcloud services enable cloudbilling.googleapis.com firebaseextensions.googleapis.com storage.googleapis.com firebasestorage.googleapis.com pubsub.googleapis.com run.googleapis.com eventarc.googleapis.com cloudfunctions.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com cloudscheduler.googleapis.com firebaserules.googleapis.com firestore.googleapis.com iam.googleapis.com iamcredentials.googleapis.com cloudresourcemanager.googleapis.com serviceusage.googleapis.com logging.googleapis.com --project <프로젝트ID>
+   ```
+   첫 배포는 권한 반영 지연으로 한 번 실패할 수 있다 — 몇 분 뒤 다시 실행하면 된다.
+   그 다음
    저장소 Settings → Secrets → Actions 에
    `FIREBASE_SERVICE_ACCOUNT_ATC`(JSON 전체), `FIREBASE_PROJECT_ID_ATC` 등록.
 4. **복합 인덱스**: `namedRespondents` — `surveyId`(asc) + `collectedDate`(asc).
