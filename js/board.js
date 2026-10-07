@@ -223,6 +223,7 @@ async function send() {
   status.textContent = "첨부파일 처리 중…";
   payload.attachments = [];
   for (const f of files) {
+    if (!f.size) { status.textContent = `내용이 없는 빈 파일(0바이트)은 첨부할 수 없습니다. (${f.name})`; return; }
     const data = await readFileBase64(f).catch(() => null);
     if (!data) { status.textContent = `첨부파일을 읽지 못했습니다. (${f.name})`; return; }
     payload.attachments.push({ name: f.name, dataBase64: data });

@@ -442,6 +442,15 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
 .apply-dialog::backdrop { background: rgba(0,0,0,0.45); }
 .apply-dialog form { padding: 1.2rem 1.3rem; display: flex; flex-direction: column; gap: 0.7rem; }
 .apply-dialog h2 { margin: 0; }
+.apply-cols { display: flex; flex-direction: column; gap: 0.7rem; }
+.apply-col { display: flex; flex-direction: column; gap: 0.7rem; min-width: 0; }
+.apply-col > div { display: flex; flex-direction: column; gap: 0.7rem; }
+.apply-col > div[hidden] { display: none; }
+/* PC: 넓게 2열로 펼쳐 스크롤 없이(왼쪽 기관·인원·이메일 / 오른쪽 첨부·제목·내용). */
+@media (min-width: 900px) {
+  .apply-dialog { max-width: 58rem; max-height: calc(100vh - 2rem); }
+  .apply-cols { display: grid; grid-template-columns: 1fr 1.25fr; gap: 0 1.6rem; }
+}
 .apply-dialog label { display: flex; flex-direction: column; gap: 0.25rem; font-weight: 600; font-size: 0.9rem; }
 .apply-dialog label small { color: var(--muted); font-weight: 400; }
 .apply-dialog input, .apply-dialog select, .apply-dialog textarea {
