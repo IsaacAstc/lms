@@ -1936,6 +1936,7 @@ function openReport(id, r) {
       <td style="text-align:right;">${(p.score || 0).toLocaleString()}</td>
       <td style="text-align:center;">${p.correct}/${p.answered}</td></tr>`).join("");
   $("rp-body").innerHTML = `
+    <div id="rp-diag">${diagHtml(r.diagnosis)}</div>
     <h2 style="margin:6px 0 12px;">문항별 결과</h2>${qRows || `<div class="notice">문항 데이터가 없습니다.</div>`}
     <h2 style="margin:20px 0 12px;">참가자 순위 (${r.playerCount || 0}명)</h2>
     <table style="width:100%;border-collapse:collapse;font-size:15px;">
@@ -1944,6 +1945,39 @@ function openReport(id, r) {
     </table>`;
   show("view-report");
 }
+
+/* ---- AI 학습 진단(문항별 정답률·오답 분포 → 취약 개념·보충 설명·다음 수업 포인트) ---- */
+function diagHtml(d) {
+  const box = (inner) => `<div style="background:rgba(99,102,241,0.18);border:1px solid rgba(165,180,252,0.5);border-radius:12px;padding:14px 16px;margin-bottom:18px;">${inner}</div>`;
+  if (!d) return box(`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <b style="flex:1;">🧠 AI 학습 진단</b>
+      <button class="btn-sm primary" id="btn-rp-diag">AI로 진단하기</button></div>
+    <div style="font-size:13px;opacity:0.8;margin-top:6px;">정답률이 낮은 문항과 오답이 몰린 보기를 분석해 취약 개념·보충 설명·다음 수업 포인트를 정리합니다. 참가자 닉네임은 AI에 보내지 않습니다.</div>`);
+  const weak = (d.weak || []).map((w) => `<div style="margin:8px 0;"><b>${w.n ? w.n + "번 · " : ""}${esc(w.concept)}</b>
+      <div style="font-size:13px;opacity:0.85;">${esc(w.why)}</div>
+      <div style="font-size:14px;margin-top:3px;">💡 ${esc(w.explain)}</div></div>`).join("");
+  const next = (d.nextClass || []).map((x) => `<li>${esc(x)}</li>`).join("");
+  const warn = (d.unverified || []).length ? `<div style="color:#ffd54f;font-size:13px;margin-top:6px;">⚠ 결과에서 확인되지 않은 숫자: ${esc(d.unverified.join(", "))}</div>` : "";
+  return box(`<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;"><b style="flex:1;">🧠 AI 학습 진단</b>
+      <span style="font-size:12px;opacity:0.7;">${esc(d.model || "")}${d.fallback ? " (자동 대체)" : ""}</span>
+      <button class="btn-sm" id="btn-rp-diag">다시 진단</button></div>
+    <div style="margin-top:8px;">${esc(d.summary)}</div>${weak ? `<h3 style="margin:12px 0 4px;font-size:15px;">취약 개념</h3>${weak}` : ""}
+    ${next ? `<h3 style="margin:12px 0 4px;font-size:15px;">다음 수업에서 짚을 점</h3><ul style="margin:4px 0 0 18px;">${next}</ul>` : ""}${warn}`);
+}
+document.addEventListener("click", async (e) => {
+  if (!e.target || e.target.id !== "btn-rp-diag" || !currentReport) return;
+  const btn = e.target;
+  btn.disabled = true; btn.textContent = "진단 중…";
+  try {
+    const call = firebase.app().functions("asia-northeast3").httpsCallable("aiQuizDiagnosis", { timeout: 250000 });
+    const res = await call({ reportId: currentReport.id });
+    currentReport.data.diagnosis = res.data.diagnosis;
+    $("rp-diag").innerHTML = diagHtml(res.data.diagnosis);
+  } catch (err) {
+    toast("진단 실패: " + (err.message || err));
+    btn.disabled = false; btn.textContent = "AI로 진단하기";
+  }
+});
 
 $("btn-rp-csv").onclick = () => {
   if (!currentReport) return;
