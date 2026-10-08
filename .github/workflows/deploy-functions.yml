@@ -165,3 +165,12 @@ jobs:
           --only functions,firestore:rules,database
           --project "${{ secrets.FIREBASE_PROJECT_ID_DEMO }}"
           --non-interactive --force
+
+      # 복합 인덱스(히어로 미션 순위표·기명 조사 기간 파기). --force 없이 올려
+      # 파일에 없는 기존 인덱스는 지우지 않는다(추가만).
+      - name: Deploy Firestore indexes
+        if: steps.check.outputs.ok == 'true'
+        run: npx --yes firebase-tools@latest deploy
+          --only firestore:indexes
+          --project "${{ secrets.FIREBASE_PROJECT_ID_DEMO }}"
+          --non-interactive
