@@ -326,12 +326,12 @@ table.events-table .ev-titleopt input { width: auto; }
 .ev-line { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-end; }
 .ev-head { align-items: center; }
 .ev-head .ev-name { flex: 1 1 220px; font-size: 15px; font-weight: 700; }
-.ev-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-muted); flex: 1 1 200px; }
+.ev-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-muted); flex: 1 1 185px; }
 .ev-field input { width: 100%; }
 .ev-field.ev-inline { flex: 0 0 auto; flex-direction: row; align-items: center; gap: 8px; }
-.ev-field.ev-narrow { flex: 0 0 110px; }
+.ev-field.ev-narrow { flex: 0 0 90px; }
 .ev-field.ev-narrow input { text-align: center; }
-.ev-field.ev-grow { flex: 1 1 220px; }
+.ev-field.ev-grow { flex: 1 1 150px; }
 .ev-count { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
 .ev-titleopt { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); white-space: nowrap; padding-bottom: 8px; }
 .ev-titleopt input { width: auto; }
@@ -339,6 +339,6 @@ table.events-table .ev-titleopt input { width: auto; }
 .ev-actions .btn { width: auto; padding: 6px 12px; font-size: 12px; margin: 0; }
 .ev-card input[type="datetime-local"] {
   background: var(--surface-2, var(--surface)); border: 1px solid var(--border); border-radius: 10px;
-  padding: 10px 12px; color: var(--text); font-family: var(--font-body); font-size: 13px; width: 100%;
+  padding: 10px 8px; color: var(--text); font-family: var(--font-body); font-size: 13px; width: 100%;
   color-scheme: dark;
 }
