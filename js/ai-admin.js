@@ -54,9 +54,12 @@ export function initAiAdmin() {
   document.getElementById("ai-prov-body").addEventListener("change", onProvInput);
   document.getElementById("ai-prov-body").addEventListener("click", onProvClick);
   document.getElementById("ai-run").addEventListener("click", runAnalysis);
+  document.getElementById("brief-save")?.addEventListener("click", saveBriefing);
+  document.getElementById("brief-preview")?.addEventListener("click", () => runBriefing(false));
+  document.getElementById("brief-send")?.addEventListener("click", () => runBriefing(true));
   document.addEventListener("tabshown", (e) => {
     if (e.detail === "settings" || e.detail === "freetext" || e.detail === "reportdoc" || e.detail === "improve" || e.detail === "docdraft" || e.detail === "assistant") loadProviders();
-    if (e.detail === "settings") loadRuns();
+    if (e.detail === "settings") { loadRuns(); loadBriefing(); }
   });
 }
 
@@ -181,12 +184,13 @@ async function loadRuns() {
       const res = r.ok
         ? (r.kind === "freetext" ? `✅ 분류 ${r.classified ?? "-"}/${r.classifiable ?? "-"}건 · 가림 ${r.maskedCount ?? 0}건`
           : r.kind === "actions" ? `✅ 조치 ${r.count ?? 0}건 추출`
+          : r.kind === "briefing" ? `✅ 주간 브리핑${r.ai ? "" : "(집계값만)"}${r.sent ? ` · ${r.sent}명 발송` : " · 미리보기"}`
           : r.kind === "ask" ? `✅ 비서 답변 · 도구 ${(r.tools || []).length}회${r.unverified?.length ? ` · <span class='warn'>확인 안 된 숫자 ${r.unverified.length}개</span>` : ""}${r.fallback ? ` · 대체: ${escapeHtml(r.fallback.to || "")}` : ""}`
           : r.kind === "doc" ? `✅ 공문 초안${r.unverified?.length ? ` · <span class='warn'>확인 안 된 숫자 ${r.unverified.length}개</span>` : " · 숫자 대조 통과"}`
           : r.kind === "report" ? `✅ 보고서 초안${r.unverified?.length ? ` · <span class='warn'>확인 안 된 숫자 ${r.unverified.length}개</span>` : " · 숫자 대조 통과"}`
           : "✅ 연결 정상")
         : `❌ ${escapeHtml(r.error || "")}`;
-      return `<tr><td>${fmt.format(new Date(r.at))}</td><td>${r.kind === "freetext" ? `주관식 분석 ${escapeHtml(r.month || "")}` : r.kind === "report" ? `보고서 ${escapeHtml(r.month || "")}` : r.kind === "actions" ? `조치 추출 ${escapeHtml(r.month || "")}` : r.kind === "doc" ? "공문 초안" : r.kind === "ask" ? "AI 비서" : "연결 테스트"}</td>
+      return `<tr><td>${fmt.format(new Date(r.at))}</td><td>${r.kind === "freetext" ? `주관식 분석 ${escapeHtml(r.month || "")}` : r.kind === "report" ? `보고서 ${escapeHtml(r.month || "")}` : r.kind === "actions" ? `조치 추출 ${escapeHtml(r.month || "")}` : r.kind === "doc" ? "공문 초안" : r.kind === "ask" ? "AI 비서" : r.kind === "briefing" ? (r.by === "schedule" ? "주간 브리핑(자동)" : "주간 브리핑") : "연결 테스트"}</td>
         <td>${escapeHtml(r.providerName || "")}</td><td>${escapeHtml(r.servedModel || r.model || "")}</td>
         <td>${res}</td><td style="text-align:right">${r.elapsedMs != null ? (r.elapsedMs / 1000).toFixed(1) + "초" : "-"}</td></tr>`;
     }).join("");
@@ -279,4 +283,51 @@ function renderResult(r) {
     } catch (err) { alert("반영 실패: " + err.message); e.target.disabled = false; }
   });
   box.prepend(card);
+}
+
+// ── 주간 AI 운영 브리핑 설정 ──
+async function loadBriefing() {
+  try {
+    const d = await getDoc(doc(db, "settings", "briefing"));
+    const v = d.exists() ? d.data() : {};
+    document.getElementById("brief-enabled").checked = !!v.enabled;
+    document.getElementById("brief-to").value = (v.recipients || []).join(", ");
+    if (v.providerId) document.getElementById("brief-provider").value = v.providerId;
+    document.getElementById("brief-last").textContent = v.lastSentAt
+      ? `마지막 자동 발송: ${new Date(v.lastSentAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}` : "";
+  } catch { /* 권한 없음 등 — 화면만 비워 둔다 */ }
+}
+async function saveBriefing() {
+  const recipients = document.getElementById("brief-to").value.split(/[,\s;]+/).map((x) => x.trim()).filter(Boolean);
+  const bad = recipients.filter((x) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x));
+  if (bad.length) return alert("이메일 형식을 확인하세요: " + bad.join(", "));
+  if (recipients.length > 10) return alert("받는 사람은 최대 10명입니다.");
+  try {
+    await setDoc(doc(db, "settings", "briefing"), {
+      enabled: document.getElementById("brief-enabled").checked, recipients,
+      providerId: document.getElementById("brief-provider").value || "", updatedAtMs: Date.now(),
+    }, { merge: true });
+    alert("주간 브리핑 설정을 저장했습니다.");
+  } catch (e) { alert("저장 실패: " + e.message); }
+}
+async function runBriefing(send) {
+  if (send && !confirm("저장된 받는 사람에게 지금 브리핑 메일을 보낼까요?")) return;
+  const out = document.getElementById("brief-out");
+  const btns = ["brief-preview", "brief-send"].map((id) => document.getElementById(id));
+  btns.forEach((b) => { b.disabled = true; });
+  out.innerHTML = `<p class="hint">브리핑 작성 중…</p>`;
+  try {
+    const fn = httpsCallable(fns, "aiBriefingPreview", { timeout: 310000 });
+    const r = (await fn({ providerId: document.getElementById("brief-provider").value, send })).data;
+    const i = r.info || {};
+    const meta = i.ai
+      ? `AI 작성 · ${escapeHtml(i.model || "")}${i.fallback ? ` (자동 대체: ${escapeHtml(i.fallback)})` : ""}`
+      : `AI 응답 없음 → 집계값 기본 브리핑${i.error ? ` (${escapeHtml(i.error)})` : ""}`;
+    const warn = i.unverified?.length ? `<p class="warn">⚠ 집계값에서 확인되지 않은 숫자: <b>${i.unverified.map(escapeHtml).join(", ")}</b></p>` : "";
+    out.innerHTML = `<div class="ai-card">
+      <div class="ai-card-head"><b>${escapeHtml(r.subject)}</b> <span class="muted">${meta}${r.sent ? ` · ${r.sent}명에게 발송함` : " · 미리보기(발송 안 함)"}</span></div>
+      ${warn}<pre class="report-narr" style="white-space:pre-wrap">${escapeHtml(r.body)}</pre>
+      <details><summary>집계값 보기</summary><pre style="white-space:pre-wrap;font-size:0.75rem">${escapeHtml(JSON.stringify(r.facts, null, 2))}</pre></details></div>`;
+    loadRuns();
+  } catch (e) { out.innerHTML = ""; alert(e.message || e); } finally { btns.forEach((b) => { b.disabled = false; }); }
 }
