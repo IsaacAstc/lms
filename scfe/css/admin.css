@@ -342,3 +342,10 @@ table.events-table .ev-titleopt input { width: auto; }
   padding: 10px 8px; color: var(--text); font-family: var(--font-body); font-size: 13px; width: 100%;
   color-scheme: dark;
 }
+
+/* 카드 압축: 행사명은 적당한 폭, 입력칸 높이 축소 */
+.ev-field.ev-namef { flex: 1 1 180px; max-width: 260px; }
+.ev-field.ev-dt { flex: 0 1 190px; }
+.ev-card .ev-field input[type="text"], .ev-card input[type="datetime-local"] { padding: 7px 9px; font-size: 13px; border-radius: 8px; }
+.ev-card .ev-name { font-weight: 700; }
+.ev-foot { align-items: center; gap: 6px 16px; }
