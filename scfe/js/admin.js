@@ -595,8 +595,7 @@ function renderEventsTable() {
         <td><input type="datetime-local" class="ev-start" data-id="${e.id}" value="${escapeHtml(e.startAt || "")}" /></td>
         <td><input type="datetime-local" class="ev-end" data-id="${e.id}" value="${escapeHtml(e.endAt || "")}" /></td>
         <td><button class="reward-toggle ev-active ${e.active ? "on" : ""}" data-id="${e.id}" title="진행중으로 표시 (여러 행사 동시 가능). QR 없이 접속하면 진행중인 행사 중에서 선택하게 됩니다."></button></td>
-        <td><input type="text" class="ev-missions" data-id="${e.id}" value="${normalizeMissionOrder(e.missionOrder).join(",")}"
-              style="width:90px" title="사용할 미션 번호를 순서대로 입력 (예: 1,2,3,4 또는 3,1)" /></td>
+        <td><input type="text" class="ev-missions" data-id="${e.id}" value="${normalizeMissionOrder(e.missionOrder).join(",")}" title="사용할 미션 번호를 순서대로 입력 (예: 1,2,3,4 또는 3,1)" /></td>
         <td><input type="text" class="ev-cert" data-id="${e.id}" value="${escapeHtml(e.certTitle || "")}" maxlength="40"
               placeholder="비우면 행사명" title="참가자 인증서 맨 위에 크게 표시할 문구" /></td>
         <td>${count}</td>
