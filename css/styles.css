@@ -879,3 +879,21 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
 /* 관리자 추가: 역할도 이메일·비밀번호 칸처럼 제목 위·입력 아래 2행으로. */
 #admin-role-wrap:not([hidden]) { display: flex; flex-direction: column; gap: 0.25rem; }
 #admin-role-wrap select { width: 100%; }
+
+/* AI 운영 비서 */
+.ask-examples { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.ask-chip { background: #eef3f9; color: var(--primary); border: 1px solid #c6d6ea; border-radius: 999px; padding: 5px 12px; font-size: 0.82rem; cursor: pointer; }
+.ask-log { display: flex; flex-direction: column; gap: 10px; min-height: 120px; max-height: 60vh; overflow-y: auto; padding: 4px 2px; }
+.ask-msg { max-width: 88%; padding: 10px 12px; border-radius: 12px; font-size: 0.9rem; line-height: 1.55; }
+.ask-msg.me { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
+.ask-msg.ai { align-self: flex-start; background: #fff; border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.ask-msg.pending { color: var(--muted); }
+.ask-msg.err { border-color: #e6a0a0; color: #a33; }
+.ask-tools { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.ask-tool { background: #eef6ee; color: #2d6a3e; border-radius: 6px; padding: 1px 7px; font-size: 0.75rem; }
+.ask-meta { font-size: 0.75rem; margin-top: 6px; }
+.ask-msg details pre { white-space: pre-wrap; font-size: 0.72rem; max-height: 240px; overflow: auto; }
+.ask-input { display: flex; gap: 8px; margin-top: 10px; align-items: stretch; }
+.ask-input textarea { flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; resize: vertical; }
+.ask-side { display: flex; flex-direction: column; gap: 6px; }
+.chk-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; }

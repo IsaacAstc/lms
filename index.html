@@ -514,6 +514,22 @@
           </table></div>
         </section>
 
+        <!-- AI 운영 비서 -->
+        <section class="tab-panel" data-tab="assistant" hidden>
+          <h2>AI 운영 비서</h2>
+          <p class="hint">운영 현황을 말로 물어보세요. AI가 시스템의 <b>정해진 조회 기능</b>(차수·정원·시간표 중복·만족도·주관식 분류·개선 조치) 중 필요한 것을 골라 쓰고,
+            <b>숫자는 시스템이 계산</b>합니다. 답변 속 숫자는 조회 결과와 대조해 확인 안 된 숫자를 표시합니다. 강사 실명 등 개인정보는 AI에 보내지 않습니다.</p>
+          <div class="ask-examples" id="ask-examples"></div>
+          <div class="ask-log" id="ask-log"></div>
+          <div class="ask-input">
+            <textarea id="ask-q" rows="2" maxlength="500" placeholder="예: 다음 달 신청이 저조한 차수 알려줘"></textarea>
+            <div class="ask-side">
+              <select id="ask-provider" class="ai-provider-select"><option value="">(AI 연결 없음)</option></select>
+              <button id="ask-send" type="button">묻기</button>
+            </div>
+          </div>
+        </section>
+
         <!-- 공문·안내문 초안 (AI) -->
         <section class="tab-panel" data-tab="docdraft" hidden>
           <h2>공문·안내문 초안</h2>
@@ -754,6 +770,7 @@
             </select>
             <button id="ai-prov-add" type="button">빈 행 추가</button>
             <button id="ai-prov-save" type="button">AI 연결 저장</button>
+            <label class="chk-inline"><input type="checkbox" id="ai-auto-fallback" checked /> 모델 자동 대체 <small class="muted">(기본 모델이 혼잡·오류면 다른 등록 모델로 자동 재시도)</small></label>
           </div>
           <p class="hint">예시의 주소·모델명은 출발점입니다. 실제 값은 각 제공처 안내를 확인하세요. 'JSON 모드'는 서버가 <code>response_format</code>을 지원할 때만 켭니다(꺼도 동작).</p>
           <h4>최근 AI 실행 기록 <small class="muted">(모델·소요시간·결과만 기록 — 원문은 남기지 않음)</small></h4>

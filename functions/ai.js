@@ -54,7 +54,7 @@ function maskPII(text, knownNames = []) {
 // ── OpenAI 호환 호출 ──
 function normBaseUrl(u) { return String(u || "").trim().replace(/\/+$/, "").replace(/\/chat\/completions$/, ""); }
 
-async function chat(provider, key, messages, { json = true, maxTokens = 2000 } = {}) {
+async function chatOnce(provider, key, messages, { json = true, maxTokens = 2000 } = {}) {
   const url = `${normBaseUrl(provider.baseUrl)}/chat/completions`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), CALL_TIMEOUT_MS);
@@ -77,6 +77,26 @@ async function chat(provider, key, messages, { json = true, maxTokens = 2000 } =
   const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== "string") throw new Error(`응답 형식이 OpenAI 호환 규격과 다릅니다: ${raw.slice(0, 200)}`);
   return { content, ms: Date.now() - t0, usage: data.usage || null, servedModel: data.model || provider.model };
+}
+
+// 모델 자동 대체: 기본 모델이 실패하면(혼잡 429·서버 오류·시간 초과·접속 실패 등)
+// 등록된 다른 모델로 차례로 다시 시도한다. provider._fallbacks 는 loadProvider 가 채운다.
+async function chat(provider, key, messages, opts = {}) {
+  try {
+    return await chatOnce(provider, key, messages, opts);
+  } catch (e) {
+    const fbs = provider._fallbacks || [];
+    let last = e;
+    for (const fb of fbs) {
+      try {
+        const r = await chatOnce(fb.provider, fb.key, messages, opts);
+        return { ...r, fallbackFrom: provider.name || provider.model, fallbackTo: fb.provider.name || fb.provider.model,
+          fallbackReason: String(e.message || e).slice(0, 120) };
+      } catch (e2) { last = e2; }
+    }
+    if (fbs.length) throw new Error(`${e.message} (대체 모델 ${fbs.length}개도 실패: ${String(last.message || last).slice(0, 120)})`);
+    throw e;
+  }
 }
 
 // 모델마다 JSON을 코드펜스로 감싸거나 앞뒤 설명을 붙이는 버릇이 달라 관대하게 꺼낸다.
@@ -202,7 +222,7 @@ function docMessages(kind, facts) {
 }
 
 module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin }) {
-  async function loadProvider(providerId) {
+  async function loadProvider(providerId, { fallback = true } = {}) {
     const cfg = (await db.doc("settings/ai").get()).data() || {};
     const list = Array.isArray(cfg.providers) ? cfg.providers : [];
     const id = providerId || cfg.defaultId || list[0]?.id;
@@ -210,7 +230,14 @@ module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin }) {
     if (!p) throw new HttpsError("failed-precondition", "AI 연결이 설정되지 않았습니다. 설정 → AI 연결에서 모델을 등록하세요.");
     if (!p.baseUrl || !p.model) throw new HttpsError("failed-precondition", `'${p.name || p.id}'의 접속 주소·모델명이 비어 있습니다.`);
     const k = await db.doc(`aiKeys/${p.id}`).get();
-    return { provider: p, key: k.exists ? String(k.data().key || "") : "" };
+    const provider = { ...p };
+    // 자동 대체(설정에서 끌 수 있음 — 기본 켬): 나머지 등록 모델을 순서대로 예비로 둔다.
+    if (fallback && cfg.autoFallback !== false) {
+      const others = list.filter((x) => x.id !== p.id && x.baseUrl && x.model);
+      const keys = await Promise.all(others.map((x) => db.doc(`aiKeys/${x.id}`).get()));
+      provider._fallbacks = others.map((x, i) => ({ provider: x, key: keys[i].exists ? String(keys[i].data().key || "") : "" }));
+    }
+    return { provider, key: k.exists ? String(k.data().key || "") : "" };
   }
 
   // 그 달 주관식을 모아 가림 처리한다(원문은 이 함수 밖으로 나가지 않는다).
@@ -256,7 +283,7 @@ module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin }) {
     { region: "asia-northeast3", memory: "256MiB", timeoutSeconds: 120, maxInstances: 3 },
     async (req) => {
       const email = await requireAdmin(req, "settings");
-      const { provider, key } = await loadProvider(String(req.data?.providerId || ""));
+      const { provider, key } = await loadProvider(String(req.data?.providerId || ""), { fallback: false });
       try {
         const r = await chat(provider, key, [
           { role: "system", content: "JSON 하나만 출력한다. 코드펜스 금지." },
@@ -438,7 +465,204 @@ module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin }) {
       }
     });
 
-  return { aiTestProvider, aiAnalyzeFreetext, aiReportNarrative, aiExtractActions, aiDraftDocument };
+
+  // ================================================================
+  // 운영 질의 비서: 관리자가 자연어로 묻으면 모델이 '정해진 조회 도구' 중 무엇을 쓸지 고르고,
+  // 계산은 시스템(아래 함수)이 하며, 모델은 그 결과로 답을 쓴다. 숫자는 결과와 대조한다.
+  // 개인 식별정보(강사 실명 등)는 도구 결과에 넣지 않는다(강사는 '강사#n' 익명 표기).
+  // ================================================================
+  const EDU_LABELS = ["현업(현장) 활용여부", "전문지식 향상여부", "교육내용", "교재/기타 강의자재", "담당직원 교육 준비성", "강의실 쾌적성/청결성"];
+  const kstToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+  const r1 = (v) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10) / 10);
+  const avg20 = (a) => (a.length ? r1((a.reduce((x, y) => x + y, 0) / a.length) * 20) : null);
+  const okDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
+  const okMonth = (v) => /^\d{4}-\d{2}$/.test(String(v || ""));
+  const courseLabel = (c) => `${c.name || "-"}${c.round != null && c.round !== "" ? ` ${c.round}차` : ""}`;
+
+  async function liveCourses() {
+    const snap = await db.collection("courses").get();
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((c) => !c.hidden);
+  }
+  const OPS_TOOLS = {
+    courses_in_range: {
+      desc: "기간(from~to, YYYY-MM-DD)에 진행되는 차수 목록: 과정명·차수·유형·기간·교육장·정원·신청·잔여",
+      args: "{from, to}",
+      async run({ from, to }) {
+        if (!okDate(from) || !okDate(to)) throw new Error("from/to 날짜 형식 오류");
+        const list = (await liveCourses()).filter((c) => (c.startDate || "") <= to && (c.endDate || c.startDate || "") >= from)
+          .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+        return { from, to, count: list.length, courses: list.slice(0, 60).map((c) => ({
+          course: courseLabel(c), type: c.courseType || "", start: c.startDate || "", end: c.endDate || "",
+          venue: c.venue || "", capacity: c.capacity ?? null, applied: c.appliedCount ?? 0,
+          remaining: c.capacity != null ? Math.max(0, c.capacity - (c.appliedCount || 0)) : null, planned: !!c.planned })) };
+      },
+    },
+    capacity_alerts: {
+      desc: "기간 안에 시작하는 차수 중 마감 임박(잔여 3석 이하 또는 신청률 90% 이상)과 신청 저조(신청률 30% 미만) 차수",
+      args: "{from, to}",
+      async run({ from, to }) {
+        if (!okDate(from) || !okDate(to)) throw new Error("from/to 날짜 형식 오류");
+        const list = (await liveCourses()).filter((c) => (c.startDate || "") >= from && (c.startDate || "") <= to && c.capacity > 0);
+        const row = (c) => ({ course: courseLabel(c), start: c.startDate, capacity: c.capacity, applied: c.appliedCount || 0,
+          ratePercent: Math.round(((c.appliedCount || 0) / c.capacity) * 100) });
+        return {
+          from, to,
+          nearlyFull: list.filter((c) => c.capacity - (c.appliedCount || 0) <= 3 || (c.appliedCount || 0) / c.capacity >= 0.9).map(row),
+          lowApplication: list.filter((c) => (c.appliedCount || 0) / c.capacity < 0.3).map(row),
+        };
+      },
+    },
+    schedule_conflicts: {
+      desc: "기간 안 시간표에서 같은 시간 같은 강의실 또는 같은 강사가 겹친 일정",
+      args: "{from, to}",
+      async run({ from, to }) {
+        if (!okDate(from) || !okDate(to)) throw new Error("from/to 날짜 형식 오류");
+        const [ss, courses] = await Promise.all([
+          db.collection("sessions").where("date", ">=", from).where("date", "<=", to).get(), liveCourses()]);
+        const byId = Object.fromEntries(courses.map((c) => [c.id, c]));
+        const rows = ss.docs.map((d) => d.data()).filter((x) => byId[x.courseId]);
+        const anon = {}; let n = 0;
+        const instLabel = (x) => { const k = x.instructorId || x.instructor || ""; if (!k) return ""; if (!anon[k]) anon[k] = `강사#${++n}`; return anon[k]; };
+        const overlap = (a, b) => a.date === b.date && (a.startTime || "") < (b.endTime || "") && (b.startTime || "") < (a.endTime || "");
+        const out = [];
+        for (let i = 0; i < rows.length; i++) for (let j = i + 1; j < rows.length; j++) {
+          const a = rows[i], b = rows[j];
+          if (!overlap(a, b) || a.courseId === b.courseId) continue;
+          const pair = [courseLabel(byId[a.courseId]), courseLabel(byId[b.courseId])];
+          if (a.room && a.room === b.room) out.push({ kind: "강의실", date: a.date, time: `${a.startTime}~${a.endTime}`, room: a.room, courses: pair });
+          if ((a.instructorId || a.instructor) && (a.instructorId || a.instructor) === (b.instructorId || b.instructor)) {
+            out.push({ kind: "강사", date: a.date, time: `${a.startTime}~${a.endTime}`, instructor: instLabel(a), courses: pair });
+          }
+          if (out.length >= 40) break;
+        }
+        return { from, to, sessionsChecked: rows.length, conflicts: out };
+      },
+    },
+    satisfaction: {
+      desc: "월(YYYY-MM) 설문 만족도(100점 환산): 전체·교육·강사 평균, 과정유형별, 교육 6문항별, 차수별 낮은 순 5개. 응답 10명 미만은 참고용",
+      args: "{month}",
+      async run({ month }) {
+        if (!okMonth(month)) throw new Error("month 형식 오류");
+        const [snap, courses] = await Promise.all([
+          db.collection("surveyResponses").where("collectedDate", ">=", `${month}-01`).where("collectedDate", "<=", `${month}-31`).get(), liveCourses()]);
+        const byId = Object.fromEntries(courses.map((c) => [c.id, c]));
+        const all = { edu: [], inst: [] }, byType = {}, byCourse = {}, items = EDU_LABELS.map(() => []);
+        for (const d of snap.docs) {
+          const r = d.data();
+          const c = byId[r.courseId];
+          const type = (c && c.courseType) || r.courseType || "기타";
+          const t = byType[type] = byType[type] || { n: 0, edu: [], inst: [] };
+          const k = byCourse[r.courseId] = byCourse[r.courseId] || { n: 0, vals: [] };
+          t.n++; k.n++;
+          Object.entries(r.edu || {}).forEach(([q, v]) => {
+            if (!Number.isFinite(v)) return;
+            all.edu.push(v); t.edu.push(v); k.vals.push(v);
+            const i = Number(String(q).replace(/\D/g, "")); if (items[i]) items[i].push(v);
+          });
+          (r.instructors || []).forEach((it) => [0, 1, 2].forEach((i) => {
+            const v = it[`q${i}`]; if (Number.isFinite(v)) { all.inst.push(v); t.inst.push(v); k.vals.push(v); }
+          }));
+        }
+        return {
+          month, responses: snap.size,
+          overall: avg20([...all.edu, ...all.inst]), education: avg20(all.edu), instructor: avg20(all.inst),
+          byCourseType: Object.entries(byType).map(([type, g]) => ({ type, responses: g.n, education: avg20(g.edu), instructor: avg20(g.inst) })),
+          educationItems: EDU_LABELS.map((label, i) => ({ item: label, score: avg20(items[i]) })),
+          lowestCourses: Object.entries(byCourse).map(([id, g]) => ({ course: byId[id] ? courseLabel(byId[id]) : "-", responses: g.n, score: avg20(g.vals) }))
+            .filter((x) => x.score != null).sort((a, b) => a.score - b.score).slice(0, 5),
+        };
+      },
+    },
+    feedback_categories: {
+      desc: "월(YYYY-MM) 주관식 분류별 건수(불만족·제안개선). 분류는 관리자가 적용한 것만",
+      args: "{month}",
+      async run({ month }) {
+        if (!okMonth(month)) throw new Error("month 형식 오류");
+        const snap = await db.collection("surveyResponses").where("collectedDate", ">=", `${month}-01`).where("collectedDate", "<=", `${month}-31`).get();
+        const dis = {}, sug = {}; let withText = 0;
+        for (const d of snap.docs) {
+          const r = d.data();
+          if (r.freeDissatisfied || r.freeSuggestion) withText++;
+          if (r.catDissatisfied) dis[r.catDissatisfied] = (dis[r.catDissatisfied] || 0) + 1;
+          if (r.catSuggestion) sug[r.catSuggestion] = (sug[r.catSuggestion] || 0) + 1;
+        }
+        return { month, responses: snap.size, withFreeText: withText, dissatisfied: dis, suggestion: sug };
+      },
+    },
+    improvements_status: {
+      desc: "개선 조치(피드백 반영계획) 목록과 상태별 건수(계획·진행·완료)",
+      args: "{}",
+      async run() {
+        const snap = await db.collection("improvements").get();
+        const list = snap.docs.map((d) => d.data());
+        const counts = {};
+        list.forEach((x) => { counts[x.status || "계획"] = (counts[x.status || "계획"] || 0) + 1; });
+        return { total: list.length, counts, open: list.filter((x) => x.status !== "완료").slice(0, 30)
+          .map((x) => ({ action: x.action, category: x.category, status: x.status || "계획", planMonth: x.planMonth || "" })) };
+      },
+    },
+  };
+
+  function opsSystem(today) {
+    const toolList = Object.entries(OPS_TOOLS).map(([n, t]) => `- ${n} ${t.args}: ${t.desc}`).join("\n");
+    return "너는 공공기관 교육훈련센터 운영 담당자를 돕는 '운영 질의 비서'다. 오늘은 " + today + "(KST)이다.\n" +
+      "질문에 답하려면 아래 조회 도구를 쓴다. 도구가 계산한 값만 근거로 답하고, 숫자를 새로 계산하거나 지어내지 않는다.\n" +
+      "'이번 주', '다음 달' 같은 표현은 오늘 날짜로 기간을 정해 도구에 넘긴다(주는 월~일).\n" +
+      "도구:\n" + toolList + "\n" +
+      "한 번에 하나씩, JSON 하나만 출력한다(코드펜스 금지).\n" +
+      "도구를 쓸 때: {\"tool\":\"도구이름\",\"args\":{...}}\n" +
+      "답할 때: {\"answer\":\"한국어 답변(핵심 먼저, 필요하면 '- ' 항목)\"}\n" +
+      "도구로 알 수 없는 질문(개인정보·시스템 밖 정보 등)은 도구 없이 할 수 없다고 답한다. 특정 강사를 평가·지목하지 않는다.";
+  }
+
+  const aiAskOps = onCall(
+    { region: "asia-northeast3", memory: "512MiB", timeoutSeconds: 300, maxInstances: 3 },
+    async (req) => {
+      const email = await requireAdmin(req, "assistant");
+      const question = String(req.data?.question || "").trim().slice(0, 500);
+      if (!question) throw new HttpsError("invalid-argument", "질문을 입력하세요.");
+      const history = (Array.isArray(req.data?.history) ? req.data.history : []).slice(-4)
+        .map((h) => ({ q: String(h?.q || "").slice(0, 300), a: String(h?.a || "").slice(0, 800) }));
+      const { provider, key } = await loadProvider(String(req.data?.providerId || ""));
+      const t0 = Date.now();
+      const today = kstToday();
+      const messages = [{ role: "system", content: opsSystem(today) }];
+      history.forEach((h) => { messages.push({ role: "user", content: h.q }); messages.push({ role: "assistant", content: JSON.stringify({ answer: h.a }) }); });
+      messages.push({ role: "user", content: question });
+      const steps = [], results = [];
+      let answer = "", servedModel = provider.model, fallback = null;
+      try {
+        for (let i = 0; i < 5 && !answer; i++) {
+          const r = await chat(provider, key, messages, { maxTokens: 1200 });
+          servedModel = r.servedModel;
+          if (r.fallbackTo) fallback = { from: r.fallbackFrom, to: r.fallbackTo, reason: r.fallbackReason };
+          let out;
+          try { out = extractJson(r.content); } catch { answer = String(r.content || "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim(); break; }
+          if (out.answer) { answer = String(out.answer).trim(); break; }
+          const tool = OPS_TOOLS[out.tool];
+          messages.push({ role: "assistant", content: JSON.stringify(out) });
+          if (!tool) { messages.push({ role: "user", content: `알 수 없는 도구입니다: ${out.tool}. 목록의 도구만 쓰거나 답하세요.` }); continue; }
+          let data;
+          try { data = await tool.run(out.args || {}); } catch (e) { data = { error: String(e.message || e) }; }
+          steps.push({ tool: out.tool, args: out.args || {} });
+          results.push(data);
+          messages.push({ role: "user", content: `도구 결과(${out.tool}):\n${JSON.stringify(data).slice(0, 12000)}\n\n더 필요하면 도구를 쓰고, 충분하면 answer로 답하라.` });
+        }
+        if (!answer) answer = "질문에 필요한 정보를 정리하지 못했습니다. 기간이나 대상을 더 구체적으로 물어봐 주세요.";
+        const unverified = results.length ? unverifiedNumbers([answer], results, today.slice(0, 7)) : [];
+        await logRun({ kind: "ask", by: email, providerId: provider.id, providerName: provider.name || "", model: provider.model,
+          servedModel, ok: true, elapsedMs: Date.now() - t0, tools: steps.map((x) => x.tool), unverified, fallback });
+        return { ok: true, answer, steps, results, unverified, fallback,
+          provider: { name: provider.name || "", model: provider.model, servedModel }, elapsedMs: Date.now() - t0 };
+      } catch (e) {
+        await logRun({ kind: "ask", by: email, providerId: provider.id, providerName: provider.name || "", model: provider.model, ok: false,
+          error: String(e.message || e).slice(0, 300), elapsedMs: Date.now() - t0 });
+        if (e instanceof HttpsError) throw e;
+        throw new HttpsError("internal", `AI 비서 응답 실패(${provider.name || provider.model}): ${e.message || e}`);
+      }
+    });
+
+  return { aiTestProvider, aiAnalyzeFreetext, aiReportNarrative, aiExtractActions, aiDraftDocument, aiAskOps };
 };
 
 // 단위 시험용(함수 배포와 무관).
