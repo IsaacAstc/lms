@@ -1377,6 +1377,12 @@ exports.publicFileDelete = onCall(FILE_OPTS, async (req) => {
  * ================================================================ */
 const ai = require("./ai")({
   db, onCall, HttpsError, requireAdmin, onSchedule,
+  // 브리핑 받는 사람 검증: 부트스트랩 관리자 또는 admins 문서가 있는(참관자 아닌) 계정만.
+  isAdminEmail: async (email) => {
+    if (BOOTSTRAP_ADMINS.includes(email)) return true;
+    const a = await db.doc(`admins/${email}`).get();
+    return a.exists && (a.data() || {}).role !== "observer";
+  },
   mail: Object.assign(
     (opts) => mailer().sendMail({ from: `"교육 운영관리 브리핑" <${MAIL_USER.value()}>`, ...opts }),
     { secrets: [MAIL_USER, MAIL_PASS] }),
@@ -1404,6 +1410,12 @@ exports.dailyMaintenance = onSchedule(
       ["신청자 이메일 파기", purgeApplicationEmails],
       ["기명 응답 파기", purgeNamedResponses],
       ["접속기록 파기", purgeAccessLogs],
+      ["AI 사용 카운터 정리", async () => {
+        const snap = await db.collection("aiQuota").where("expireAt", "<=", new Date()).limit(400).get();
+        const b = db.batch();
+        snap.docs.forEach((d) => b.delete(d.ref));
+        if (!snap.empty) await b.commit();
+      }],
     ];
     const kstDay = new Date(Date.now() + 9 * 3600000).getUTCDay(); // 0=일, 1=월
     if (kstDay === 1) steps.push(["주간 AI 운영 브리핑", ai.weeklyBriefing]);

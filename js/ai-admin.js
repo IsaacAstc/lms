@@ -72,6 +72,8 @@ async function loadProviders() {
     defaultId = v.defaultId || providers[0]?.id || "";
     const fb = document.getElementById("ai-auto-fallback");
     if (fb) fb.checked = v.autoFallback !== false;
+    const hl = document.getElementById("ai-hourly-limit");
+    if (hl) hl.value = v.hourlyLimit || 40;
   } catch { providers = []; defaultId = ""; }
   paintProviders();
   paintRunSelect();
@@ -161,6 +163,7 @@ async function saveProviders() {
       providers: providers.map(({ id, name, baseUrl, model, jsonMode, hasKey }) => ({ id, name, baseUrl, model, jsonMode: !!jsonMode, hasKey: !!hasKey })),
       defaultId: providers.some((p) => p.id === defaultId) ? defaultId : (providers[0]?.id || ""),
       autoFallback: document.getElementById("ai-auto-fallback")?.checked !== false,
+      hourlyLimit: Math.max(5, Math.min(500, Number(document.getElementById("ai-hourly-limit")?.value) || 40)),
       updatedAtMs: Date.now(),
     });
     paintProviders();

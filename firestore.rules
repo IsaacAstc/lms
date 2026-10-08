@@ -186,9 +186,24 @@ service cloud.firestore {
     // 설문 응답: create 만 공개 허용(완전 익명), 읽기·수정·삭제는 관리자만.
     // expireAt은 서버시각 기준 약 180일 후여야 함(클라이언트 조작 방지, ±2일 허용).
     match /surveyResponses/{responseId} {
+      // 공개 생성: 형식 검증으로 가짜 응답 주입을 줄인다(정해진 필드만, 공개 설문이 있는 차수만, 크기 상한).
+      function respOk(d) {
+        return d.keys().hasOnly(['courseId', 'courseType', 'roomId', 'collectedDate', 'collectedAt', 'edu', 'instructors',
+            'eduItems', 'instructorItems', 'scale', 'freeDissatisfied', 'freeSuggestion', 'freeExtra', 'oxAnswers',
+            'extraAnswers', 'choiceAnswers', 'fuTexts', 'photoNotes', 'mailNotes', 'submitCode', 'expireAt'])
+          && d.courseId is string && d.courseId.size() > 0 && d.courseId.size() <= 64
+          && exists(/databases/$(database)/documents/publicSurveys/$(d.courseId))
+          && d.collectedDate is string && d.collectedDate.size() == 10
+          && d.edu is map && d.edu.size() <= 12
+          && d.instructors is list && d.instructors.size() <= 30
+          && d.get('freeDissatisfied', '') is string && d.get('freeDissatisfied', '').size() <= 2000
+          && d.get('freeSuggestion', '') is string && d.get('freeSuggestion', '').size() <= 2000
+          && (!('scale' in d) || (d.scale is number && d.scale >= 2 && d.scale <= 10));
+      }
       allow create: if request.resource.data.expireAt is timestamp
         && request.resource.data.expireAt > request.time + duration.value(178, 'd')
-        && request.resource.data.expireAt < request.time + duration.value(182, 'd');
+        && request.resource.data.expireAt < request.time + duration.value(182, 'd')
+        && respOk(request.resource.data);
       // 원문 파기(삭제)는 되돌릴 수 없으므로 마스터 전용('데이터 관리' 메뉴).
       allow read: if isAdmin();
       allow update: if canTab('freetext');
@@ -267,11 +282,29 @@ service cloud.firestore {
               && request.resource.data.totalScore >= resource.data.get('totalScore', 0)
               && request.resource.data.totalScore <= 500);
       }
+      // 미션 점수: 한 번 기록되면 바꿀 수 없고(재도전으로 덮어쓰기 금지), 0~100점, 총점 = 미션 점수 합.
+      // 참가자 기기가 점수를 계산하는 구조라 상한·합계 검증이 콘솔 조작을 막는 방어선이다.
+      function mScore(d, k) { return d.get(k, null) == null ? 0 : d.get(k, null).get('score', 0); }
+      function missionOk(k) {
+        return !(k in changed())
+          || (resource.data.get(k, null) == null
+              && request.resource.data.get(k, null) is map
+              && request.resource.data.get(k, null).get('score', -1) is number
+              && request.resource.data.get(k, null).get('score', -1) >= 0
+              && request.resource.data.get(k, null).get('score', -1) <= 100);
+      }
+      function missionsOk() {
+        return missionOk('mission1') && missionOk('mission2') && missionOk('mission3')
+          && missionOk('mission4') && missionOk('mission5')
+          && request.resource.data.get('totalScore', 0) == mScore(request.resource.data, 'mission1')
+             + mScore(request.resource.data, 'mission2') + mScore(request.resource.data, 'mission3')
+             + mScore(request.resource.data, 'mission4') + mScore(request.resource.data, 'mission5');
+      }
       // 기념품 지급 표시는 관리자만. 주인 표시는 한 번 정해지면 못 바꾼다.
       function participantSafe() {
         return !('rewardGiven' in changed())
           && !('ownerUid' in changed())
-          && scoreOk();
+          && scoreOk() && missionsOk();
       }
 
       allow read: if true;
@@ -285,7 +318,8 @@ service cloud.firestore {
                     && request.resource.data.eventId is string
                     && request.resource.data.eventId.size() > 0
                     && request.resource.data.eventId.size() <= 64
-                    && request.resource.data.rewardGiven == false;
+                    && request.resource.data.rewardGiven == false
+                    && request.resource.data.get('totalScore', 0) == 0;
       allow update: if canWrite()
         // 본인 문서만.
         || (request.auth != null
