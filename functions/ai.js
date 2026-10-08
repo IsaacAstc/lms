@@ -782,7 +782,61 @@ module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin, onSched
       }
     };
 
-  return { aiTestProvider, aiAnalyzeFreetext, aiReportNarrative, aiExtractActions, aiDraftDocument, aiAskOps, aiBriefingPreview, weeklyBriefing };
+  // ================================================================
+  // 퀴즈 결과 학습 진단: 문항별 정답률·오답 분포로 취약 개념·보충 설명·다음 수업 포인트.
+  // 참가자 닉네임·점수는 모델에 보내지 않는다(문항 단위 집계만). 결과는 그 게임 기록에 붙여 둔다.
+  // ================================================================
+  const aiQuizDiagnosis = onCall(
+    { region: "asia-northeast3", memory: "256MiB", timeoutSeconds: 240, maxInstances: 3 },
+    async (req) => {
+      const email = await requireAdmin(req);
+      const id = String(req.data?.reportId || "");
+      if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) throw new HttpsError("invalid-argument", "게임 기록이 올바르지 않습니다.");
+      const ref = db.doc(`quizReports/${id}`);
+      const doc = await ref.get();
+      if (!doc.exists) throw new HttpsError("not-found", "게임 기록을 찾을 수 없습니다.");
+      const r = doc.data();
+      const facts = {
+        quizTitle: r.quizTitle || "", players: r.playerCount || 0,
+        questions: (r.questions || []).map((q) => ({
+          n: q.n, type: q.type, text: String(q.text || "").slice(0, 200), respondents: q.respondents, correctRate: q.correctRate,
+          choices: (q.labels || []).map((l, i) => ({ label: String(l).slice(0, 60), picked: (q.counts || [])[i] || 0, correct: (q.answers || []).includes(i) })),
+        })),
+      };
+      const { provider, key } = await loadProvider(String(req.data?.providerId || ""));
+      const t0 = Date.now();
+      try {
+        const res = await chat(provider, key, [
+          { role: "system", content:
+            "너는 항공보안 교육 강사를 돕는 학습 진단 보조자다. 퀴즈 문항별 정답률과 보기 선택 분포(JSON)를 보고 진단한다.\n" +
+            "규칙: 1) 숫자는 JSON 값 그대로만. 2) 정답률이 낮거나 특정 오답에 몰린 문항에서 '무엇을 헷갈렸는지'를 짚는다. " +
+            "3) 개인을 지목하지 않는다. 4) 투표(poll)·안내(slide) 문항은 진단에서 뺀다. 5) 교육 내용에 없는 사실을 지어내지 않는다.\n" +
+            "출력은 JSON 하나만(코드펜스 금지): {\"summary\":\"전체 이해도 2문장\",\"weak\":[{\"n\":문항번호,\"concept\":\"취약 개념(짧게)\",\"why\":\"오답 경향 근거 1문장\",\"explain\":\"교육생에게 다시 설명할 보충 문장 1~2개\"}],\"nextClass\":[\"다음 수업에서 짚을 점\"]} — weak는 최대 4개, nextClass는 2~3개." },
+          { role: "user", content: `퀴즈 결과(JSON):\n${JSON.stringify(facts).slice(0, 15000)}` },
+        ], { maxTokens: 1500 });
+        const out = extractJson(res.content);
+        const diag = {
+          summary: String(out.summary || "").trim().slice(0, 600),
+          weak: (Array.isArray(out.weak) ? out.weak : []).slice(0, 4).map((w) => ({
+            n: Number(w.n) || null, concept: String(w.concept || "").slice(0, 80), why: String(w.why || "").slice(0, 300), explain: String(w.explain || "").slice(0, 400) })),
+          nextClass: (Array.isArray(out.nextClass) ? out.nextClass : []).slice(0, 4).map((x) => String(x).slice(0, 200)),
+          model: res.servedModel, fallback: res.fallbackTo || null, at: Date.now(),
+        };
+        const allText = [diag.summary, ...diag.weak.flatMap((w) => [w.why, w.explain]), ...diag.nextClass];
+        diag.unverified = unverifiedNumbers(allText, facts, "2000-01");
+        await ref.update({ diagnosis: diag }); // 관리자 SDK — 클라이언트는 이 기록을 고칠 수 없다
+        await logRun({ kind: "quizdiag", by: email, providerId: provider.id, providerName: provider.name || "", model: provider.model,
+          servedModel: res.servedModel, ok: true, elapsedMs: Date.now() - t0, unverified: diag.unverified });
+        return { ok: true, diagnosis: diag };
+      } catch (e) {
+        await logRun({ kind: "quizdiag", by: email, providerId: provider.id, providerName: provider.name || "", model: provider.model, ok: false,
+          error: String(e.message || e).slice(0, 300), elapsedMs: Date.now() - t0 });
+        if (e instanceof HttpsError) throw e;
+        throw new HttpsError("internal", `학습 진단 실패(${provider.name || provider.model}): ${e.message || e}`);
+      }
+    });
+
+  return { aiTestProvider, aiAnalyzeFreetext, aiReportNarrative, aiExtractActions, aiDraftDocument, aiAskOps, aiBriefingPreview, weeklyBriefing, aiQuizDiagnosis };
 };
 
 // 단위 시험용(함수 배포와 무관).
