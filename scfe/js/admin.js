@@ -1,4 +1,4 @@
-import { firebaseConfig, setupAppCheck } from "./firebase-config.js";
+import { firebaseConfig, setupAppCheck, orgParam } from "./firebase-config.js";
 import {
   EVENT_PARAM,
   LEGACY_EVENT_ID,
@@ -882,11 +882,12 @@ document.getElementById("btnExportCsv").addEventListener("click", () => {
 });
 
 // 참가자용 URL: 저장해 둔 값 → 없으면 현재 관리자 페이지 주소에서 추론
-const SITE_URL_KEY = "avsec_admin_site_url";
+const SITE_URL_KEY = "avsec_admin_site_url" + (orgParam ? ":" + orgParam : ""); // 기관별로 따로 기억
 
 function guessSiteUrl() {
   // .../admin.html → .../ (참가자 페이지)
-  return location.href.split("?")[0].split("#")[0].replace(/admin\.html$/, "");
+  const base = location.href.split("?")[0].split("#")[0].replace(/admin\.html$/, "");
+  return orgParam ? `${base}?${orgParam}` : base; // 기관(데모 등) 화면이면 참가자도 같은 기관으로
 }
 
 function initSiteUrlInput() {

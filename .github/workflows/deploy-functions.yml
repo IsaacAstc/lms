@@ -157,12 +157,11 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEMO }}
 
       # 이 프로젝트는 vault와 규칙을 공유하지 않으므로 Firestore 규칙까지 함께 배포한다.
-      # RTDB(database)는 대상에서 뺀다 — 실시간 DB를 쓰는 기능은 퀴즈·히어로 미션뿐이고
-      # 이들은 추가 기관에서도 기본 기관 백엔드로 연결되는 링크라(orgs.js) 인스턴스가 없다.
-      # 넣어두면 "haven't created a Realtime Database instance"로 배포 전체가 멈춘다.
+      # 데모 기관은 퀴즈 시연을 위해 실시간 DB(RTDB) 인스턴스를 두므로 그 규칙도 함께 올린다
+      # (퀴즈·히어로 미션이 ?org=로 이 프로젝트에 붙는다 — js/org-config.js).
       - name: Deploy functions & Firestore rules
         if: steps.check.outputs.ok == 'true'
         run: npx --yes firebase-tools@latest deploy
-          --only functions,firestore:rules
+          --only functions,firestore:rules,database
           --project "${{ secrets.FIREBASE_PROJECT_ID_DEMO }}"
           --non-interactive --force
