@@ -594,6 +594,8 @@ function renderEventsTable() {
       return `<div class="ev-card" data-id="${e.id}">
         <div class="ev-line ev-head">
           <input type="text" class="ev-name" data-id="${e.id}" value="${escapeHtml(e.name || "")}" placeholder="행사명" />
+          <label class="ev-titleopt" title="참가자 첫 화면 제목을 '항공보안 히어로 미션' 대신 행사명으로 표시">
+            <input type="checkbox" class="ev-title" data-id="${e.id}" ${e.titleIsEventName ? "checked" : ""} /> 첫 화면 제목을 행사명으로</label>
           <label class="ev-field ev-inline">진행중 노출
             <button class="reward-toggle ev-active ${e.active ? "on" : ""}" data-id="${e.id}" title="진행중으로 표시 (여러 행사 동시 가능). QR 없이 접속하면 진행중인 행사 중에서 선택하게 됩니다."></button></label>
           <span class="ev-count">참가자 <b>${count}</b>명</span>
@@ -605,14 +607,12 @@ function renderEventsTable() {
               title="사용할 미션 번호를 순서대로 입력 (예: 1,2,3,4 또는 3,1)" /></label>
           <label class="ev-field ev-grow">인증서 문구<input type="text" class="ev-cert" data-id="${e.id}" value="${escapeHtml(e.certTitle || "")}" maxlength="40"
               placeholder="비우면 행사명" title="참가자 인증서 맨 위에 크게 표시할 문구" /></label>
-          <label class="ev-titleopt" title="참가자 첫 화면 제목을 '항공보안 히어로 미션' 대신 행사명으로 표시">
-            <input type="checkbox" class="ev-title" data-id="${e.id}" ${e.titleIsEventName ? "checked" : ""} /> 첫 화면 제목을 행사명으로</label>
-        </div>
-        <div class="ev-line ev-actions">
-          <button class="btn btn-secondary ev-qr" data-id="${e.id}" title="참가자 개인 휴대폰용 — 기기당 참여 횟수 제한이 적용됩니다">QR</button>
-          <button class="btn btn-secondary ev-qr-kiosk" data-id="${e.id}" title="부스 공용 기기용 — 참여 횟수 제한이 면제됩니다">QR(키오스크)</button>
-          <button class="btn btn-secondary ev-save" data-id="${e.id}">저장</button>
-          <button class="btn btn-danger ev-del" data-id="${e.id}">삭제</button>
+          <div class="ev-actions">
+            <button class="btn btn-secondary ev-qr" data-id="${e.id}" title="참가자 개인 휴대폰용 — 기기당 참여 횟수 제한이 적용됩니다">QR</button>
+            <button class="btn btn-secondary ev-qr-kiosk" data-id="${e.id}" title="부스 공용 기기용 — 참여 횟수 제한이 면제됩니다">QR(키오스크)</button>
+            <button class="btn btn-secondary ev-save" data-id="${e.id}">저장</button>
+            <button class="btn btn-danger ev-del" data-id="${e.id}">삭제</button>
+          </div>
         </div>
       </div>`;
     })
