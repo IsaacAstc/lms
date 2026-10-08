@@ -259,13 +259,13 @@ service cloud.firestore {
     // ownerUid는 Auth가 발급해 위조할 수 없으므로 공개돼도 무방하다.
     match /participants/{docId} {
       function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
-      // 점수 규칙: 총점은 숫자여야 하고, 내려갈 수 없으며, 만점(미션 4개 × 100점)을 넘지 못한다.
+      // 점수 규칙: 총점은 숫자여야 하고, 내려갈 수 없으며, 만점(미션 5개 × 100점)을 넘지 못한다.
       // 본인 확인과 별개로 걸어 두는 2차 방어선 — 남의 점수 깎기·부풀리기를 막는다.
       function scoreOk() {
         return !('totalScore' in changed())
           || (request.resource.data.totalScore is number
               && request.resource.data.totalScore >= resource.data.get('totalScore', 0)
-              && request.resource.data.totalScore <= 400);
+              && request.resource.data.totalScore <= 500);
       }
       // 기념품 지급 표시는 관리자만. 주인 표시는 한 번 정해지면 못 바꾼다.
       function participantSafe() {

@@ -51,6 +51,7 @@
       <div class="light" data-m="2"></div>
       <div class="light" data-m="3"></div>
       <div class="light" data-m="4"></div>
+      <div class="light" data-m="5"></div>
     </div>
     <div class="mission-list">
       <div class="mission-card" data-mission="1" id="card-1">
@@ -72,6 +73,11 @@
         <div class="icon">🔍</div>
         <div class="info"><div class="name" id="cardName-4">항공 낱말 탐정</div><div class="desc" id="cardDesc-4">가로세로 낱말 퍼즐을 풀어라</div></div>
         <div class="score" id="score-4">-</div>
+      </div>
+      <div class="mission-card" data-mission="5" id="card-5">
+        <div class="icon">🛸</div>
+        <div class="info"><div class="name" id="cardName-5">공항 하늘 방어</div><div class="desc" id="cardDesc-5">날아드는 위험물을 막아라</div></div>
+        <div class="score" id="score-5">-</div>
       </div>
     </div>
     <button class="btn btn-primary cert-cta" id="btnCertImageMenu" style="display:none">인증서 이미지 저장/공유</button>
@@ -144,6 +150,23 @@
     </div>
   </section>
 
+  <!-- 미션5 사전 안내 -->
+  <section class="screen" id="screen-pre5">
+    <div class="pre-icon">🛸</div>
+    <div class="pre-mission-no">MISSION 05</div>
+    <h2 class="pre-title" id="preTitle-5">공항 하늘을 지켜라!</h2>
+    <div class="pre-desc-box">
+      <p id="preLine1-5">화면을 끌어 보안 드론을 움직이세요. 스캔 빔은 자동으로 나가요.</p>
+      <p id="preLine2-5">위험물만 맞히세요. <strong>안전물품</strong>(휴대폰·책 등)을 맞히면 감점!</p>
+    </div>
+    <div class="pre-meta">
+      <div class="pre-meta-item">⏱ 진행시간 <strong id="preTime-5">90초</strong> · 마지막에 수상한 드론 등장</div>
+    </div>
+    <div class="pre-btn-area">
+      <button class="btn btn-primary" id="btnStartM5">시작하기</button>
+    </div>
+  </section>
+
   <!-- 5. 카운트다운 (미션 1·2 공용) -->
   <section class="screen" id="screen-countdown">
     <div class="countdown-wrap">
@@ -197,6 +220,12 @@
       <div class="m4-msg" id="m4-msg"></div>
     </div>
     <div class="cw-clues" id="m4-clues"></div>
+  </section>
+
+  <!-- 미션5: 공항 하늘 방어(캔버스) -->
+  <section class="screen m5-screen" id="screen-m5">
+    <canvas id="m5-canvas"></canvas>
+    <button type="button" class="m5-sound" id="m5-sound" aria-label="소리 켜기/끄기">🔊</button>
   </section>
 
   <!-- 5. 미션 결과 (단일 미션 클리어 후) -->

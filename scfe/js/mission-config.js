@@ -87,6 +87,14 @@ export const DEFAULT_MISSION_CONFIG = {
       { a: "공항소방대", c: "공항 사고 현장에 가장 먼저 출동해요" },
     ],
   },
+  mission5: {
+    name: "공항 하늘 방어",
+    cardDesc: "날아드는 위험물을 막아라",
+    title: "공항 하늘을 지켜라!",
+    line1: "화면을 끌어 보안 드론을 움직이세요. 스캔 빔은 자동으로 나가요.",
+    line2: "위험물만 맞히세요. <strong>안전물품</strong>(휴대폰·책 등)을 맞히면 감점!",
+    durationSec: 90,
+  },
 };
 
 // 저장된 설정을 기본값 위에 덮어쓴다.
@@ -95,7 +103,7 @@ export function mergeMissionConfig(saved) {
   const out = JSON.parse(JSON.stringify(DEFAULT_MISSION_CONFIG));
   if (!saved || typeof saved !== "object") return out;
 
-  ["mission1", "mission2", "mission3", "mission4"].forEach((key) => {
+  ["mission1", "mission2", "mission3", "mission4", "mission5"].forEach((key) => {
     const s = saved[key];
     if (!s || typeof s !== "object") return;
     const d = out[key];

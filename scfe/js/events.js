@@ -24,7 +24,7 @@ export function normalizeMissionOrder(raw) {
   const out = [];
   raw.forEach((v) => {
     const n = Number(v);
-    if ([1, 2, 3, 4].includes(n) && !out.includes(n)) out.push(n);
+    if ([1, 2, 3, 4, 5].includes(n) && !out.includes(n)) out.push(n);
   });
   return out.length ? out : [...DEFAULT_MISSION_ORDER];
 }
@@ -38,7 +38,7 @@ export function parseMissionOrder(text) {
   const out = [];
   for (const p of parts) {
     const n = Number(p);
-    if (![1, 2, 3, 4].includes(n) || out.includes(n)) return null; // 범위 밖 또는 중복
+    if (![1, 2, 3, 4, 5].includes(n) || out.includes(n)) return null; // 범위 밖 또는 중복
     out.push(n);
   }
   return out;
