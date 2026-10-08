@@ -8,9 +8,10 @@
 
 1. README의 **'추가 기관 배포' 1~5**를 새 프로젝트에 그대로 진행한다.
    - GitHub 시크릿 이름: `FIREBASE_SERVICE_ACCOUNT_DEMO`, `FIREBASE_PROJECT_ID_DEMO`
-   - 함수 시크릿: `MAIL_USER`·`MAIL_PASS`에 더해 `GH_FILES_TOKEN`도 등록해야 배포된다.
+   - 함수 시크릿 4개: `MAIL_USER`·`MAIL_PASS`·`GH_FILES_TOKEN`·`SURVEY_ID_SALT`.
+   - 서비스 계정에 **서비스 사용량 관리자** 역할 추가 + README의 API 일괄 사용 설정 명령 실행.
 2. 함수·규칙 배포: Run workflow → 배포 대상 `demo`
-   (워크플로에 demo job이 아직 없다면 `atc` job을 복제해 시크릿 이름만 `_DEMO`로 바꾼다).
+   첫 실행이 권한 반영 지연으로 실패하면 몇 분 뒤 다시 실행한다.
 3. Authentication에 마스터 계정을 만들고, 기본 기관 **기관 관리**에 이 프로젝트 config를 등록한다.
 4. 데모 기관으로 로그인 → **데이터 관리 → 심사·시연용 모의데이터 → 모의데이터 생성**.
 5. 심사위원용 계정은 **일반 관리자**로 따로 만든다 — 가상 데이터라 직접 등록·수정해 봐도 된다.
