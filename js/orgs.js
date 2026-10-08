@@ -131,6 +131,12 @@ export async function initOrgSelectors() {
   if (label) label.textContent = currentOrg ? currentOrg.name : "";
   const boardLink = document.querySelector('.quick-links a[href^="board.html"]');
   if (boardLink && currentOrg) boardLink.href = `board.html?org=${encodeURIComponent(currentOrg.id)}`;
+  // 퀴즈·히어로 미션도 접속 중 기관의 프로젝트로 연다(js/org-config.js).
+  const q = currentOrg ? `?org=${encodeURIComponent(currentOrg.id)}` : "";
+  const quizLink = document.querySelector('.quick-links a[href^="quiz.html"]');
+  if (quizLink) quizLink.href = `quiz.html${q}`;
+  const scfeLink = document.querySelector('.quick-links a[href^="scfe/"]');
+  if (scfeLink) scfeLink.href = `scfe/admin.html${q}`;
 }
 
 // ── 기관 관리 탭(허브 마스터 전용) ──

@@ -508,7 +508,7 @@
  *  (js/firebase-config.js 는 배포 시 Secrets 로 생성, databaseURL 포함)
  *  로그인 세션은 LMS 관리자 화면과 공유된다(같은 프로젝트·같은 도메인).
  * ================================================================ */
-import { firebaseConfig as FIREBASE_CONFIG } from "./js/firebase-config.js";
+import { firebaseConfig as FIREBASE_CONFIG, orgParam } from "./js/org-config.js";
 
 const COLORS = ["c0","c1","c2","c3"];
 // 보기 아이콘: 항공 테마 — 비행기 · 여행 가방 · 지도 · 탑승권.
@@ -1303,7 +1303,7 @@ async function hostGame(quiz) {
   if (typeof QRCode !== "undefined") {
     // 영문 진행 퀴즈면 &en=1 — 참가 입력 화면부터 영어로.
     const enParam = playQuiz.lang === "en" ? "&en=1" : "";
-    new QRCode(qrBox, { text: `${location.origin}${location.pathname}?pin=${pin}${enParam}`, width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M });
+    new QRCode(qrBox, { text: `${location.origin}${location.pathname}?pin=${pin}${enParam}${orgParam ? "&" + orgParam : ""}`, width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M });
   }
   // 참가자 구독
   const pRef = ref.child("players");

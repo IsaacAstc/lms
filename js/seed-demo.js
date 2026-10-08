@@ -210,11 +210,31 @@ export async function seedDemo(log = () => {}) {
 
   // 데모 표식 — 화면에 '심사용 모의데이터' 안내를 띄우는 데 쓴다.
   await setDoc(doc(db, "settings", "demoMode"), { enabled: true, seededAt: ymd(today) });
+  await seedDemoQuiz();
 
   return {
     instructors: instructors.length, courses: courses.length, sessions: sessionWrites.length,
     responses: responseWrites.length, reportMonth: lastMonth,
   };
+}
+
+// 시연용 샘플 퀴즈 1세트(퀴즈 배틀). 일반 상식 수준의 항공보안 문항 — 실제 평가 문항 아님.
+const DEMO_QUIZ = {
+  id: "demo-quiz", title: "[데모] 항공보안 기본 상식",
+  questions: [
+    { type: "mc", text: "항공기 객실 반입이 금지되는 물품은?", choices: ["노트북", "칼날 6cm 이상 칼", "휴대폰", "책"], answers: [1], points: "standard", timeLimit: 20, explain: "날붙이류는 객실 반입이 제한됩니다." },
+    { type: "ox", text: "액체류는 100ml 이하 용기에 담아 1L 투명 지퍼백 1개까지 객실 반입할 수 있다.", answers: [0], points: "standard", timeLimit: 20 },
+    { type: "mc", text: "보안검색 시 X-ray 판독 대상이 아닌 것은?", choices: ["휴대 수하물", "위탁 수하물", "승객의 탑승권 QR", "화물"], answers: [2], points: "standard", timeLimit: 20 },
+    { type: "poll", text: "오늘 교육에서 가장 유익했던 부분은?", choices: ["이론", "실습", "사례 분석", "토론"], answers: [0], points: "none", timeLimit: 20 },
+    { type: "short", text: "공항 보호구역 출입 시 패용해야 하는 것은? (두 글자)", accepted: ["출입증"], answers: [0], points: "double", timeLimit: 30 },
+  ],
+};
+export async function seedDemoQuiz() {
+  if (!currentOrg) throw new Error("기본 기관에서는 실행하지 않습니다.");
+  const qs = DEMO_QUIZ.questions.map((q) => ({
+    choices: ["", "", "", ""], accepted: [], shuffle: false, media: null, body: "", explain: "", ...q,
+  }));
+  await setDoc(doc(db, "quizzes", DEMO_QUIZ.id), { ...DEMO_QUIZ, questions: qs });
 }
 
 // 데이터 관리 탭의 '초기 데이터' 아래에 섹션을 붙인다. 기본 기관에서는 만들지 않는다
@@ -228,11 +248,16 @@ export function initSeedDemo() {
     <p class="hint">외부 심사·시연용 <b>데모 기관</b>에 가상 강사·차수·시간표·설문 응답을 한 번에 만듭니다.
       실존 인물·기관과 무관한 가상 데이터이며, <b>추가 기관이면서 비어 있을 때만</b> 실행됩니다(운영 기관에서는 거부).
       날짜는 실행일 기준 지난달~3개월 뒤로 만들어집니다.</p>
-    <div class="form-actions"><button id="seed-demo-btn" type="button">모의데이터 생성</button></div>
+    <div class="form-actions"><button id="seed-demo-btn" type="button">모의데이터 생성</button>
+      <button id="seed-demo-quiz-btn" type="button">샘플 퀴즈 추가</button></div>
     <pre id="seed-demo-log" class="seed-log"></pre>`;
   anchor.after(box);
   const btn = box.querySelector("#seed-demo-btn");
   const out = box.querySelector("#seed-demo-log");
+  box.querySelector("#seed-demo-quiz-btn").addEventListener("click", async () => {
+    try { await seedDemoQuiz(); out.textContent = "샘플 퀴즈 '[데모] 항공보안 기본 상식'을 추가했습니다(퀴즈 화면에서 확인)."; }
+    catch (e) { out.textContent = "샘플 퀴즈 추가 실패: " + (e.message || e); }
+  });
   btn.addEventListener("click", async () => {
     const typed = prompt(
       "심사·시연용 모의데이터를 이 기관에 생성합니다.\n" +
