@@ -15,7 +15,7 @@ export const EVENT_PARAM = "event";
 export const LEGACY_EVENT_ID = "legacy";
 export const LEGACY_EVENT_NAME = "기본 (이전 데이터)";
 
-// 행사에서 사용할 미션 번호와 순서. 미설정이면 기본 3개 전부.
+// 행사에서 사용할 미션 번호와 순서. 미설정이면 기본 3개(미션4는 행사별로 추가 — 진행 중 행사의 완료 판정이 바뀌지 않게).
 export const DEFAULT_MISSION_ORDER = [1, 2, 3];
 
 // 저장된 missionOrder를 안전하게 정리 (유효 번호만, 중복 제거, 비면 기본값)
@@ -24,7 +24,7 @@ export function normalizeMissionOrder(raw) {
   const out = [];
   raw.forEach((v) => {
     const n = Number(v);
-    if ([1, 2, 3].includes(n) && !out.includes(n)) out.push(n);
+    if ([1, 2, 3, 4].includes(n) && !out.includes(n)) out.push(n);
   });
   return out.length ? out : [...DEFAULT_MISSION_ORDER];
 }
@@ -38,7 +38,7 @@ export function parseMissionOrder(text) {
   const out = [];
   for (const p of parts) {
     const n = Number(p);
-    if (![1, 2, 3].includes(n) || out.includes(n)) return null; // 범위 밖 또는 중복
+    if (![1, 2, 3, 4].includes(n) || out.includes(n)) return null; // 범위 밖 또는 중복
     out.push(n);
   }
   return out;

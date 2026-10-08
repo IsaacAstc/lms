@@ -5,6 +5,7 @@
 // =====================================================================
 
 import { DEFAULT_MISSION_CONFIG } from "./mission-config.js";
+import { buildCrossword, normAnswer } from "./crossword.js";
 
 // 현재 적용 중인 미션 설정(관리자 화면에서 편집 가능). 기본값으로 시작한다.
 let CFG = DEFAULT_MISSION_CONFIG;
@@ -276,4 +277,163 @@ export function startMission3(onComplete) {
     score = Math.max(0, Math.min(100, score));
     onComplete({ score, timeMs: Math.round(elapsed) });
   }
+}
+
+// ---------------------------------------------------------------------
+// 미션 4: 항공 낱말 탐정 — 가로세로 낱말 퍼즐 (제한시간 없음)
+// 점수: 만점 시간(낱말당 10초) 안에 풀면 100점, 이후 3초마다 1점 감점(시간 점수 하한 40),
+//       힌트 1회당 5점 감점, 최종 하한 30점. 틀린 입력은 감점하지 않는다.
+// ---------------------------------------------------------------------
+export function m4Score(elapsedMs, placed, hints) {
+  const full = placed * 10;
+  const sec = elapsedMs / 1000;
+  const timeScore = sec <= full ? 100 : Math.max(40, 100 - Math.floor((sec - full) / 3));
+  return Math.max(30, timeScore - hints * 5);
+}
+
+export function startMission4(onComplete, seed) {
+  const board = document.getElementById("m4-board");
+  const clueBox = document.getElementById("m4-clues");
+  const timeLabel = document.getElementById("m4-timeLabel");
+  const leftLabel = document.getElementById("m4-left");
+  const cur = document.getElementById("m4-current");
+  const input = document.getElementById("m4-input");
+  const btnOk = document.getElementById("m4-ok");
+  const btnHint = document.getElementById("m4-hint");
+  const msg = document.getElementById("m4-msg");
+
+  const cfg = CFG.mission4;
+  const cw = buildCrossword(cfg.words, cfg.placeCount, seed || "default");
+  if (!cw) { onComplete({ score: 0, timeMs: 0 }); return; }
+  const entries = cw.entries.map((e, i) => ({ ...e, id: i, solved: false, hinted: false }));
+  const letters = {}; // "r,c" → 공개된 글자
+  const k = (r, c) => r + "," + c;
+  const cellsOf = (e) => [...e.a].map((ch, i) => [e.r + (e.dir === "down" ? i : 0), e.c + (e.dir === "across" ? i : 0), ch]);
+
+  // 판 그리기
+  board.style.gridTemplateColumns = `repeat(${cw.cols}, 1fr)`;
+  board.innerHTML = "";
+  const cellEl = {};
+  const used = new Set();
+  entries.forEach((e) => cellsOf(e).forEach(([r, c]) => used.add(k(r, c))));
+  for (let r = 0; r < cw.rows; r++) {
+    for (let c = 0; c < cw.cols; c++) {
+      const el = document.createElement("div");
+      if (used.has(k(r, c))) {
+        el.className = "cw-cell";
+        const start = entries.find((e) => e.r === r && e.c === c);
+        el.innerHTML = (start ? `<span class="cw-num">${start.num}</span>` : "") + `<span class="cw-ch"></span>`;
+        el.addEventListener("click", () => {
+          // 이 칸을 지나는 낱말 중 아직 안 푼 것 → 같은 칸을 다시 누르면 다른 방향으로
+          const hits = entries.filter((e) => cellsOf(e).some(([rr, cc]) => rr === r && cc === c));
+          const open = hits.filter((e) => !e.solved);
+          const list = open.length ? open : hits;
+          const idx = list.indexOf(selected);
+          select(list[(idx + 1) % list.length]);
+        });
+        cellEl[k(r, c)] = el;
+      } else {
+        el.className = "cw-cell cw-block";
+      }
+      board.appendChild(el);
+    }
+  }
+
+  // 열쇠 목록
+  const clueEl = {};
+  const section = (dir, title) => {
+    const list = entries.filter((e) => e.dir === dir);
+    if (!list.length) return "";
+    return `<div class="cw-clue-title">${title}</div>` + list.map((e) =>
+      `<div class="cw-clue" data-id="${e.id}"><b>${e.num}</b> ${escapeHtmlLite(e.clue)} <span class="cw-len">(${e.len}글자)</span></div>`).join("");
+  };
+  clueBox.innerHTML = section("across", "가로 열쇠 ➡") + section("down", "세로 열쇠 ⬇");
+  clueBox.querySelectorAll(".cw-clue").forEach((el) => {
+    clueEl[el.dataset.id] = el;
+    el.addEventListener("click", () => select(entries[Number(el.dataset.id)]));
+  });
+
+  let selected = null, hints = 0, finished = false;
+  const start = performance.now();
+  const timer = setInterval(() => {
+    const sec = Math.floor((performance.now() - start) / 1000);
+    timeLabel.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+  }, 250);
+
+  function paint() {
+    Object.entries(cellEl).forEach(([key, el]) => {
+      el.querySelector(".cw-ch").textContent = letters[key] || "";
+      el.classList.remove("cw-sel");
+    });
+    if (selected) cellsOf(selected).forEach(([r, c]) => cellEl[k(r, c)].classList.add("cw-sel"));
+    entries.forEach((e) => {
+      const el = clueEl[e.id];
+      el.classList.toggle("solved", e.solved);
+      el.classList.toggle("active", e === selected);
+      if (e.solved) cellsOf(e).forEach(([r, c]) => cellEl[k(r, c)].classList.add("cw-done"));
+    });
+    leftLabel.textContent = `남은 낱말 ${entries.filter((e) => !e.solved).length}개`;
+  }
+  function select(e) {
+    if (finished || !e) return;
+    selected = e;
+    cur.textContent = `${e.num}. ${e.dir === "across" ? "가로" : "세로"} (${e.len}글자) — ${e.clue}`;
+    msg.textContent = "";
+    input.value = "";
+    input.disabled = btnOk.disabled = e.solved;
+    btnHint.disabled = e.solved || e.hinted;
+    paint();
+    if (!e.solved) input.focus({ preventScroll: true });
+    clueEl[e.id].scrollIntoView({ block: "nearest" });
+  }
+  function submit() {
+    if (finished || !selected || selected.solved) return;
+    const v = normAnswer(input.value);
+    if (!v) return;
+    if (v === selected.a) {
+      selected.solved = true;
+      cellsOf(selected).forEach(([r, c, ch]) => { letters[k(r, c)] = ch; });
+      msg.textContent = "정답!";
+      msg.className = "m4-msg ok";
+      // 겹치는 글자만으로 다 채워진 낱말도 자동으로 푼 것으로 보지 않는다(직접 입력해야 함).
+      if (entries.every((e) => e.solved)) return end();
+      const next = entries.find((e) => !e.solved);
+      paint();
+      setTimeout(() => select(next), 350);
+    } else {
+      msg.textContent = "다시 생각해 보세요!";
+      msg.className = "m4-msg no";
+      input.select();
+    }
+  }
+  function hint() {
+    if (finished || !selected || selected.solved || selected.hinted) return;
+    selected.hinted = true;
+    hints++;
+    const [r, c, ch] = cellsOf(selected)[0];
+    letters[k(r, c)] = ch;
+    btnHint.disabled = true;
+    msg.textContent = `첫 글자는 '${ch}' (힌트 −5점)`;
+    msg.className = "m4-msg";
+    paint();
+  }
+  function end() {
+    finished = true;
+    clearInterval(timer);
+    input.onkeydown = btnOk.onclick = btnHint.onclick = null;
+    const elapsed = Math.round(performance.now() - start);
+    paint();
+    setTimeout(() => onComplete({ score: m4Score(elapsed, entries.length, hints), timeMs: elapsed }), 600);
+  }
+
+  // 핸들러는 매번 덮어쓴다(다시 시작해도 중복 등록되지 않게)
+  btnOk.onclick = submit;
+  btnHint.onclick = hint;
+  input.onkeydown = (ev) => { if (ev.key === "Enter" && !ev.isComposing) { ev.preventDefault(); submit(); } };
+  timeLabel.textContent = "0:00";
+  select(entries[0]);
+}
+
+function escapeHtmlLite(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }

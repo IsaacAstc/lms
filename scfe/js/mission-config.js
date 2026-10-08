@@ -60,6 +60,33 @@ export const DEFAULT_MISSION_CONFIG = {
       { id: "mech", emoji: "🔧", label: "항공정비사", duty: "항공기가 안전하게 날 수 있도록 이착륙 전후 점검하고 수리해요" },
     ],
   },
+  mission4: {
+    name: "항공 낱말 탐정",
+    cardDesc: "가로세로 낱말 퍼즐을 풀어라",
+    title: "낱말 퍼즐을 완성하라!",
+    line1: "열쇠(문제)를 누르고 정답 낱말을 입력하세요.",
+    line2: "제한시간은 없지만 <strong>빨리 풀수록</strong> 점수가 높아요. 힌트를 쓰면 감점!",
+    placeCount: 10, // 판에 올릴 낱말 수(8~12). 같은 행사 참가자는 모두 같은 판을 푼다.
+    // a: 정답(띄어쓰기 없이), c: 열쇠
+    words: [
+      { a: "항공보안", c: "하늘길의 안전을 지키는 일, 네 글자" },
+      { a: "보안검색", c: "비행기 타기 전, 위험한 물건이 없는지 확인하는 절차" },
+      { a: "검색대", c: "가방을 올려 엑스레이로 검사하는 곳" },
+      { a: "물어보안", c: "항공보안 정보를 알려 주는 카카오톡 챗봇 이름" },
+      { a: "폭발물", c: "처리요원이 특수장비와 로봇으로 안전하게 없애는 위험물" },
+      { a: "수하물", c: "비행기에 싣는 여행 짐" },
+      { a: "금속탐지기", c: "문처럼 생긴 곳을 지나가면 몸의 금속을 찾아내요" },
+      { a: "비행기", c: "하늘을 나는 탈것" },
+      { a: "기장", c: "비행기를 책임지는 조종사의 대장" },
+      { a: "조종사", c: "비행기를 조종하는 하늘 위의 리더" },
+      { a: "관제사", c: "관제탑에서 비행기의 이륙·착륙 순서를 정해 줘요" },
+      { a: "관제탑", c: "공항에서 가장 높은 건물, 관제사가 일하는 곳" },
+      { a: "탑승권", c: "비행기를 탈 때 꼭 보여 줘야 하는 표" },
+      { a: "승무원", c: "비행기 안에서 승객의 안전을 돌봐요" },
+      { a: "항공정비사", c: "비행 전후 비행기를 점검하고 고쳐요" },
+      { a: "공항소방대", c: "공항 사고 현장에 가장 먼저 출동해요" },
+    ],
+  },
 };
 
 // 저장된 설정을 기본값 위에 덮어쓴다.
@@ -68,7 +95,7 @@ export function mergeMissionConfig(saved) {
   const out = JSON.parse(JSON.stringify(DEFAULT_MISSION_CONFIG));
   if (!saved || typeof saved !== "object") return out;
 
-  ["mission1", "mission2", "mission3"].forEach((key) => {
+  ["mission1", "mission2", "mission3", "mission4"].forEach((key) => {
     const s = saved[key];
     if (!s || typeof s !== "object") return;
     const d = out[key];
@@ -85,6 +112,15 @@ export function mergeMissionConfig(saved) {
       const items = s.items.filter((it) => it && it.e && it.l);
       // 미션1은 위험물·안전물품이 각각 최소 1개씩 있어야 성립
       if (items.some((it) => it.d) && items.some((it) => !it.d)) d.items = items;
+    }
+    if (Number.isFinite(s.placeCount) && "placeCount" in d) {
+      d.placeCount = Math.max(8, Math.min(12, Math.round(s.placeCount)));
+    }
+    if (Array.isArray(s.words) && d.words) {
+      const words = s.words
+        .map((w) => ({ a: String((w && w.a) || "").replace(/\s+/g, ""), c: String((w && w.c) || "").trim() }))
+        .filter((w) => w.a.length >= 2 && w.c);
+      if (words.length >= 4) d.words = words;
     }
     if (Array.isArray(s.pairs) && s.pairs.length > 0 && d.pairs) {
       const pairs = s.pairs.filter((p) => p && p.emoji && p.label && p.duty);
