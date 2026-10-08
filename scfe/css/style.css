@@ -530,3 +530,32 @@ input[type="text"]:focus { outline: 2px solid var(--amber); border-color: var(--
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.08); opacity: 0.85; }
 }
+
+/* 인증서: 행사별 제목 아래에 기본 문구를 작게 */
+.cert .cert-sub { font-size: 12px; color: var(--text-muted); margin: -2px 0 4px; }
+
+/* ---- 미션4: 가로세로 낱말 퍼즐 ---- */
+.cw-board { display: grid; gap: 2px; width: 100%; max-width: 420px; margin: 6px auto 10px; }
+.cw-cell {
+  position: relative; aspect-ratio: 1; background: #fff; border: 1.5px solid #9fb3c8; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none;
+}
+.cw-cell.cw-block { background: transparent; border-color: transparent; cursor: default; }
+.cw-num { position: absolute; top: 1px; left: 3px; font-size: 9px; font-weight: 700; color: var(--text-muted); line-height: 1; }
+.cw-ch { font-size: clamp(13px, 4.6vw, 20px); font-weight: 800; color: #10233f; }
+.cw-cell.cw-done { background: #d6f5e6; border-color: var(--green); }
+.cw-cell.cw-sel { background: #dce8ff; border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
+.cw-input { position: sticky; bottom: 0; background: var(--bg, #0b1a30); padding: 8px 0; z-index: 2; }
+.cw-current { font-size: 14px; font-weight: 700; margin-bottom: 6px; line-height: 1.35; }
+.cw-row { display: flex; gap: 6px; }
+.cw-row input { flex: 1; min-width: 0; font-size: 18px; padding: 10px 12px; border-radius: 10px; border: 1.5px solid #9fb3c8; }
+.cw-row .btn { width: auto; padding: 10px 14px; margin: 0; }
+.m4-msg { min-height: 18px; font-size: 13px; margin-top: 4px; font-weight: 700; }
+.m4-msg.ok { color: var(--green); }
+.m4-msg.no { color: var(--red); }
+.cw-clues { margin-top: 6px; }
+.cw-clue-title { font-weight: 800; margin: 10px 0 4px; }
+.cw-clue { padding: 7px 9px; border-radius: 8px; font-size: 14px; line-height: 1.4; cursor: pointer; }
+.cw-clue.active { background: rgba(59, 130, 246, 0.18); }
+.cw-clue.solved { opacity: 0.5; text-decoration: line-through; }
+.cw-len { font-size: 12px; color: var(--text-muted); }

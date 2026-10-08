@@ -1,4 +1,5 @@
 import { firebaseConfig, setupAppCheck, orgParam } from "./firebase-config.js";
+import { buildCrossword } from "./crossword.js";
 import {
   EVENT_PARAM,
   LEGACY_EVENT_ID,
@@ -268,8 +269,12 @@ function renderMissionEditor() {
 
   const block = (n) => {
     const m = missionCfg["mission" + n];
-    const timeField =
-      "durationSec" in m
+    const timeField = n === 4
+      ? `<div style="margin-bottom:10px">
+           <label class="field-label" for="m4-place">판에 올릴 낱말 수 (8~12)</label>
+           <input type="number" id="m4-place" min="8" max="12" value="${m.placeCount}" />
+         </div>`
+      : "durationSec" in m
         ? `<div style="margin-bottom:10px">
              <label class="field-label" for="m${n}-duration">제한시간(초)</label>
              <input type="number" id="m${n}-duration" min="5" max="300" value="${m.durationSec}" />
@@ -306,6 +311,23 @@ function renderMissionEditor() {
         </div>`;
     }
 
+    if (n === 4) {
+      listEditor = `
+        <div class="section-title" style="margin-top:6px"><span>낱말 · 열쇠 목록</span></div>
+        <p style="font-size:12px;color:var(--text-muted);margin:0 0 8px">
+          정답은 띄어쓰기 없이 2~11글자. 목록에서 위 개수만큼 <strong>서로 글자가 겹치게</strong> 자동 배치되며, 같은 행사 참가자는 모두 같은 판을 풉니다.
+          겹치는 글자가 적은 낱말은 배치되지 않을 수 있습니다 — <strong>배치 확인</strong>으로 미리 보세요.
+        </p>
+        <div class="table-wrap"><table class="participants events-table"><thead><tr>
+          <th style="width:160px">정답</th><th>열쇠(문제)</th><th style="width:80px">삭제</th>
+        </tr></thead><tbody id="m4-words"></tbody></table></div>
+        <div class="toolbar" style="margin-top:8px">
+          <button class="btn btn-ghost" id="m4-add" style="width:auto">낱말 추가</button>
+          <button class="btn btn-secondary" id="m4-preview" style="width:auto">배치 확인</button>
+        </div>
+        <pre id="m4-previewOut" style="font-size:15px;line-height:1.25;letter-spacing:2px"></pre>`;
+    }
+
     // 기본은 접힌 상태 — 제목을 클릭하면 펼쳐진다
     return `<details class="mission-block">
       <summary>MISSION 0${n} <span class="mission-summary-name">${escapeHtml(m.name || "")}</span></summary>
@@ -319,9 +341,21 @@ function renderMissionEditor() {
     </details>`;
   };
 
-  root.innerHTML = [1, 2, 3].map(block).join("");
+  root.innerHTML = [1, 2, 3, 4].map(block).join("");
   renderItemRows();
   renderPairRows();
+  renderWordRows();
+  document.getElementById("m4-add").addEventListener("click", () => {
+    if (!currentIsMaster) return;
+    collectWordRows();
+    missionCfg.mission4.words.push({ a: "", c: "" });
+    renderWordRows();
+  });
+  document.getElementById("m4-preview").addEventListener("click", () => {
+    collectWordRows();
+    const n = Number(document.getElementById("m4-place").value) || 10;
+    document.getElementById("m4-previewOut").textContent = previewCrossword(missionCfg.mission4.words, n);
+  });
 
   document.getElementById("m1-add").addEventListener("click", () => {
     if (!currentIsMaster) return;
@@ -385,6 +419,51 @@ function renderPairRows() {
   applyMasterOnlyUi();   // 행을 다시 그릴 때마다 새 버튼이 생기므로 매번 잠근다
 }
 
+function renderWordRows() {
+  const body = document.getElementById("m4-words");
+  if (!body) return;
+  body.innerHTML = missionCfg.mission4.words
+    .map(
+      (w, i) => `<tr>
+        <td><input type="text" class="wd-a" data-i="${i}" value="${escapeHtml(w.a)}" maxlength="11" /></td>
+        <td><input type="text" class="wd-c" data-i="${i}" value="${escapeHtml(w.c)}" maxlength="80" style="width:100%" /></td>
+        <td><button class="btn btn-danger wd-del" data-i="${i}">삭제</button></td>
+      </tr>`
+    )
+    .join("");
+  body.querySelectorAll(".wd-del").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (!currentIsMaster) return;
+      collectWordRows();
+      missionCfg.mission4.words.splice(Number(b.dataset.i), 1);
+      renderWordRows();
+    })
+  );
+  applyMasterOnlyUi();
+}
+function collectWordRows() {
+  const body = document.getElementById("m4-words");
+  if (!body) return;
+  missionCfg.mission4.words = [...body.querySelectorAll("tr")].map((tr) => ({
+    a: tr.querySelector(".wd-a").value.replace(/\s+/g, ""),
+    c: tr.querySelector(".wd-c").value.trim(),
+  }));
+}
+// 배치 미리보기(예시 판). 실제 판은 행사마다 다르지만 배치 가능한 개수는 비슷하다.
+function previewCrossword(words, n) {
+  const cw = buildCrossword(words.filter((w) => w.a && w.c), n, "preview");
+  if (!cw) return "낱말이 2개 이상 필요합니다.";
+  const g = Array.from({ length: cw.rows }, () => Array(cw.cols).fill("□"));
+  cw.entries.forEach((e) => [...e.a].forEach((ch, i) => {
+    g[e.r + (e.dir === "down" ? i : 0)][e.c + (e.dir === "across" ? i : 0)] = ch;
+  }));
+  const unused = words.filter((w) => w.a && !cw.entries.some((e) => e.a === w.a)).map((w) => w.a);
+  return `배치 ${cw.entries.length}/${n}개 · ${cw.rows}×${cw.cols}칸` +
+    (cw.entries.length < n ? "  ⚠ 목표보다 적습니다 — 글자가 겹치는 낱말을 더 넣으세요." : "") +
+    "\n\n" + g.map((r) => r.join("")).join("\n") +
+    (unused.length ? `\n\n(이 예시에서 빠진 낱말: ${unused.join(", ")})` : "");
+}
+
 // 화면 입력값을 missionCfg로 수집
 function collectItemRows() {
   const body = document.getElementById("m1-items");
@@ -408,7 +487,7 @@ function collectPairRows() {
 }
 
 function collectMissionEditor() {
-  [1, 2, 3].forEach((n) => {
+  [1, 2, 3, 4].forEach((n) => {
     const m = missionCfg["mission" + n];
     const val = (id) => {
       const el = document.getElementById(id);
@@ -426,6 +505,9 @@ function collectMissionEditor() {
   });
   collectItemRows();
   collectPairRows();
+  collectWordRows();
+  const pEl = document.getElementById("m4-place");
+  if (pEl) missionCfg.mission4.placeCount = Math.max(8, Math.min(12, Number(pEl.value) || 10));
 }
 
 document.getElementById("btnSaveMissions").addEventListener("click", async () => {
@@ -438,6 +520,11 @@ document.getElementById("btnSaveMissions").addEventListener("click", async () =>
   }
   const pairs = missionCfg.mission3.pairs.filter((p) => p.emoji && p.label && p.duty);
   if (pairs.length < 2) return alert("미션3: 직업 짝이 최소 2개 필요합니다.");
+  const words = missionCfg.mission4.words.filter((w) => w.a && w.c);
+  if (words.length < 4) return alert("미션4: 정답·열쇠가 모두 있는 낱말이 최소 4개 필요합니다.");
+  const cw = buildCrossword(words, missionCfg.mission4.placeCount, "preview");
+  if (cw && cw.entries.length < missionCfg.mission4.placeCount
+    && !confirm(`미션4: 예시 배치에서 ${cw.entries.length}/${missionCfg.mission4.placeCount}개만 놓입니다(겹치는 글자 부족). 이대로 저장할까요?`)) return;
   if (!(missionCfg.mission1.durationSec > 0) || !(missionCfg.mission3.durationSec > 0)) {
     return alert("제한시간은 1초 이상이어야 합니다.");
   }
@@ -497,7 +584,7 @@ function renderEventsTable() {
 
   if (allEvents.length === 0) {
     body.innerHTML =
-      '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">등록된 행사가 없습니다. 아래에서 추가하세요.<br/>행사를 만들기 전까지는 기존과 동일하게 동작합니다.</td></tr>';
+      '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">등록된 행사가 없습니다. 아래에서 추가하세요.<br/>행사를 만들기 전까지는 기존과 동일하게 동작합니다.</td></tr>';
     return;
   }
   body.innerHTML = allEvents
@@ -509,7 +596,9 @@ function renderEventsTable() {
         <td><input type="datetime-local" class="ev-end" data-id="${e.id}" value="${escapeHtml(e.endAt || "")}" /></td>
         <td><button class="reward-toggle ev-active ${e.active ? "on" : ""}" data-id="${e.id}" title="진행중으로 표시 (여러 행사 동시 가능). QR 없이 접속하면 진행중인 행사 중에서 선택하게 됩니다."></button></td>
         <td><input type="text" class="ev-missions" data-id="${e.id}" value="${normalizeMissionOrder(e.missionOrder).join(",")}"
-              style="width:90px" title="사용할 미션 번호를 순서대로 입력 (예: 1,2,3 또는 3,1)" /></td>
+              style="width:90px" title="사용할 미션 번호를 순서대로 입력 (예: 1,2,3,4 또는 3,1)" /></td>
+        <td><input type="text" class="ev-cert" data-id="${e.id}" value="${escapeHtml(e.certTitle || "")}" maxlength="40"
+              placeholder="비우면 행사명" title="참가자 인증서 맨 위에 크게 표시할 문구" /></td>
         <td>${count}</td>
         <td>
           <button class="btn btn-secondary ev-qr" data-id="${e.id}" title="참가자 개인 휴대폰용 — 기기당 참여 횟수 제한이 적용됩니다">QR</button>
@@ -543,16 +632,17 @@ function renderEventsTable() {
       const startAt = body.querySelector(`.ev-start[data-id="${id}"]`).value;
       const endAt = body.querySelector(`.ev-end[data-id="${id}"]`).value;
       const missionOrder = parseMissionOrder(body.querySelector(`.ev-missions[data-id="${id}"]`).value);
+      const certTitle = body.querySelector(`.ev-cert[data-id="${id}"]`).value.trim().slice(0, 40);
       if (!name) return alert("행사명을 입력하세요.");
       if (!missionOrder) {
-        return alert("미션 구성은 1~3 사이 번호를 중복 없이 순서대로 입력하세요. (예: 1,2,3 또는 3,1)");
+        return alert("미션 구성은 1~4 사이 번호를 중복 없이 순서대로 입력하세요. (예: 1,2,3,4 또는 4,1)");
       }
       if (startAt && endAt && new Date(startAt) > new Date(endAt)) {
         return alert("종료 일시가 시작 일시보다 빠릅니다.");
       }
       btn.disabled = true;
       try {
-        await updateDoc(doc(db, "events", id), { name, startAt, endAt, missionOrder });
+        await updateDoc(doc(db, "events", id), { name, startAt, endAt, missionOrder, certTitle });
       } catch (err) {
         console.error(err);
         alert("저장 실패: " + err.message);
@@ -627,7 +717,7 @@ document.getElementById("btnAddEvent").addEventListener("click", async () => {
       name,
       startAt: startEl.value || "",
       endAt: endEl.value || "",
-      missionOrder: [1, 2, 3], // 기본은 미션 3개 전부
+      missionOrder: [1, 2, 3, 4], // 새 행사는 미션 4개 전부
       active: allEvents.length === 0, // 첫 행사는 기본 활성
       createdAt: serverTimestamp(),
     });
@@ -739,7 +829,7 @@ function renderTable(rows) {
   const body = document.getElementById("participantsBody");
   if (rows.length === 0) {
     body.innerHTML =
-      '<tr><td colspan="10" style="text-align:center;color:var(--text-muted)">데이터가 없습니다</td></tr>';
+      '<tr><td colspan="11" style="text-align:center;color:var(--text-muted)">데이터가 없습니다</td></tr>';
     updateDeleteBtn();
     return;
   }
@@ -754,6 +844,7 @@ function renderTable(rows) {
         <td>${missionCell(r.mission1)}</td>
         <td>${missionCell(r.mission2)}</td>
         <td>${missionCell(r.mission3)}</td>
+        <td>${missionCell(r.mission4)}</td>
         <td>${r.totalScore || 0}</td>
         <td>${((r.totalTimeMs || 0) / 1000).toFixed(1)}</td>
         <td>${completedAt}</td>
@@ -847,7 +938,7 @@ function csvCell(v) {
 document.getElementById("btnExportCsv").addEventListener("click", () => {
   const header = [
     "행사", "닉네임", "인증코드", "M1점수", "M1시간ms", "M2점수", "M2시간ms",
-    "M3점수", "M3시간ms", "총점", "총시간ms", "완료시각", "기념품지급",
+    "M3점수", "M3시간ms", "M4점수", "M4시간ms", "총점", "총시간ms", "완료시각", "기념품지급",
   ];
   const lines = [header.join(",")];
   // 화면에서 선택한 행사 범위만 내보낸다
@@ -863,6 +954,8 @@ document.getElementById("btnExportCsv").addEventListener("click", () => {
       r.mission2 ? r.mission2.timeMs : "",
       r.mission3 ? r.mission3.score : "",
       r.mission3 ? r.mission3.timeMs : "",
+      r.mission4 ? r.mission4.score : "",
+      r.mission4 ? r.mission4.timeMs : "",
       r.totalScore || 0,
       r.totalTimeMs || 0,
       completedAt,
