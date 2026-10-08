@@ -1371,10 +1371,17 @@ exports.publicFileDelete = onCall(FILE_OPTS, async (req) => {
  *  AI(LLM) 연동 — 주관식 원문 분석 (functions/ai.js)
  *  OpenAI 호환 규격 하나로 호출해 모델 교체가 설정만으로 된다(모델 비종속).
  * ================================================================ */
-const ai = require("./ai")({ db, onCall, HttpsError, requireAdmin });
+const ai = require("./ai")({
+  db, onCall, HttpsError, requireAdmin, onSchedule,
+  mail: Object.assign(
+    (opts) => mailer().sendMail({ from: `"교육 운영관리 브리핑" <${MAIL_USER.value()}>`, ...opts }),
+    { secrets: [MAIL_USER, MAIL_PASS] }),
+});
 exports.aiTestProvider = ai.aiTestProvider;
 exports.aiAnalyzeFreetext = ai.aiAnalyzeFreetext;
 exports.aiReportNarrative = ai.aiReportNarrative;
 exports.aiExtractActions = ai.aiExtractActions;
 exports.aiDraftDocument = ai.aiDraftDocument;
 exports.aiAskOps = ai.aiAskOps;
+exports.aiBriefingPreview = ai.aiBriefingPreview;
+exports.weeklyBriefing = ai.weeklyBriefing;

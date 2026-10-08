@@ -221,7 +221,7 @@ function docMessages(kind, facts) {
   ];
 }
 
-module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin }) {
+module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin, onSchedule, mail }) {
   async function loadProvider(providerId, { fallback = true } = {}) {
     const cfg = (await db.doc("settings/ai").get()).data() || {};
     const list = Array.isArray(cfg.providers) ? cfg.providers : [];
@@ -662,7 +662,128 @@ module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin }) {
       }
     });
 
-  return { aiTestProvider, aiAnalyzeFreetext, aiReportNarrative, aiExtractActions, aiDraftDocument, aiAskOps };
+
+  // ================================================================
+  // 주간 AI 운영 브리핑: 매주 월요일 아침 AI가 먼저 담당자에게 메일로 알린다.
+  // 사실(일정·정원·충돌·설문·조치)은 위 조회 도구로 시스템이 계산하고, 모델은 요약·우선순위만 쓴다.
+  // 모델이 실패해도(대체 모델까지) 계산된 사실만으로 된 기본 브리핑을 보낸다.
+  // ================================================================
+  const addDays = (ymd, n) => { const d = new Date(ymd + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  async function briefingFacts(today) {
+    const dow = (new Date(today + "T00:00:00Z").getUTCDay() + 6) % 7; // 월=0
+    const mon = addDays(today, -dow), sun = addDays(mon, 6);
+    const last7 = addDays(today, -7), yest = addDays(today, -1);
+    const [week, cap, conf, imp, fb] = await Promise.all([
+      OPS_TOOLS.courses_in_range.run({ from: mon, to: sun }),
+      OPS_TOOLS.capacity_alerts.run({ from: today, to: addDays(today, 28) }),
+      OPS_TOOLS.schedule_conflicts.run({ from: today, to: addDays(today, 13) }),
+      OPS_TOOLS.improvements_status.run(),
+      db.collection("surveyResponses").where("collectedDate", ">=", last7).where("collectedDate", "<=", yest).get(),
+    ]);
+    const vals = [], dis = {};
+    let withText = 0;
+    fb.docs.forEach((d) => {
+      const r = d.data();
+      Object.values(r.edu || {}).forEach((v) => Number.isFinite(v) && vals.push(v));
+      (r.instructors || []).forEach((it) => [0, 1, 2].forEach((i) => Number.isFinite(it[`q${i}`]) && vals.push(it[`q${i}`])));
+      if (r.freeDissatisfied) withText++;
+      if (r.catDissatisfied) dis[r.catDissatisfied] = (dis[r.catDissatisfied] || 0) + 1;
+    });
+    return {
+      today, thisWeek: { from: mon, to: sun, courses: week.courses },
+      capacity: { from: cap.from, to: cap.to, nearlyFull: cap.nearlyFull, lowApplication: cap.lowApplication },
+      conflicts: { from: conf.from, to: conf.to, items: conf.conflicts },
+      lastWeekSurvey: { from: last7, to: yest, responses: fb.size, overall: avg20(vals), dissatisfiedWithText: withText, dissatisfiedCategories: dis },
+      improvements: { counts: imp.counts, open: imp.open.slice(0, 10) },
+    };
+  }
+  function briefingMessages(f) {
+    return [
+      { role: "system", content:
+        "너는 공공기관 교육훈련센터의 '주간 운영 브리핑'을 쓰는 비서다. 주어진 사실(JSON)만으로 담당자가 월요일 아침 1분 안에 읽을 브리핑을 쓴다.\n" +
+        "규칙: 1) 숫자·과정명·날짜는 JSON에 있는 그대로만. 계산·추정 금지. 2) 개인·특정 강사를 지목하지 않는다. " +
+        "3) 구성: [이번 주 한눈에] 2~3문장 → [먼저 챙길 일] 우선순위 순 '- ' 항목(시간표 충돌, 마감 임박·신청 저조, 미완료 조치) → [지난주 설문] 1~2문장. 해당 사항이 없으면 '없음'. " +
+        "4) 존댓말, 간결하게. 출력은 JSON 하나만: {\"subject\":\"메일 제목(25자 이내)\",\"body\":\"본문(줄바꿈 \\n)\"} — 코드펜스 금지." },
+      { role: "user", content: `사실(JSON):\n${JSON.stringify(f).slice(0, 20000)}` },
+    ];
+  }
+  // 모델 없이도 보낼 수 있는 기본 브리핑(사실 나열).
+  function plainBriefing(f) {
+    const L = [];
+    L.push(`[이번 주 교육] ${f.thisWeek.from} ~ ${f.thisWeek.to} · ${f.thisWeek.courses.length}개 차수`);
+    f.thisWeek.courses.slice(0, 15).forEach((c) => L.push(`- ${c.course} (${c.start}~${c.end}, ${c.venue || "-"}, 신청 ${c.applied}/${c.capacity ?? "-"})`));
+    L.push("", "[먼저 챙길 일]");
+    if (f.conflicts.items.length) f.conflicts.items.slice(0, 10).forEach((x) => L.push(`- ${x.kind} 중복: ${x.date} ${x.time} ${x.room || x.instructor || ""} — ${x.courses.join(" / ")}`));
+    f.capacity.nearlyFull.forEach((x) => L.push(`- 마감 임박: ${x.course} (${x.start}, ${x.applied}/${x.capacity})`));
+    f.capacity.lowApplication.forEach((x) => L.push(`- 신청 저조: ${x.course} (${x.start}, ${x.applied}/${x.capacity})`));
+    if (L[L.length - 1] === "[먼저 챙길 일]") L.push("- 없음");
+    L.push("", `[지난주 설문] 응답 ${f.lastWeekSurvey.responses}건${f.lastWeekSurvey.overall != null ? ` · 종합 ${f.lastWeekSurvey.overall}점` : ""}`);
+    L.push("", `[개선 조치] ${Object.entries(f.improvements.counts).map(([k, v]) => `${k} ${v}`).join(" · ") || "없음"}`);
+    return { subject: `주간 운영 브리핑 ${f.today}`, body: L.join("\n") };
+  }
+  async function makeBriefing(providerId) {
+    const today = kstToday();
+    const facts = await briefingFacts(today);
+    let out = null, info = { ai: false };
+    try {
+      const { provider, key } = await loadProvider(providerId || "");
+      const r = await chat(provider, key, briefingMessages(facts), { maxTokens: 1800 });
+      const j = extractJson(r.content);
+      if (j.body) {
+        out = { subject: String(j.subject || "").slice(0, 60) || `주간 운영 브리핑 ${today}`, body: String(j.body).trim() };
+        info = { ai: true, model: r.servedModel, provider: provider.name || provider.model, fallback: r.fallbackTo || null,
+          unverified: unverifiedNumbers([out.subject, out.body], facts, today.slice(0, 7)) };
+      }
+    } catch (e) { info = { ai: false, error: String(e.message || e).slice(0, 200) }; }
+    if (!out) out = plainBriefing(facts);
+    return { ...out, facts, info, today };
+  }
+  async function sendBriefing(b, recipients) {
+    const note = b.info.ai
+      ? `\n\n— AI(${b.info.model}) 작성 · 숫자는 시스템 집계값입니다.${b.info.unverified && b.info.unverified.length ? ` (확인 안 된 숫자: ${b.info.unverified.join(", ")})` : ""}`
+      : "\n\n— AI 응답이 없어 시스템 집계값으로 작성했습니다.";
+    await mail({ to: recipients.join(","), subject: `[LMS] ${b.subject}`, text: b.body + note + "\n※ 이 메일은 교육 운영관리 시스템의 주간 브리핑 설정에 따라 자동 발송되었습니다." });
+  }
+  const okEmails = (a) => (Array.isArray(a) ? a : []).map((x) => String(x).trim()).filter((x) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)).slice(0, 10);
+
+  const aiBriefingPreview = onCall(
+    { region: "asia-northeast3", memory: "512MiB", timeoutSeconds: 300, maxInstances: 2, secrets: mail.secrets },
+    async (req) => {
+      const email = await requireAdmin(req, "settings");
+      const t0 = Date.now();
+      const b = await makeBriefing(String(req.data?.providerId || ""));
+      let sent = 0;
+      if (req.data?.send) {
+        const cfg = (await db.doc("settings/briefing").get()).data() || {};
+        const to = okEmails(cfg.recipients);
+        if (!to.length) throw new HttpsError("failed-precondition", "받는 사람을 먼저 저장하세요.");
+        await sendBriefing(b, to);
+        sent = to.length;
+      }
+      await logRun({ kind: "briefing", by: email, ok: true, model: b.info.model || "", servedModel: b.info.model || "",
+        providerName: b.info.provider || "", ai: b.info.ai, sent, elapsedMs: Date.now() - t0, unverified: b.info.unverified || [] });
+      return { subject: b.subject, body: b.body, facts: b.facts, info: b.info, sent };
+    });
+
+  const weeklyBriefing = onSchedule(
+    { region: "asia-northeast3", schedule: "50 7 * * 1", timeZone: "Asia/Seoul", secrets: mail.secrets, timeoutSeconds: 300, memory: "512MiB" },
+    async () => {
+      const cfg = (await db.doc("settings/briefing").get()).data() || {};
+      const to = okEmails(cfg.recipients);
+      if (!cfg.enabled || !to.length) return;
+      const t0 = Date.now();
+      try {
+        const b = await makeBriefing(String(cfg.providerId || ""));
+        await sendBriefing(b, to);
+        await db.doc("settings/briefing").set({ lastSentAt: Date.now() }, { merge: true });
+        await logRun({ kind: "briefing", by: "schedule", ok: true, model: b.info.model || "", servedModel: b.info.model || "",
+          providerName: b.info.provider || "", ai: b.info.ai, sent: to.length, elapsedMs: Date.now() - t0, unverified: b.info.unverified || [] });
+      } catch (e) {
+        await logRun({ kind: "briefing", by: "schedule", ok: false, error: String(e.message || e).slice(0, 300), elapsedMs: Date.now() - t0 });
+      }
+    });
+
+  return { aiTestProvider, aiAnalyzeFreetext, aiReportNarrative, aiExtractActions, aiDraftDocument, aiAskOps, aiBriefingPreview, weeklyBriefing };
 };
 
 // 단위 시험용(함수 배포와 무관).

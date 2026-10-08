@@ -773,6 +773,19 @@
             <label class="chk-inline"><input type="checkbox" id="ai-auto-fallback" checked /> 모델 자동 대체 <small class="muted">(기본 모델이 혼잡·오류면 다른 등록 모델로 자동 재시도)</small></label>
           </div>
           <p class="hint">예시의 주소·모델명은 출발점입니다. 실제 값은 각 제공처 안내를 확인하세요. 'JSON 모드'는 서버가 <code>response_format</code>을 지원할 때만 켭니다(꺼도 동작).</p>
+          <h4>주간 AI 운영 브리핑</h4>
+          <p class="hint">매주 <b>월요일 07:50</b>에 이번 주 교육 일정, 먼저 챙길 일(시간표 충돌·마감 임박·신청 저조·미완료 조치), 지난주 설문 요약을
+            AI가 정리해 메일로 보냅니다. 숫자는 시스템이 계산하며, AI가 응답하지 않으면 집계값만으로 된 기본 브리핑을 보냅니다. 강사 실명은 보내지 않습니다.</p>
+          <div class="load-row">
+            <label class="chk-inline"><input type="checkbox" id="brief-enabled" /> 자동 발송 켜기</label>
+            <label>받는 사람 <input id="brief-to" placeholder="쉼표로 구분, 최대 10명" style="min-width:280px" /></label>
+            <label>모델 <select id="brief-provider" class="ai-provider-select"><option value="">(기본 모델)</option></select></label>
+            <button id="brief-save" type="button">저장</button>
+            <button id="brief-preview" type="button">미리보기</button>
+            <button id="brief-send" type="button">지금 보내기</button>
+          </div>
+          <p class="hint" id="brief-last"></p>
+          <div id="brief-out"></div>
           <h4>최근 AI 실행 기록 <small class="muted">(모델·소요시간·결과만 기록 — 원문은 남기지 않음)</small></h4>
           <div class="table-wrap"><table class="ai-runs-table">
             <colgroup><col style="width:10rem"><col style="width:7.5rem"><col style="width:15%"><col style="width:17%"><col><col style="width:4.5rem"></colgroup>
