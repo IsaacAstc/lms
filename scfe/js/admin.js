@@ -601,8 +601,6 @@ function renderEventsTable() {
         <div class="ev-line">
           <label class="ev-field">시작<input type="datetime-local" class="ev-start" data-id="${e.id}" value="${escapeHtml(e.startAt || "")}" /></label>
           <label class="ev-field">종료<input type="datetime-local" class="ev-end" data-id="${e.id}" value="${escapeHtml(e.endAt || "")}" /></label>
-        </div>
-        <div class="ev-line">
           <label class="ev-field ev-narrow">미션 구성<input type="text" class="ev-missions" data-id="${e.id}" value="${normalizeMissionOrder(e.missionOrder).join(",")}"
               title="사용할 미션 번호를 순서대로 입력 (예: 1,2,3,4 또는 3,1)" /></label>
           <label class="ev-field ev-grow">인증서 문구<input type="text" class="ev-cert" data-id="${e.id}" value="${escapeHtml(e.certTitle || "")}" maxlength="40"
