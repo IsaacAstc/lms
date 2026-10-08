@@ -309,6 +309,7 @@
       <input type="checkbox" id="ed-lang-en"> 영문 진행</label>
     <button class="btn-sm" id="btn-export">💾 JSON 내보내기</button>
     <button class="btn-sm primary" id="btn-ed-save">저장</button>
+    <button class="btn-sm" id="btn-ed-ai" title="과정 커리큘럼·주제로 AI가 문항 초안을 만듭니다(골라서 추가)">🤖 AI 문항 초안</button>
     <button class="btn-sm" id="btn-ed-preview" title="미리보기 (게임 시작 없이 문제 확인)">👁 미리보기</button>
     <button class="btn-sm primary" id="btn-ed-host" style="background:var(--green);">▶ 게임 시작</button>
   </div>
@@ -1122,6 +1123,66 @@ $("ed-qtext").oninput = e => { edQuiz.questions[edIdx].text = e.target.value; };
 $("ed-explain").oninput = e => { edQuiz.questions[edIdx].explain = e.target.value; };
 $("ed-title").oninput = e => { edQuiz.title = e.target.value; };
 $("ed-lang-en").onchange = e => { edQuiz.lang = e.target.checked ? "en" : "ko"; };
+/* ---- AI 문항 초안(교육 콘텐츠 출제 보조): 과정 커리큘럼·주제 → 초안 → 골라서 추가 ---- */
+$("btn-ed-ai").onclick = async () => {
+  let progs = [];
+  try { progs = (await fsdb.collection("programs").get()).docs.map((d) => ({ id: d.id, name: d.data().name || d.id })).sort((a, b) => a.name.localeCompare(b.name, "ko")); }
+  catch (e) { /* 권한 없으면 주제로만 */ }
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999;display:flex;align-items:center;justify-content:center;padding:16px;";
+  ov.innerHTML = `<div style="background:#1e2140;border-radius:14px;padding:18px;width:min(720px,100%);max-height:90vh;overflow:auto;color:#fff;">
+    <h2 style="margin:0 0 10px;">🤖 AI 문항 초안</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:14px;">
+      <label>과정 <select id="ai-q-prog"><option value="">(선택 안 함)</option>${progs.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("")}</select></label>
+      <label>주제 <input id="ai-q-topic" placeholder="예: 기내 반입 금지물품" style="width:200px;"></label>
+      <label>문항 수 <select id="ai-q-n"><option>5</option><option>8</option><option>10</option></select></label>
+      <label>난이도 <select id="ai-q-lv"><option>쉬움</option><option selected>보통</option><option>어려움</option></select></label>
+      <button class="btn-sm primary" id="ai-q-go">초안 만들기</button>
+    </div>
+    <p style="font-size:12px;opacity:.75;margin:8px 0;">과정을 고르면 그 과정의 과목·교육내용을 근거로 만듭니다. 초안은 사실 확인 후 고쳐서 쓰세요.</p>
+    <div id="ai-q-out"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+      <button class="btn-sm" id="ai-q-close">닫기</button>
+      <button class="btn-sm primary" id="ai-q-add" hidden>선택한 문항 추가</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const q = (id) => ov.querySelector("#" + id);
+  let items = [];
+  q("ai-q-close").onclick = () => ov.remove();
+  q("ai-q-go").onclick = async () => {
+    const btn = q("ai-q-go");
+    if (!q("ai-q-prog").value && !q("ai-q-topic").value.trim()) return toast("과정이나 주제를 입력하세요.");
+    btn.disabled = true; btn.textContent = "만드는 중…";
+    try {
+      const call = firebase.app().functions("asia-northeast3").httpsCallable("aiContentDraft", { timeout: 250000 });
+      const r = (await call({ kind: "quiz", programId: q("ai-q-prog").value, topic: q("ai-q-topic").value, count: Number(q("ai-q-n").value), level: q("ai-q-lv").value })).data;
+      items = r.items || [];
+      q("ai-q-out").innerHTML = items.length ? items.map((it, i) => `<label style="display:block;background:rgba(255,255,255,.08);border-radius:10px;padding:10px;margin:6px 0;">
+        <input type="checkbox" data-i="${i}" checked> <b>${i + 1}. [${it.type === "ox" ? "OX" : "선다형"}] ${esc(it.text)}</b>
+        <div style="font-size:13px;margin-top:4px;opacity:.9;">${it.type === "ox" ? `정답: ${it.answer === 0 ? "O" : "X"}` : it.choices.map((c, k) => `${k === it.answer ? "✔ " : ""}${esc(c)}`).join(" · ")}</div>
+        ${it.explain ? `<div style="font-size:12px;opacity:.7;">해설: ${esc(it.explain)}</div>` : ""}</label>`).join("")
+        + `<div style="font-size:12px;opacity:.6;">${esc(r.model || "")}${r.fallback ? " (자동 대체)" : ""}</div>`
+        : `<div class="notice">초안을 만들지 못했습니다. 주제를 바꿔 다시 시도하세요.</div>`;
+      q("ai-q-add").hidden = !items.length;
+    } catch (e) { toast("초안 생성 실패: " + (e.message || e)); }
+    finally { btn.disabled = false; btn.textContent = "초안 만들기"; }
+  };
+  q("ai-q-add").onclick = () => {
+    const picked = [...ov.querySelectorAll("input[data-i]:checked")].map((c) => items[Number(c.dataset.i)]);
+    if (!picked.length) return toast("추가할 문항을 고르세요.");
+    // 비어 있는 첫 문항(새 퀴즈 기본값)은 대체한다.
+    if (edQuiz.questions.length === 1 && !edQuiz.questions[0].text) edQuiz.questions = [];
+    picked.forEach((it) => edQuiz.questions.push(normQ({
+      ...newQuestion(), type: it.type, text: it.text,
+      choices: it.type === "mc" ? it.choices : ["", "", "", ""], answers: [it.answer], explain: it.explain,
+    })));
+    edIdx = edQuiz.questions.length - picked.length;
+    renderEditor();
+    ov.remove();
+    toast(`${picked.length}개 문항을 추가했습니다. 확인 후 저장하세요.`);
+  };
+};
+
 $("btn-add-q").onclick = () => {
   edQuiz.questions.push(newQuestion());
   edIdx = edQuiz.questions.length - 1;

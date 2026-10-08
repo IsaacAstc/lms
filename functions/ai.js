@@ -836,7 +836,77 @@ module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin, onSched
       }
     });
 
-  return { aiTestProvider, aiAnalyzeFreetext, aiReportNarrative, aiExtractActions, aiDraftDocument, aiAskOps, aiBriefingPreview, weeklyBriefing, aiQuizDiagnosis };
+  // ================================================================
+  // 교육 콘텐츠 출제 보조: 퀴즈 문항 초안(과정 커리큘럼 근거) · 낱말퍼즐 단어·열쇠 초안(주제·학년).
+  // 결과는 돌려주기만 한다 — 사람이 골라 편집기에 넣고 다듬어 저장한다.
+  // ================================================================
+  const HANGUL_WORD = /^[가-힣]{2,8}$/;
+  const aiContentDraft = onCall(
+    { region: "asia-northeast3", memory: "256MiB", timeoutSeconds: 240, maxInstances: 3 },
+    async (req) => {
+      const email = await requireAdmin(req);
+      const kind = req.data?.kind === "crossword" ? "crossword" : "quiz";
+      const count = Math.max(3, Math.min(kind === "quiz" ? 10 : 20, Number(req.data?.count) || (kind === "quiz" ? 5 : 12)));
+      const level = String(req.data?.level || (kind === "quiz" ? "보통" : "초등 고학년")).slice(0, 20);
+      const topic = String(req.data?.topic || "").trim().slice(0, 200);
+      let material = "";
+      if (kind === "quiz" && req.data?.programId) {
+        const pid = String(req.data.programId);
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(pid)) throw new HttpsError("invalid-argument", "과정이 올바르지 않습니다.");
+        const p = await db.doc(`programs/${pid}`).get();
+        if (!p.exists) throw new HttpsError("not-found", "과정 커리큘럼을 찾을 수 없습니다.");
+        const d = p.data();
+        material = `과정명: ${d.name || ""}\n과목:\n` + (d.subjects || []).slice(0, 60)
+          .map((x) => `- ${x.subject || ""}${x.content ? `: ${String(x.content).slice(0, 200)}` : ""}`).join("\n");
+      }
+      if (!material && !topic) throw new HttpsError("invalid-argument", "과정이나 주제를 입력하세요.");
+      const messages = kind === "quiz" ? [
+        { role: "system", content:
+          "너는 항공보안 교육 강사의 퀴즈 출제를 돕는다. 주어진 교육 내용(과정 커리큘럼·주제) 범위 안에서만 문항을 만든다.\n" +
+          "규칙: 1) 사실이 확실한 일반 상식·교육 내용만. 법령 조항 번호·수치처럼 틀리기 쉬운 세부는 피한다. 2) 선다형(mc)은 보기 4개·정답 1개, OX(ox)는 참/거짓 문장. " +
+          "3) 문항 120자, 보기 60자 이내. 4) 해설은 한 문장. 5) 난이도: " + level + ".\n" +
+          "출력은 JSON 하나만(코드펜스 금지): {\"questions\":[{\"type\":\"mc\",\"text\":\"...\",\"choices\":[\"..\",\"..\",\"..\",\"..\"],\"answer\":정답보기번호(0부터),\"explain\":\"...\"},{\"type\":\"ox\",\"text\":\"...\",\"answer\":0이면 O 1이면 X,\"explain\":\"...\"}]}" },
+        { role: "user", content: `${material ? material + "\n" : ""}${topic ? `주제: ${topic}\n` : ""}문항 수: ${count}` },
+      ] : [
+        { role: "system", content:
+          "너는 초·중학생 대상 '항공보안·공항 진로' 가로세로 낱말퍼즐 출제를 돕는다.\n" +
+          "규칙: 1) 정답은 띄어쓰기 없는 한글 명사 2~5글자. 2) 서로 같은 글자(음절)를 공유하는 낱말을 많이 고른다(판에 교차 배치해야 함). " +
+          "3) 열쇠는 " + level + " 학생이 이해할 쉬운 문장, 40자 이내, 정답 글자를 열쇠에 쓰지 않는다. 4) 사실이 확실한 내용만.\n" +
+          "출력은 JSON 하나만(코드펜스 금지): {\"words\":[{\"a\":\"정답\",\"c\":\"열쇠\"}]}" },
+        { role: "user", content: `주제: ${topic || "항공보안과 공항의 직업"}\n낱말 수: ${count}` },
+      ];
+      const { provider, key } = await loadProvider(String(req.data?.providerId || ""));
+      const t0 = Date.now();
+      try {
+        const r = await chat(provider, key, messages, { maxTokens: 2500 });
+        const out = extractJson(r.content);
+        let items;
+        if (kind === "quiz") {
+          items = (Array.isArray(out.questions) ? out.questions : []).map((q) => {
+            const type = q.type === "ox" ? "ox" : "mc";
+            const text = String(q.text || "").trim().slice(0, 120);
+            const choices = type === "mc" ? (Array.isArray(q.choices) ? q.choices : []).map((c) => String(c).trim().slice(0, 60)).slice(0, 4) : [];
+            const answer = Number(q.answer);
+            if (!text || (type === "mc" && (choices.length !== 4 || choices.some((c) => !c))) || !Number.isInteger(answer) || answer < 0 || answer > (type === "mc" ? 3 : 1)) return null;
+            return { type, text, choices, answer, explain: String(q.explain || "").trim().slice(0, 300) };
+          }).filter(Boolean).slice(0, count);
+        } else {
+          const seen = new Set();
+          items = (Array.isArray(out.words) ? out.words : []).map((w) => ({ a: String(w.a || "").replace(/\s+/g, ""), c: String(w.c || "").trim().slice(0, 80) }))
+            .filter((w) => HANGUL_WORD.test(w.a) && w.c && !w.c.includes(w.a) && !seen.has(w.a) && seen.add(w.a)).slice(0, count);
+        }
+        await logRun({ kind: "content", contentKind: kind, by: email, providerId: provider.id, providerName: provider.name || "", model: provider.model,
+          servedModel: r.servedModel, ok: true, elapsedMs: Date.now() - t0, count: items.length });
+        return { ok: true, kind, items, model: r.servedModel, fallback: r.fallbackTo || null, elapsedMs: Date.now() - t0 };
+      } catch (e) {
+        await logRun({ kind: "content", contentKind: kind, by: email, providerId: provider.id, providerName: provider.name || "", model: provider.model, ok: false,
+          error: String(e.message || e).slice(0, 300), elapsedMs: Date.now() - t0 });
+        if (e instanceof HttpsError) throw e;
+        throw new HttpsError("internal", `초안 생성 실패(${provider.name || provider.model}): ${e.message || e}`);
+      }
+    });
+
+  return { aiTestProvider, aiAnalyzeFreetext, aiReportNarrative, aiExtractActions, aiDraftDocument, aiAskOps, aiBriefingPreview, weeklyBriefing, aiQuizDiagnosis, aiContentDraft };
 };
 
 // 단위 시험용(함수 배포와 무관).
