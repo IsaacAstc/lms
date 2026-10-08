@@ -1389,6 +1389,7 @@ exports.aiDraftDocument = ai.aiDraftDocument;
 exports.aiAskOps = ai.aiAskOps;
 exports.aiBriefingPreview = ai.aiBriefingPreview;
 exports.aiQuizDiagnosis = ai.aiQuizDiagnosis;
+exports.aiContentDraft = ai.aiContentDraft;
 
 /* ================================================================
  *  일일 정기 작업(매일 06:00 KST) — 예약 작업 1개로 통합
