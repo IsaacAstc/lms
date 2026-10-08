@@ -270,7 +270,7 @@ function initDidConfig() {
   wireDidUpload("did-bg-upload", "did-bg-file", "did-bg", { maxDim: 3840, keepAlpha: false, prefix: "bg" });
   // 특별일정은 글자가 든 배너·공지가 올라오므로 PNG로 올린 파일은 PNG로 저장한다.
   // JPEG 재압축을 거치지 않아 글자 가장자리가 뭉개지지 않는다.
-  wireDidUpload("did-special-upload", "did-special-file", "did-special", { maxDim: 3840, keepAlpha: "auto", prefix: "special" });
+  wireDidUpload("did-special-upload", "did-special-file", "did-special", { maxDim: 1920, keepAlpha: "auto", prefix: "special" });
   const base = location.origin + location.pathname.replace(/[^/]*$/, "");
   const url = `${base}did.html${orgQuery(true)}`;
   document.getElementById("did-url").value = url;

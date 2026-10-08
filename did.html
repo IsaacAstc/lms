@@ -174,6 +174,36 @@
   }
 
   function $(id) { return document.getElementById(id); }
+
+  // 특별일정 이미지 미리 받기·유지. 받은 Image 객체를 계속 붙잡아 두어(디코딩 유지)
+  // TV 브라우저가 메모리 정리로 배경 이미지를 버려 흰 화면이 되는 일을 줄인다.
+  var spImg = null, spWant = "", spLoading = false, spRetry = null;
+  function ensureSpecial(src) {
+    if (spImg && spWant === src && spImg.naturalWidth > 0) return true;
+    if (spWant !== src) { spWant = src; spImg = null; spLoading = false; }
+    if (!spLoading) {
+      spLoading = true;
+      var im = new Image();
+      im.onload = function () {
+        if (spWant !== src) return;
+        spLoading = false; spImg = im; render();
+      };
+      im.onerror = function () {
+        if (spWant !== src) return;
+        spLoading = false;
+        clearTimeout(spRetry);
+        spRetry = setTimeout(function () { render(); }, 30000); // 30초 뒤 다시 시도
+      };
+      // 다시 받을 때는 캐시를 피해 새로 받는다(깨진 캐시 대비).
+      im.src = src + (spImg === null && spRetry ? (src.indexOf("?") < 0 ? "?" : "&") + "r=" + Date.now() : "");
+    }
+    return false;
+  }
+  // 1분마다 점검: 표시 중인 특별일정 이미지가 비었으면(디코딩 해제·로드 실패) 다시 받는다.
+  function specialWatchdog() {
+    if (!lastSpecial) return;
+    if (!spImg || !(spImg.naturalWidth > 0)) { spImg = null; spLoading = false; spRetry = 1; render(); }
+  }
   // 업로드 이미지는 이 저장소의 media/ 폴더에 있다. 관리자가 다른 도메인(github.io 등)에서
   // 업로드하면 그 도메인의 절대 URL이 저장되는데, 망에 따라 그쪽이 막혀 이미지가 안 뜬다.
   // 저장값이 무엇이든 media/<파일명>만 떼어 내 이 화면과 같은 도메인에서 불러온다.
@@ -236,10 +266,12 @@
     for (i = 0; i < rent.length; i++) all.push({ kind: "rent", v: rent[i] });
 
     // 특별일정: 지정 이미지 하나만 전체화면 표시(최우선).
+    // 이미지를 먼저 받아 둔 뒤에만 전환한다 — 받기 전이나 실패 시 여백 색만 남은 빈 화면이 되지 않도록
+    // 그동안은 일반 화면을 그대로 보여 준다.
     var specialEl = $("special");
     lastSpecial = specialActive();
-    if (lastSpecial) {
-      specialEl.style.backgroundImage = 'url("' + mediaSrc(didCfg.specialUrl).replace(/"/g, "") + '")';
+    if (lastSpecial && ensureSpecial(mediaSrc(didCfg.specialUrl).replace(/"/g, ""))) {
+      specialEl.style.backgroundImage = 'url("' + spImg.src + '")';
       // 이미지 비율이 화면과 다를 때 남는 여백의 색. 관리자 설정값이 없으면 검정.
       specialEl.style.backgroundColor = /^#[0-9a-f]{6}$/i.test(String(didCfg.specialBg || "")) ? didCfg.specialBg : "#000";
       specialEl.style.display = "block";
@@ -457,6 +489,7 @@
     setInterval(tickClock, 5000);
     checkUpdate();
     setInterval(checkUpdate, 600000);
+    setInterval(specialWatchdog, 60000);
     setInterval(function () {
       var dayChanged = todayStr() !== lastDay;
       var specialChanged = specialActive() !== lastSpecial; // 예약 시각 도달·종료 감지(분 단위)
