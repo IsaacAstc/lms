@@ -171,8 +171,9 @@ table.events-table td:first-child { text-align: left; width: auto; padding: 8px 
 table.events-table th,
 table.events-table td { padding: 8px 10px; font-size: 13px; }
 table.events-table input[type="text"] { width: 100%; min-width: 0; }
-table.events-table .ev-name { min-width: 120px; }
-table.events-table .ev-missions { width: 72px; text-align: center; }
+table.events-table input[type="text"].ev-name { min-width: 170px; }
+table.events-table input[type="text"].ev-cert { min-width: 140px; }
+table.events-table input[type="text"].ev-missions { width: 84px; min-width: 84px; text-align: center; }
 table.events-table input[type="datetime-local"] {
   background: var(--surface);
   border: 1px solid var(--border);
