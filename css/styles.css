@@ -875,3 +875,7 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
 .apps-table td { white-space: normal; word-break: keep-all; }
 .apps-table td:first-child, .apps-table td:nth-child(2), .apps-table td:nth-child(4), .apps-table td.actions { white-space: nowrap; }
 .apps-table td:nth-child(5) { min-width: 6rem; }
+
+/* 관리자 추가: 역할도 이메일·비밀번호 칸처럼 제목 위·입력 아래 2행으로. */
+#admin-role-wrap:not([hidden]) { display: flex; flex-direction: column; gap: 0.25rem; }
+#admin-role-wrap select { width: 100%; }
