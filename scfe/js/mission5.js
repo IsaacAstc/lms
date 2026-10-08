@@ -45,6 +45,19 @@ function initAudio() {
     master.connect(actx.destination);
   } catch (e) { actx = null; }
 }
+// iOS·안드로이드는 '사용자가 누른 그 순간'에 만들거나 깨운 오디오만 소리를 낸다.
+// 게임은 카운트다운 뒤(타이머 안)에 시작되므로, '시작하기' 버튼 클릭에서 바로 이걸 부른다.
+export function unlockM5Audio() {
+  initAudio();
+  if (!actx) return;
+  try {
+    if (actx.state === "suspended") actx.resume();
+    // 무음 한 번 재생 — 일부 iOS 버전은 이걸 해야 이후 소리가 난다.
+    const b = actx.createBuffer(1, 1, 22050), src = actx.createBufferSource();
+    src.buffer = b; src.connect(actx.destination); src.start(0);
+  } catch (e) { /* 소리 실패는 게임을 막지 않는다 */ }
+}
+
 function tone(o) {
   if (!actx || !soundOn) return;
   const t0 = o.time ?? actx.currentTime, dur = o.dur ?? 0.12;

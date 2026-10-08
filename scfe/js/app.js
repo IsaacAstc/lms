@@ -1,6 +1,6 @@
 import { firebaseConfig, setupAppCheck } from "./firebase-config.js";
 import { startMission1, startMission2, startMission3, startMission4, setMissionConfig } from "./missions.js";
-import { startMission5 } from "./mission5.js";
+import { startMission5, unlockM5Audio } from "./mission5.js";
 import { DEFAULT_MISSION_CONFIG } from "./mission-config.js";
 let missionConfig = DEFAULT_MISSION_CONFIG;
 import { MISSION_SETTINGS_PATH, mergeMissionConfig } from "./mission-config.js";
@@ -407,7 +407,7 @@ document.getElementById("btnStartM1").addEventListener("click", () => launchMiss
 document.getElementById("btnStartM2").addEventListener("click", () => launchMission(2));
 document.getElementById("btnStartM3").addEventListener("click", () => launchMission(3));
 document.getElementById("btnStartM4").addEventListener("click", () => launchMission(4));
-document.getElementById("btnStartM5").addEventListener("click", () => launchMission(5));
+document.getElementById("btnStartM5").addEventListener("click", () => { unlockM5Audio(); launchMission(5); });
 
 document.getElementById("btnStart").addEventListener("click", async () => {
   const input = document.getElementById("nicknameInput");
