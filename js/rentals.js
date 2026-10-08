@@ -5,7 +5,8 @@
 import {
   collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, getDoc, setDoc, query, orderBy,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { db } from "./firebase.js";
+import { db, app } from "./firebase.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 import { escapeHtml } from "./app.js";
 import { onRoomsChange, getRooms } from "./rooms.js";
 import { orgQuery } from "./orgs.js";
@@ -132,29 +133,13 @@ function renderTable(tbody, form, submitBtn, cancelBtn) {
   }
 }
 
-// ── 로고·배경 이미지 업로드 (저장소 media/ — 퀴즈 편집기와 동일 방식·토큰 공유) ──
-const GH_REPO = "IsaacAstc/lms";
-const GH_TOKEN_KEY = "qbGhToken"; // 퀴즈 편집기와 같은 키(토큰 1회 등록으로 양쪽 사용)
-function ghToken() {
-  let t = localStorage.getItem(GH_TOKEN_KEY);
-  if (!t) {
-    t = prompt(
-      "이미지 업로드에는 GitHub 토큰이 필요합니다(이 브라우저에만 저장).\n\n"
-      + "발급: github.com → Settings → Developer settings → Fine-grained tokens →\n"
-      + `대상 저장소 ${GH_REPO}, 권한은 Contents: Read and write만 → 생성된 토큰 붙여넣기`);
-    if (!t) return null;
-    localStorage.setItem(GH_TOKEN_KEY, t.trim());
-    t = t.trim();
-  }
-  return t;
-}
-
+// ── 로고·배경 이미지 업로드 (저장소 media/ — 서버 함수 경유, 브라우저 토큰 없음) ──
 // 이미지 압축: 로고는 투명 보존(PNG, 최대 1200px — 대기 화면 대형 표시 대응), 배경은 JPEG(최대 3840px).
-function compressImage(file, { maxDim, keepAlpha }) {
+function compressImage(file, { maxDim, keepAlpha, upscale }) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const scale = (upscale ? (x) => x : (x) => Math.min(1, x))(maxDim / Math.max(img.width || maxDim, img.height || maxDim));
       const cv = document.createElement("canvas");
       cv.width = Math.round(img.width * scale); cv.height = Math.round(img.height * scale);
       const ctx = cv.getContext("2d");
@@ -184,51 +169,28 @@ function compressImage(file, { maxDim, keepAlpha }) {
   });
 }
 
+// 업로드는 서버 함수(publicFileUpload)가 대신 커밋한다 — GitHub 토큰은 서버 비밀값에만 있어
+// 기기마다 토큰을 발급·입력할 필요가 없다(퀴즈 미디어 업로드와 같은 경로).
+const callFn = (name) => httpsCallable(getFunctions(app, "asia-northeast3"), name, { timeout: 130000 });
+
 async function uploadDidImage(file, { maxDim, keepAlpha, prefix }) {
-  const token = ghToken();
-  if (!token) return null;
   if (!confirm(`'${file.name}'을 공개 저장소 media/ 폴더에 업로드할까요?\n공개 가능한 이미지인지 확인하세요.`)) return null;
-  // SVG는 벡터 그대로 업로드(래스터 변환 없음 — 로고 선명도 유지). 그 외는 캔버스 압축.
+  // SVG는 서버가 받지 않으므로(같은 도메인 스크립트 실행 방지) 고해상도 PNG로 변환해 올린다.
   const isSvg = file.type === "image/svg+xml" || /\.svg$/i.test(file.name);
-  let b64, ext;
-  if (isSvg) {
-    if (file.size > 1024 * 1024) throw new Error("SVG는 1MB 이하만 업로드할 수 있습니다.");
-    // 큰 파일에서 String.fromCharCode(...bytes) 전개는 스택 초과 — 청크 단위로 변환.
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    let bin = "";
-    for (let i = 0; i < bytes.length; i += 8192) {
-      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
-    }
-    b64 = btoa(bin);
-    ext = "svg";
-  } else {
-    // keepAlpha "auto": 투명을 담을 수 있는 형식으로 올린 파일만 PNG로 저장한다.
-    // 사진을 PNG로 저장하면 용량이 몇 배로 뛰어 상한에 걸리므로 JPEG로 둔다.
-    const alpha = keepAlpha === "auto"
-      ? /^image\/(png|webp|gif)$/.test(file.type) || /\.(png|webp|gif)$/i.test(file.name)
-      : keepAlpha;
-    // PNG는 압축이 없어 같은 해상도에서도 훨씬 크다. TV가 1080p이므로 1920px면 충분하다.
-    const dim = alpha && keepAlpha === "auto" ? Math.min(maxDim, 1920) : maxDim;
-    const out = await compressImage(file, { maxDim: dim, keepAlpha: alpha });
-    b64 = out.dataUrl.split(",")[1];
-    if (b64.length > 4 * 1024 * 1024) throw new Error("이미지가 너무 큽니다. 더 작은 이미지를 사용하세요.");
-    if (out.flattened) alert("투명 PNG 용량이 커서 투명한 부분을 흰색으로 채워 JPG로 저장합니다.");
-    ext = out.alpha ? "png" : "jpg";
-  }
-  const path = `media/${prefix}-${Date.now().toString(36)}.${ext}`;
-  const resp = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${path}`, {
-    method: "PUT",
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
-    body: JSON.stringify({ message: `media: DID ${prefix} 이미지 업로드`, content: b64 }),
-  });
-  if (resp.status === 401 || resp.status === 403) {
-    localStorage.removeItem(GH_TOKEN_KEY);
-    throw new Error("토큰이 유효하지 않거나 권한이 없습니다. 다시 시도해 토큰을 재등록하세요.");
-  }
-  if (!resp.ok) throw new Error(`업로드 실패 (HTTP ${resp.status})`);
+  const alpha = isSvg ? true : keepAlpha === "auto"
+    ? /^image\/(png|webp|gif)$/.test(file.type) || /\.(png|webp|gif)$/i.test(file.name)
+    : keepAlpha;
+  // PNG는 압축이 없어 같은 해상도에서도 훨씬 크다. TV가 1080p이므로 1920px면 충분하다.
+  const dim = isSvg ? 2400 : alpha && keepAlpha === "auto" ? Math.min(maxDim, 1920) : maxDim;
+  const out = await compressImage(file, { maxDim: dim, keepAlpha: alpha, upscale: isSvg });
+  const b64 = out.dataUrl.split(",")[1];
+  if (b64.length > 4 * 1024 * 1024) throw new Error("이미지가 너무 큽니다. 더 작은 이미지를 사용하세요.");
+  if (out.flattened) alert("투명 PNG 용량이 커서 투명한 부분을 흰색으로 채워 JPG로 저장합니다.");
+  const name = `${prefix}-${Date.now().toString(36)}.${out.alpha ? "png" : "jpg"}`;
+  await callFn("publicFileUpload")({ dir: "media", name, dataBase64: b64 });
   // 절대 URL로 저장하면 업로드한 도메인(github.io 등)이 박혀, 그 도메인이 막힌 망의
   // DID에서는 이미지가 안 뜬다. 상대 경로로 저장해 표출 화면과 같은 도메인에서 받게 한다.
-  return path;
+  return `media/${name}`;
 }
 
 function wireDidUpload(btnId, fileId, inputId, opts) {
@@ -266,23 +228,11 @@ const fmtSize = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.ma
 async function loadMediaList() {
   const tbody = document.getElementById("media-tbody");
   const note = document.getElementById("media-note");
-  const token = ghToken();
-  if (!token) return;
   tbody.innerHTML = `<tr><td colspan="6" class="empty">불러오는 중…</td></tr>`;
   note.textContent = "";
   try {
-    const resp = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/media`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
-    });
-    if (resp.status === 401 || resp.status === 403) {
-      localStorage.removeItem(GH_TOKEN_KEY);
-      throw new Error("토큰이 유효하지 않습니다. 다시 조회해 토큰을 재등록하세요.");
-    }
-    if (resp.status === 404) { tbody.innerHTML = `<tr><td colspan="6" class="empty">media/ 폴더에 파일이 없습니다.</td></tr>`; return; }
-    if (!resp.ok) throw new Error(`조회 실패 (HTTP ${resp.status})`);
-    const files = (await resp.json()).filter((f) => f.type === "file" && f.name !== "README.md");
+    const files = ((await callFn("publicFileList")({ dir: "media" })).data?.files) || [];
     if (!files.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty">업로드된 미디어가 없습니다.</td></tr>`; return; }
-    files.sort((a, b) => a.name.localeCompare(b.name));
     note.textContent = `${files.length}개 · 합계 ${fmtSize(files.reduce((s, f) => s + (f.size || 0), 0))}`;
     tbody.innerHTML = "";
     for (const f of files) {
@@ -292,19 +242,14 @@ async function loadMediaList() {
         <td>${MEDIA_KIND(f.name)}</td>
         <td>${fmtSize(f.size || 0)}</td>
         <td>${MEDIA_SOURCE(f.name)}</td>
-        <td><a href="${escapeHtml(f.download_url)}" target="_blank" rel="noopener" class="btn-link">열기</a></td>
+        <td><a href="${escapeHtml(f.path)}" target="_blank" rel="noopener" class="btn-link">열기</a></td>
         <td class="actions"><button type="button" class="del m-del">삭제</button></td>`;
       tr.querySelector(".m-del").addEventListener("click", async (e) => {
         if (!confirm(`'${f.name}' 파일을 저장소에서 삭제할까요?\n퀴즈·DID에서 참조 중이면 해당 화면에 더 이상 표시되지 않습니다.`)) return;
         const btn = e.target;
         btn.disabled = true; btn.textContent = "삭제 중…";
         try {
-          const del = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${f.path}`, {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
-            body: JSON.stringify({ message: `media: ${f.name} 삭제 (관리자 화면)`, sha: f.sha }),
-          });
-          if (!del.ok) throw new Error(`삭제 실패 (HTTP ${del.status})`);
+          await callFn("publicFileDelete")({ dir: "media", name: f.name });
           loadMediaList();
         } catch (err) {
           alert(err.message || "삭제에 실패했습니다.");
