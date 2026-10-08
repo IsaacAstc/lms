@@ -1390,12 +1390,12 @@ exports.aiAskOps = ai.aiAskOps;
 exports.aiBriefingPreview = ai.aiBriefingPreview;
 
 /* ================================================================
- *  일일 정기 작업(매일 03:00 KST) — 예약 작업 1개로 통합
+ *  일일 정기 작업(매일 06:00 KST) — 예약 작업 1개로 통합
  *  ① 신청자 이메일 파기 ② 기명 응답 파기 ③ 접속기록 파기 ④ (월요일) 주간 AI 운영 브리핑
  *  각 단계는 따로 오류를 잡아, 하나가 실패해도 나머지는 실행된다.
  * ================================================================ */
 exports.dailyMaintenance = onSchedule(
-  { region: "asia-northeast3", schedule: "0 3 * * *", timeZone: "Asia/Seoul",
+  { region: "asia-northeast3", schedule: "0 6 * * *", timeZone: "Asia/Seoul",
     secrets: [MAIL_USER, MAIL_PASS], timeoutSeconds: 540, memory: "512MiB" },
   async (event) => {
     const steps = [
