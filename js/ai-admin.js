@@ -186,12 +186,13 @@ async function loadRuns() {
           : r.kind === "actions" ? `✅ 조치 ${r.count ?? 0}건 추출`
           : r.kind === "briefing" ? `✅ 주간 브리핑${r.ai ? "" : "(집계값만)"}${r.sent ? ` · ${r.sent}명 발송` : " · 미리보기"}`
           : r.kind === "quizdiag" ? `✅ 퀴즈 학습 진단${r.unverified?.length ? ` · <span class='warn'>확인 안 된 숫자 ${r.unverified.length}개</span>` : ""}`
+          : r.kind === "content" ? `✅ ${r.contentKind === "crossword" ? "낱말퍼즐" : "퀴즈"} 초안 ${r.count ?? 0}개`
           : r.kind === "ask" ? `✅ 비서 답변 · 도구 ${(r.tools || []).length}회${r.unverified?.length ? ` · <span class='warn'>확인 안 된 숫자 ${r.unverified.length}개</span>` : ""}${r.fallback ? ` · 대체: ${escapeHtml(r.fallback.to || "")}` : ""}`
           : r.kind === "doc" ? `✅ 공문 초안${r.unverified?.length ? ` · <span class='warn'>확인 안 된 숫자 ${r.unverified.length}개</span>` : " · 숫자 대조 통과"}`
           : r.kind === "report" ? `✅ 보고서 초안${r.unverified?.length ? ` · <span class='warn'>확인 안 된 숫자 ${r.unverified.length}개</span>` : " · 숫자 대조 통과"}`
           : "✅ 연결 정상")
         : `❌ ${escapeHtml(r.error || "")}`;
-      return `<tr><td>${fmt.format(new Date(r.at))}</td><td>${r.kind === "freetext" ? `주관식 분석 ${escapeHtml(r.month || "")}` : r.kind === "report" ? `보고서 ${escapeHtml(r.month || "")}` : r.kind === "actions" ? `조치 추출 ${escapeHtml(r.month || "")}` : r.kind === "doc" ? "공문 초안" : r.kind === "ask" ? "AI 비서" : r.kind === "quizdiag" ? "퀴즈 진단" : r.kind === "briefing" ? (r.by === "schedule" ? "주간 브리핑(자동)" : "주간 브리핑") : "연결 테스트"}</td>
+      return `<tr><td>${fmt.format(new Date(r.at))}</td><td>${r.kind === "freetext" ? `주관식 분석 ${escapeHtml(r.month || "")}` : r.kind === "report" ? `보고서 ${escapeHtml(r.month || "")}` : r.kind === "actions" ? `조치 추출 ${escapeHtml(r.month || "")}` : r.kind === "doc" ? "공문 초안" : r.kind === "ask" ? "AI 비서" : r.kind === "quizdiag" ? "퀴즈 진단" : r.kind === "content" ? "출제 보조" : r.kind === "briefing" ? (r.by === "schedule" ? "주간 브리핑(자동)" : "주간 브리핑") : "연결 테스트"}</td>
         <td>${escapeHtml(r.providerName || "")}</td><td>${escapeHtml(r.servedModel || r.model || "")}</td>
         <td>${res}</td><td style="text-align:right">${r.elapsedMs != null ? (r.elapsedMs / 1000).toFixed(1) + "초" : "-"}</td></tr>`;
     }).join("");

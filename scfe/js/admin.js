@@ -1,5 +1,6 @@
 import { firebaseConfig, setupAppCheck, orgParam } from "./firebase-config.js";
 import { buildCrossword } from "./crossword.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 import {
   EVENT_PARAM,
   LEGACY_EVENT_ID,
@@ -324,7 +325,9 @@ function renderMissionEditor() {
         <div class="toolbar" style="margin-top:8px">
           <button class="btn btn-ghost" id="m4-add" style="width:auto">낱말 추가</button>
           <button class="btn btn-secondary" id="m4-preview" style="width:auto">배치 확인</button>
+          <button class="btn btn-secondary" id="m4-ai" style="width:auto">🤖 AI 단어 초안</button>
         </div>
+        <div id="m4-aiOut"></div>
         <pre id="m4-previewOut" style="font-size:15px;line-height:1.25;letter-spacing:2px"></pre>`;
     }
 
@@ -351,6 +354,7 @@ function renderMissionEditor() {
     missionCfg.mission4.words.push({ a: "", c: "" });
     renderWordRows();
   });
+  document.getElementById("m4-ai").addEventListener("click", aiWordDraft);
   document.getElementById("m4-preview").addEventListener("click", () => {
     collectWordRows();
     const n = Number(document.getElementById("m4-place").value) || 10;
@@ -417,6 +421,34 @@ function renderPairRows() {
     })
   );
   applyMasterOnlyUi();   // 행을 다시 그릴 때마다 새 버튼이 생기므로 매번 잠근다
+}
+
+// AI 단어 초안(교육 콘텐츠 출제 보조): 주제·학년 → 후보 → 골라서 목록에 추가.
+async function aiWordDraft() {
+  if (!currentIsMaster) return alert("미션 설정은 마스터 관리자만 수정할 수 있습니다.");
+  const topic = prompt("어떤 주제로 낱말을 만들까요?", "공항의 직업과 보안검색 절차");
+  if (topic == null) return;
+  const level = prompt("대상 학년", "초등 고학년") || "초등 고학년";
+  const out = document.getElementById("m4-aiOut");
+  out.innerHTML = '<p style="font-size:12px;color:var(--text-muted)">AI 초안 만드는 중…</p>';
+  try {
+    const fn = httpsCallable(getFunctions(app, "asia-northeast3"), "aiContentDraft", { timeout: 250000 });
+    const r = (await fn({ kind: "crossword", topic, level, count: 14 })).data;
+    collectWordRows();
+    const have = new Set(missionCfg.mission4.words.map((w) => w.a));
+    const items = (r.items || []).filter((w) => !have.has(w.a));
+    if (!items.length) { out.innerHTML = '<p style="font-size:12px">새로 추가할 후보가 없습니다. 주제를 바꿔 보세요.</p>'; return; }
+    out.innerHTML = `<div style="margin:8px 0;padding:10px;border:1px solid var(--border);border-radius:10px">
+      ${items.map((w, i) => `<label style="display:block;font-size:13px;margin:3px 0"><input type="checkbox" data-i="${i}" checked> <b>${escapeHtml(w.a)}</b> — ${escapeHtml(w.c)}</label>`).join("")}
+      <div class="toolbar" style="margin-top:8px"><button class="btn btn-secondary" id="m4-aiAdd" style="width:auto">선택한 낱말 추가</button>
+      <span style="font-size:11px;color:var(--text-muted)">${escapeHtml(r.model || "")} · 추가 후 '배치 확인'으로 판을 확인하세요</span></div></div>`;
+    document.getElementById("m4-aiAdd").addEventListener("click", () => {
+      collectWordRows();
+      out.querySelectorAll("input[data-i]:checked").forEach((c) => missionCfg.mission4.words.push(items[Number(c.dataset.i)]));
+      out.innerHTML = "";
+      renderWordRows();
+    });
+  } catch (e) { out.innerHTML = ""; alert("AI 초안 실패: " + (e.message || e)); }
 }
 
 function renderWordRows() {
