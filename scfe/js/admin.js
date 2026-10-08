@@ -597,7 +597,9 @@ function renderEventsTable() {
         <td><button class="reward-toggle ev-active ${e.active ? "on" : ""}" data-id="${e.id}" title="진행중으로 표시 (여러 행사 동시 가능). QR 없이 접속하면 진행중인 행사 중에서 선택하게 됩니다."></button></td>
         <td><input type="text" class="ev-missions" data-id="${e.id}" value="${normalizeMissionOrder(e.missionOrder).join(",")}" title="사용할 미션 번호를 순서대로 입력 (예: 1,2,3,4 또는 3,1)" /></td>
         <td><input type="text" class="ev-cert" data-id="${e.id}" value="${escapeHtml(e.certTitle || "")}" maxlength="40"
-              placeholder="비우면 행사명" title="참가자 인증서 맨 위에 크게 표시할 문구" /></td>
+              placeholder="비우면 행사명" title="참가자 인증서 맨 위에 크게 표시할 문구" />
+            <label class="ev-titleopt" title="참가자 첫 화면 제목을 '항공보안 히어로 미션' 대신 행사명으로 표시">
+              <input type="checkbox" class="ev-title" data-id="${e.id}" ${e.titleIsEventName ? "checked" : ""} /> 첫 화면 제목=행사명</label></td>
         <td>${count}</td>
         <td>
           <button class="btn btn-secondary ev-qr" data-id="${e.id}" title="참가자 개인 휴대폰용 — 기기당 참여 횟수 제한이 적용됩니다">QR</button>
@@ -632,6 +634,7 @@ function renderEventsTable() {
       const endAt = body.querySelector(`.ev-end[data-id="${id}"]`).value;
       const missionOrder = parseMissionOrder(body.querySelector(`.ev-missions[data-id="${id}"]`).value);
       const certTitle = body.querySelector(`.ev-cert[data-id="${id}"]`).value.trim().slice(0, 40);
+      const titleIsEventName = body.querySelector(`.ev-title[data-id="${id}"]`).checked;
       if (!name) return alert("행사명을 입력하세요.");
       if (!missionOrder) {
         return alert("미션 구성은 1~4 사이 번호를 중복 없이 순서대로 입력하세요. (예: 1,2,3,4 또는 4,1)");
@@ -641,7 +644,7 @@ function renderEventsTable() {
       }
       btn.disabled = true;
       try {
-        await updateDoc(doc(db, "events", id), { name, startAt, endAt, missionOrder, certTitle });
+        await updateDoc(doc(db, "events", id), { name, startAt, endAt, missionOrder, certTitle, titleIsEventName });
       } catch (err) {
         console.error(err);
         alert("저장 실패: " + err.message);

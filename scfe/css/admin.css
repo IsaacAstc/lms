@@ -315,3 +315,6 @@ table.events-table .reward-toggle { margin: 0 auto; }
 }
 .qr-modal-actions { display: flex; gap: 8px; margin-top: 16px; }
 .qr-modal-actions .btn { margin-top: 0; padding: 10px 14px; font-size: 13px; }
+
+table.events-table .ev-titleopt { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); margin-top: 4px; white-space: nowrap; }
+table.events-table .ev-titleopt input { width: auto; }
