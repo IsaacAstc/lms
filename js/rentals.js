@@ -157,9 +157,27 @@ function compressImage(file, { maxDim, keepAlpha }) {
       const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
       const cv = document.createElement("canvas");
       cv.width = Math.round(img.width * scale); cv.height = Math.round(img.height * scale);
-      cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+      const ctx = cv.getContext("2d");
+      ctx.drawImage(img, 0, 0, cv.width, cv.height);
       URL.revokeObjectURL(img.src);
-      resolve(keepAlpha ? cv.toDataURL("image/png") : cv.toDataURL("image/jpeg", 0.82));
+      // PNG·WebP여도 실제로 투명한 픽셀이 없으면(배너·포스터 등) JPEG로 저장한다 — PNG는 몇 배 커서 상한에 걸린다.
+      let alpha = !!keepAlpha;
+      if (alpha) {
+        const d = ctx.getImageData(0, 0, cv.width, cv.height).data;
+        alpha = false;
+        for (let i = 3; i < d.length; i += 4) if (d[i] < 250) { alpha = true; break; }
+      }
+      if (alpha) {
+        const png = cv.toDataURL("image/png");
+        // 투명 PNG가 상한을 넘으면 흰 바탕에 합쳐 JPEG로 낮춘다(투명 대신 흰색).
+        if (png.length <= 2.6 * 1024 * 1024) return resolve({ dataUrl: png, alpha: true });
+        const bg = document.createElement("canvas");
+        bg.width = cv.width; bg.height = cv.height;
+        const b = bg.getContext("2d");
+        b.fillStyle = "#fff"; b.fillRect(0, 0, bg.width, bg.height); b.drawImage(cv, 0, 0);
+        return resolve({ dataUrl: bg.toDataURL("image/jpeg", 0.9), alpha: false, flattened: true });
+      }
+      resolve({ dataUrl: cv.toDataURL("image/jpeg", keepAlpha ? 0.92 : 0.82), alpha: false });
     };
     img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error("이미지 파일을 읽을 수 없습니다.")); };
     img.src = URL.createObjectURL(file);
@@ -191,14 +209,11 @@ async function uploadDidImage(file, { maxDim, keepAlpha, prefix }) {
       : keepAlpha;
     // PNG는 압축이 없어 같은 해상도에서도 훨씬 크다. TV가 1080p이므로 1920px면 충분하다.
     const dim = alpha && keepAlpha === "auto" ? Math.min(maxDim, 1920) : maxDim;
-    const dataUrl = await compressImage(file, { maxDim: dim, keepAlpha: alpha });
-    b64 = dataUrl.split(",")[1];
-    if (b64.length > 2 * 1024 * 1024) {
-      throw new Error(alpha
-        ? "이미지가 너무 큽니다. 투명 배경(PNG)은 용량이 크게 잡힙니다 — 더 작은 이미지를 쓰거나, 배경색을 넣어 JPG로 저장해 올리세요."
-        : "이미지가 너무 큽니다. 더 작은 이미지를 사용하세요.");
-    }
-    ext = alpha ? "png" : "jpg";
+    const out = await compressImage(file, { maxDim: dim, keepAlpha: alpha });
+    b64 = out.dataUrl.split(",")[1];
+    if (b64.length > 4 * 1024 * 1024) throw new Error("이미지가 너무 큽니다. 더 작은 이미지를 사용하세요.");
+    if (out.flattened) alert("투명 PNG 용량이 커서 투명한 부분을 흰색으로 채워 JPG로 저장합니다.");
+    ext = out.alpha ? "png" : "jpg";
   }
   const path = `media/${prefix}-${Date.now().toString(36)}.${ext}`;
   const resp = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${path}`, {
