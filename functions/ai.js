@@ -765,9 +765,8 @@ module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin, onSched
       return { subject: b.subject, body: b.body, facts: b.facts, info: b.info, sent };
     });
 
-  const weeklyBriefing = onSchedule(
-    { region: "asia-northeast3", schedule: "50 7 * * 1", timeZone: "Asia/Seoul", secrets: mail.secrets, timeoutSeconds: 300, memory: "512MiB" },
-    async () => {
+  // 예약 실행은 index.js 의 dailyMaintenance(매일 03:00)가 월요일에만 부른다.
+  const weeklyBriefing = async () => {
       const cfg = (await db.doc("settings/briefing").get()).data() || {};
       const to = okEmails(cfg.recipients);
       if (!cfg.enabled || !to.length) return;
@@ -781,7 +780,7 @@ module.exports = function makeAi({ db, onCall, HttpsError, requireAdmin, onSched
       } catch (e) {
         await logRun({ kind: "briefing", by: "schedule", ok: false, error: String(e.message || e).slice(0, 300), elapsedMs: Date.now() - t0 });
       }
-    });
+    };
 
   return { aiTestProvider, aiAnalyzeFreetext, aiReportNarrative, aiExtractActions, aiDraftDocument, aiAskOps, aiBriefingPreview, weeklyBriefing };
 };

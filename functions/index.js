@@ -96,6 +96,10 @@ async function checkRateLimit(rawIp, maxPerHour = RATE_LIMIT_PER_HOUR) {
   });
 }
 
+// 예약 작업은 아래 dailyMaintenance 하나로 묶어 실행한다(Cloud Scheduler 작업 수 절감).
+// asJob 은 기존 onSchedule(옵션, 함수) 형태를 유지한 채 함수만 꺼내 쓰기 위한 자리표시.
+const asJob = (_opts, fn) => fn;
+
 function mailer() {
   return nodemailer.createTransport({
     service: "gmail",
@@ -402,7 +406,7 @@ exports.rejectApplication = onCall(
  *  신청 마감일(= 교육 시작일)이 지난 접수 기록의 email 필드를 삭제한다.
  *  개인정보 최소 보관 원칙 — 수치·상태·접수번호는 그대로 남는다.
  * ================================================================ */
-exports.purgeApplicationEmails = onSchedule(
+const purgeApplicationEmails = asJob(
   { region: "asia-northeast3", schedule: "0 3 * * *", timeZone: "Asia/Seoul" },
   async () => {
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -892,7 +896,7 @@ exports.submitNamedSurvey = onCall(
 
 // 보유기간이 지난 기명 응답 파기(일 1회). 익명 설문의 수동 파기와 달리 자동 실행한다 —
 // 개인정보는 보유기간 경과 시 지체 없이 파기해야 하므로 담당자 조작에 의존하지 않는다.
-exports.purgeNamedResponses = onSchedule(
+const purgeNamedResponses = asJob(
   { region: "asia-northeast3", schedule: "10 3 * * *", timeZone: "Asia/Seoul" },
   async () => {
     // 응답 본문과 응답자 표시는 같은 보유기간을 가지므로 함께 파기한다.
@@ -1127,7 +1131,7 @@ exports.namedAccessReview = onCall(NAMED_OPTS, async (req) => {
 });
 
 // 보관기간이 지난 접속기록 파기(일 1회).
-exports.purgeAccessLogs = onSchedule(
+const purgeAccessLogs = asJob(
   { region: "asia-northeast3", schedule: "20 3 * * *", timeZone: "Asia/Seoul" },
   async () => {
     const snap = await db.collection(ACCESS_LOG).where("expireAt", "<=", new Date()).limit(400).get();
@@ -1384,4 +1388,25 @@ exports.aiExtractActions = ai.aiExtractActions;
 exports.aiDraftDocument = ai.aiDraftDocument;
 exports.aiAskOps = ai.aiAskOps;
 exports.aiBriefingPreview = ai.aiBriefingPreview;
-exports.weeklyBriefing = ai.weeklyBriefing;
+
+/* ================================================================
+ *  일일 정기 작업(매일 03:00 KST) — 예약 작업 1개로 통합
+ *  ① 신청자 이메일 파기 ② 기명 응답 파기 ③ 접속기록 파기 ④ (월요일) 주간 AI 운영 브리핑
+ *  각 단계는 따로 오류를 잡아, 하나가 실패해도 나머지는 실행된다.
+ * ================================================================ */
+exports.dailyMaintenance = onSchedule(
+  { region: "asia-northeast3", schedule: "0 3 * * *", timeZone: "Asia/Seoul",
+    secrets: [MAIL_USER, MAIL_PASS], timeoutSeconds: 540, memory: "512MiB" },
+  async (event) => {
+    const steps = [
+      ["신청자 이메일 파기", purgeApplicationEmails],
+      ["기명 응답 파기", purgeNamedResponses],
+      ["접속기록 파기", purgeAccessLogs],
+    ];
+    const kstDay = new Date(Date.now() + 9 * 3600000).getUTCDay(); // 0=일, 1=월
+    if (kstDay === 1) steps.push(["주간 AI 운영 브리핑", ai.weeklyBriefing]);
+    for (const [name, fn] of steps) {
+      try { await fn(event); } catch (e) { console.error(`정기 작업 실패: ${name}`, e); }
+    }
+  }
+);
