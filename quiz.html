@@ -1348,11 +1348,14 @@ async function hostGame(quiz) {
   const playQuiz = { title: quiz.title, lang: quiz.lang === "en" ? "en" : "ko", questions: quiz.questions.map(prepareForPlay) };
   setLang(playQuiz.lang); // 진행 화면 언어(대기실부터) 적용
   host.pin = pin; host.ref = ref; host.quiz = playQuiz; host.qIdx = -1;
+  // 참가자가 읽는 공개 사본에는 정답·허용 답안·해설을 넣지 않는다(개발자 도구로 미리 보는 것 방지).
+  // 정답 판정은 진행자 기기가 자기 사본(host.quiz)으로 하고, 해설은 정답 공개 때 reveal/{문항}에 쓴다.
+  const publicQuiz = { ...playQuiz, questions: playQuiz.questions.map(({ answers, accepted, explain, ...rest }) => rest) };
   await ref.set({
     status: "lobby",
     createdAt: firebase.database.ServerValue.TIMESTAMP,
     currentQ: -1,
-    quiz: playQuiz,
+    quiz: publicQuiz,
   });
   ref.onDisconnect().remove(); // 호스트가 나가면 방 제거
 
@@ -1542,6 +1545,7 @@ function hostReveal(q) {
         updates[`players/${pid}/score`] = (host.players[pid].score || 0) + points;
       }
     });
+    updates[`reveal/${host.qIdx}`] = { explain: q.explain || "" };
     updates["status"] = "reveal";
     return host.ref.update(updates);
   }).catch((e) => {
@@ -1902,7 +1906,7 @@ function playerShowResult(game, myScore) {
   const q = game.quiz.questions[qi];
   // 정답 화면의 미디어는 재생하지 않는다(진행자 화면에서 이미 틀었고, 참가자 폰이 한꺼번에 소리를 내면 곤란하다).
   $("pr-media").innerHTML = mediaHTML(q);
-  $("pr-explain").textContent = (q.explain || "").trim();
+  $("pr-explain").textContent = String(((game.reveal || {})[qi] || {}).explain || "").trim();
   if (q.type === "poll") {
     $("pr-icon").textContent = "🗳"; $("pr-title").textContent = my ? tr("voted") : tr("noVote");
     $("pr-points").textContent = "";

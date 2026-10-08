@@ -8,11 +8,15 @@
         ".read": true,
 
         "players": {
-          "$pid": { ".write": true }
+          "$pid": {
+            ".write": "!data.exists() && newData.child('score').val() === 0 && newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 20"
+          }
         },
         "answers": {
           "$q": {
-            "$pid": { ".write": true }
+            "$pid": {
+              ".write": "!data.exists() && root.child('games').child($pin).child('players').child($pid).exists() && !newData.child('correct').exists() && !newData.child('points').exists() && newData.child('at').isNumber() && newData.child('at').val() <= now + 5000 && newData.child('at').val() >= root.child('games').child($pin).child('questionStartAt').val() - 5000"
+            }
           }
         },
 
