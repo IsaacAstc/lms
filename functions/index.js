@@ -1377,3 +1377,4 @@ exports.aiAnalyzeFreetext = ai.aiAnalyzeFreetext;
 exports.aiReportNarrative = ai.aiReportNarrative;
 exports.aiExtractActions = ai.aiExtractActions;
 exports.aiDraftDocument = ai.aiDraftDocument;
+exports.aiAskOps = ai.aiAskOps;
