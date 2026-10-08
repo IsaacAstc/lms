@@ -50,6 +50,7 @@
       <div class="light" data-m="1"></div>
       <div class="light" data-m="2"></div>
       <div class="light" data-m="3"></div>
+      <div class="light" data-m="4"></div>
     </div>
     <div class="mission-list">
       <div class="mission-card" data-mission="1" id="card-1">
@@ -66,6 +67,11 @@
         <div class="icon">🧩</div>
         <div class="info"><div class="name" id="cardName-3">공항 직업 커넥트</div><div class="desc" id="cardDesc-3">직업과 설명을 짝지어라</div></div>
         <div class="score" id="score-3">-</div>
+      </div>
+      <div class="mission-card" data-mission="4" id="card-4">
+        <div class="icon">🔍</div>
+        <div class="info"><div class="name" id="cardName-4">항공 낱말 탐정</div><div class="desc" id="cardDesc-4">가로세로 낱말 퍼즐을 풀어라</div></div>
+        <div class="score" id="score-4">-</div>
       </div>
     </div>
     <button class="btn btn-primary cert-cta" id="btnCertImageMenu" style="display:none">인증서 이미지 저장/공유</button>
@@ -121,6 +127,23 @@
     </div>
   </section>
 
+  <!-- 미션4 사전 안내 -->
+  <section class="screen" id="screen-pre4">
+    <div class="pre-icon">🔍</div>
+    <div class="pre-mission-no">MISSION 04</div>
+    <h2 class="pre-title" id="preTitle-4">낱말 퍼즐을 완성하라!</h2>
+    <div class="pre-desc-box">
+      <p id="preLine1-4">열쇠(문제)를 누르고 정답 낱말을 입력하세요.</p>
+      <p id="preLine2-4">제한시간은 없지만 <strong>빨리 풀수록</strong> 점수가 높아요. 힌트를 쓰면 감점!</p>
+    </div>
+    <div class="pre-meta">
+      <div class="pre-meta-item">⏱ 제한시간 <strong>없음</strong> · 클리어 시간으로 점수</div>
+    </div>
+    <div class="pre-btn-area">
+      <button class="btn btn-primary" id="btnStartM4">시작하기</button>
+    </div>
+  </section>
+
   <!-- 5. 카운트다운 (미션 1·2 공용) -->
   <section class="screen" id="screen-countdown">
     <div class="countdown-wrap">
@@ -159,6 +182,23 @@
     <div class="match-grid" id="m3-grid"></div>
   </section>
 
+  <!-- 미션4: 가로세로 낱말 퍼즐 -->
+  <section class="screen" id="screen-m4">
+    <div class="game-header"><div class="game-name">🔍 항공 낱말 탐정</div><div id="m4-timeLabel" class="pill">0:00</div></div>
+    <div class="match-label" id="m4-left">남은 낱말</div>
+    <div class="cw-board" id="m4-board"></div>
+    <div class="cw-input">
+      <div class="cw-current" id="m4-current"></div>
+      <div class="cw-row">
+        <input type="text" id="m4-input" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="정답 입력" maxlength="12" />
+        <button class="btn btn-primary" id="m4-ok" type="button">확인</button>
+        <button class="btn btn-ghost" id="m4-hint" type="button">힌트</button>
+      </div>
+      <div class="m4-msg" id="m4-msg"></div>
+    </div>
+    <div class="cw-clues" id="m4-clues"></div>
+  </section>
+
   <!-- 5. 미션 결과 (단일 미션 클리어 후) -->
   <section class="screen" id="screen-result">
     <h1 class="title" id="resultTitle">미션 클리어!</h1>
@@ -175,7 +215,8 @@
     <div class="cert-capture" id="certCapture">
       <div class="cert">
         <div class="badge">🏅</div>
-        <div class="cert-title">항공보안 전문가 인증서</div>
+        <div class="cert-title" id="certTitle">항공보안 전문가 인증서</div>
+        <div class="cert-sub" id="certSub" hidden>항공보안 전문가 인증서</div>
         <div class="cert-name" id="certNickname">-</div>
         <div class="cert-code" id="certCode">CODE: -</div>
       </div>
