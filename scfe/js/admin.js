@@ -341,7 +341,7 @@ function renderMissionEditor() {
     </details>`;
   };
 
-  root.innerHTML = [1, 2, 3, 4].map(block).join("");
+  root.innerHTML = [1, 2, 3, 4, 5].map(block).join("");
   renderItemRows();
   renderPairRows();
   renderWordRows();
@@ -487,7 +487,7 @@ function collectPairRows() {
 }
 
 function collectMissionEditor() {
-  [1, 2, 3, 4].forEach((n) => {
+  [1, 2, 3, 4, 5].forEach((n) => {
     const m = missionCfg["mission" + n];
     const val = (id) => {
       const el = document.getElementById(id);
@@ -525,6 +525,7 @@ document.getElementById("btnSaveMissions").addEventListener("click", async () =>
   const cw = buildCrossword(words, missionCfg.mission4.placeCount, "preview");
   if (cw && cw.entries.length < missionCfg.mission4.placeCount
     && !confirm(`미션4: 예시 배치에서 ${cw.entries.length}/${missionCfg.mission4.placeCount}개만 놓입니다(겹치는 글자 부족). 이대로 저장할까요?`)) return;
+  if (!(missionCfg.mission5.durationSec >= 30)) return alert("미션5: 진행시간은 30초 이상이어야 합니다.");
   if (!(missionCfg.mission1.durationSec > 0) || !(missionCfg.mission3.durationSec > 0)) {
     return alert("제한시간은 1초 이상이어야 합니다.");
   }
@@ -580,7 +581,10 @@ function renderEventsTable() {
   const body = document.getElementById("eventsBody");
   if (!body) return;
   // 입력 중에는 다시 그리지 않음(타이핑 중 값이 날아가는 것 방지)
-  if (body.contains(document.activeElement)) return;
+  // 삭제·저장 버튼을 누른 직후에도 포커스가 버튼에 남아 있어, 버튼은 예외로 둔다
+  // (예전엔 버튼 포커스 때문에 삭제한 카드가 새로고침 전까지 남아 있었다).
+  const ae = document.activeElement;
+  if (body.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) && ae.type !== "checkbox") return;
 
   if (allEvents.length === 0) {
     body.innerHTML =
@@ -604,7 +608,7 @@ function renderEventsTable() {
           <label class="ev-field">시작<input type="datetime-local" class="ev-start" data-id="${e.id}" value="${escapeHtml(e.startAt || "")}" /></label>
           <label class="ev-field">종료<input type="datetime-local" class="ev-end" data-id="${e.id}" value="${escapeHtml(e.endAt || "")}" /></label>
           <label class="ev-field ev-narrow">미션 구성<input type="text" class="ev-missions" data-id="${e.id}" value="${normalizeMissionOrder(e.missionOrder).join(",")}"
-              title="사용할 미션 번호를 순서대로 입력 (예: 1,2,3,4 또는 3,1)" /></label>
+              title="사용할 미션 번호를 순서대로 입력 (예: 1,2,3,4,5 또는 3,1)" /></label>
           <label class="ev-field ev-grow">인증서 문구<input type="text" class="ev-cert" data-id="${e.id}" value="${escapeHtml(e.certTitle || "")}" maxlength="40"
               placeholder="비우면 행사명" title="참가자 인증서 맨 위에 크게 표시할 문구" /></label>
           <div class="ev-actions">
@@ -644,7 +648,7 @@ function renderEventsTable() {
       const titleIsEventName = body.querySelector(`.ev-title[data-id="${id}"]`).checked;
       if (!name) return alert("행사명을 입력하세요.");
       if (!missionOrder) {
-        return alert("미션 구성은 1~4 사이 번호를 중복 없이 순서대로 입력하세요. (예: 1,2,3,4 또는 4,1)");
+        return alert("미션 구성은 1~5 사이 번호를 중복 없이 순서대로 입력하세요. (예: 1,2,3,4,5 또는 5,1)");
       }
       if (startAt && endAt && new Date(startAt) > new Date(endAt)) {
         return alert("종료 일시가 시작 일시보다 빠릅니다.");
@@ -726,7 +730,7 @@ document.getElementById("btnAddEvent").addEventListener("click", async () => {
       name,
       startAt: startEl.value || "",
       endAt: endEl.value || "",
-      missionOrder: [1, 2, 3, 4], // 새 행사는 미션 4개 전부
+      missionOrder: [1, 2, 3, 4, 5], // 새 행사는 미션 전부
       active: allEvents.length === 0, // 첫 행사는 기본 활성
       createdAt: serverTimestamp(),
     });
@@ -838,7 +842,7 @@ function renderTable(rows) {
   const body = document.getElementById("participantsBody");
   if (rows.length === 0) {
     body.innerHTML =
-      '<tr><td colspan="11" style="text-align:center;color:var(--text-muted)">데이터가 없습니다</td></tr>';
+      '<tr><td colspan="12" style="text-align:center;color:var(--text-muted)">데이터가 없습니다</td></tr>';
     updateDeleteBtn();
     return;
   }
@@ -854,6 +858,7 @@ function renderTable(rows) {
         <td>${missionCell(r.mission2)}</td>
         <td>${missionCell(r.mission3)}</td>
         <td>${missionCell(r.mission4)}</td>
+        <td>${missionCell(r.mission5)}</td>
         <td>${r.totalScore || 0}</td>
         <td>${((r.totalTimeMs || 0) / 1000).toFixed(1)}</td>
         <td>${completedAt}</td>
@@ -947,7 +952,7 @@ function csvCell(v) {
 document.getElementById("btnExportCsv").addEventListener("click", () => {
   const header = [
     "행사", "닉네임", "인증코드", "M1점수", "M1시간ms", "M2점수", "M2시간ms",
-    "M3점수", "M3시간ms", "M4점수", "M4시간ms", "총점", "총시간ms", "완료시각", "기념품지급",
+    "M3점수", "M3시간ms", "M4점수", "M4시간ms", "M5점수", "M5시간ms", "총점", "총시간ms", "완료시각", "기념품지급",
   ];
   const lines = [header.join(",")];
   // 화면에서 선택한 행사 범위만 내보낸다
@@ -965,6 +970,8 @@ document.getElementById("btnExportCsv").addEventListener("click", () => {
       r.mission3 ? r.mission3.timeMs : "",
       r.mission4 ? r.mission4.score : "",
       r.mission4 ? r.mission4.timeMs : "",
+      r.mission5 ? r.mission5.score : "",
+      r.mission5 ? r.mission5.timeMs : "",
       r.totalScore || 0,
       r.totalTimeMs || 0,
       completedAt,

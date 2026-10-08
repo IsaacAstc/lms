@@ -1,5 +1,8 @@
 import { firebaseConfig, setupAppCheck } from "./firebase-config.js";
 import { startMission1, startMission2, startMission3, startMission4, setMissionConfig } from "./missions.js";
+import { startMission5 } from "./mission5.js";
+import { DEFAULT_MISSION_CONFIG } from "./mission-config.js";
+let missionConfig = DEFAULT_MISSION_CONFIG;
 import { MISSION_SETTINGS_PATH, mergeMissionConfig } from "./mission-config.js";
 import {
   EVENT_PARAM,
@@ -175,6 +178,7 @@ async function getOrCreateSession(nickname) {
     mission2: null,
     mission3: null,
     mission4: null,
+    mission5: null,
     totalScore: 0,
     totalTimeMs: 0,
     completedAt: null,
@@ -202,7 +206,7 @@ function activeMissionKeys() {
 
 function renderMenu() {
   const order = missionNumbers();
-  [1, 2, 3, 4].forEach((n) => {
+  [1, 2, 3, 4, 5].forEach((n) => {
     const card = document.getElementById("card-" + n);
     const scoreEl = document.getElementById("score-" + n);
     const light = document.querySelector(`.runway-progress .light[data-m="${n}"]`);
@@ -362,7 +366,7 @@ function runCountdown(onDone) {
 // 이벤트 바인딩
 // ---------------------------------------------------------------------
 // 미션 카드 → 사전 안내화면으로 이동
-[1, 2, 3, 4].forEach((n) => {
+[1, 2, 3, 4, 5].forEach((n) => {
   document.getElementById("card-" + n).addEventListener("click", () => {
     const key = "mission" + n;
     if (!state.data) return;
@@ -384,6 +388,11 @@ function launchMission(n) {
       if (n === 1) startMission1(onComplete);
       if (n === 2) startMission2(onComplete);
     });
+  } else if (n === 5) {
+    runCountdown(() => {
+      showScreen("screen-m5");
+      startMission5(onComplete, missionConfig.mission5);
+    });
   } else if (n === 4) {
     showScreen("screen-m4");
     // 같은 행사 참가자는 모두 같은 판(행사 ID로 판을 고정)
@@ -398,6 +407,7 @@ document.getElementById("btnStartM1").addEventListener("click", () => launchMiss
 document.getElementById("btnStartM2").addEventListener("click", () => launchMission(2));
 document.getElementById("btnStartM3").addEventListener("click", () => launchMission(3));
 document.getElementById("btnStartM4").addEventListener("click", () => launchMission(4));
+document.getElementById("btnStartM5").addEventListener("click", () => launchMission(5));
 
 document.getElementById("btnStart").addEventListener("click", async () => {
   const input = document.getElementById("nicknameInput");
@@ -633,12 +643,13 @@ async function loadMissionConfig() {
   }
   const cfg = mergeMissionConfig(saved);
   setMissionConfig(cfg); // 게임 로직(missions.js)에 반영
+  missionConfig = cfg;   // 미션5(mission5.js)는 설정을 직접 넘긴다
   applyMissionConfigToUI(cfg);
 }
 
 // 미션 카드·사전 안내 화면의 문구를 설정값으로 갱신
 function applyMissionConfigToUI(cfg) {
-  [1, 2, 3, 4].forEach((n) => {
+  [1, 2, 3, 4, 5].forEach((n) => {
     const m = cfg["mission" + n];
     if (!m) return;
     const set = (id, value, html = false) => {
