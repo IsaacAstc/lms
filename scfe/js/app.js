@@ -749,6 +749,15 @@ function refreshStartAvailability() {
 
 // 행사 이름/일정 표시 + 참가 가능 여부 반영
 function applyEventToUI() {
+  // 안내 문구의 미션 수는 이 행사의 미션 구성을 따른다.
+  const cnt = document.getElementById("missionCountText");
+  if (cnt) cnt.textContent = `${missionNumbers().length}가지`;
+  // 행사 설정에서 켜면 첫 화면 제목을 행사명으로.
+  const titleEl = document.getElementById("homeTitle");
+  if (titleEl) {
+    titleEl.textContent = state.event && state.event.titleIsEventName && state.event.name
+      ? state.event.name : "항공보안 히어로 미션";
+  }
   const nameEl = document.getElementById("eventName");
   if (nameEl) {
     if (state.event) {

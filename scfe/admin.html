@@ -59,23 +59,7 @@
       <button class="btn btn-ghost" id="btnGenBaseQr" style="width:auto;padding:6px 12px;font-size:12px;margin:8px 0 0">기본 주소 QR 보기</button>
     </p>
   </details>
-  <div class="table-wrap">
-    <table class="participants events-table">
-      <thead>
-        <tr>
-          <th>행사명</th>
-          <th>시작</th>
-          <th>종료</th>
-          <th>진행중 노출</th>
-          <th>미션 구성</th>
-          <th>인증서 문구</th>
-          <th>참가자</th>
-          <th>관리</th>
-        </tr>
-      </thead>
-      <tbody id="eventsBody"></tbody>
-    </table>
-  </div>
+  <div id="eventsBody" class="ev-cards"></div>
   <div class="toolbar" style="margin-top:12px">
     <input type="text" id="newEventName" placeholder="새 행사명 (예: 2026 항공보안의 날)" />
     <input type="datetime-local" id="newEventStart" title="시작 일시(선택)" />
