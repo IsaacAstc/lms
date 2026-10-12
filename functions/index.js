@@ -390,6 +390,11 @@ exports.rejectApplication = onCall(
     if (app.status !== "active") throw new HttpsError("failed-precondition", "이미 취소·반려된 접수입니다.");
 
     const applicantEmail = app.email || "";
+    // 통지 메일에 넣을 접수 정보(공문 대조용)
+    const cancelled = (app.cancelLog || []).reduce((n, x) => n + (x.count || 0), 0);
+    const appliedAt = app.createdAt?.toDate
+      ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" }).format(app.createdAt.toDate())
+      : "";
 
     // 잔여석 복구 + 상태를 'rejected'로 (이후 신청자가 접수번호로 취소해도 이중 차감되지 않음).
     await db.runTransaction(async (tx) => {
@@ -424,9 +429,17 @@ exports.rejectApplication = onCall(
         from: `"교육신청 접수" <${MAIL_USER.value()}>`,
         to: applyTo,
         cc: applicantEmail || undefined,
-        subject: `[교육신청 반려] ${app.org ? `${headerSafe(app.org)} - ` : ""}${app.courseName || ""} ${app.count}명`,
+        subject: `[교육신청 반려] ${app.org ? `${headerSafe(app.org)} - ` : ""}${app.courseName || ""} ${app.count}명`
+          + `${app.code ? ` (접수번호 ${app.code})` : ""}`,
         text: [
-          `과정: ${app.courseName || ""}`, `신청 인원: ${app.count}명`, "",
+          "[접수 정보]",
+          ...(app.org ? [`신청기관: ${app.org}`] : []),
+          `과정: ${app.courseName || ""}`,
+          `신청 인원: ${app.count}명${cancelled ? ` (일부 취소 ${cancelled}명 반영 후)` : ""}`,
+          ...(app.code ? [`접수번호: ${app.code}`] : []),
+          ...(appliedAt ? [`접수일시: ${appliedAt}`] : []),
+          ...(app.groupId ? [`묶음 신청: ${app.groupId} (${app.groupSize || "?"}개 과정 중 이 과정만 반려 — 나머지 과정 접수는 유효)`] : []),
+          "",
           "아래 사유로 접수가 반려되었습니다. 보완 후 다시 신청해 주세요.", "",
           `[반려 사유] ${reason}`, "",
           "※ 반려에 따라 잔여석은 복구되었습니다.",
