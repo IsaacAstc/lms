@@ -388,6 +388,8 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
 .board-table td.board-actions { display: table-cell; margin: 0; white-space: nowrap; text-align: right; }
 .board-table td.board-actions .board-apply-btn { padding: 0.35rem 0.7rem; font-size: 0.82rem; }
 .board-table td.board-actions .board-apply-btn + .board-apply-btn { margin-left: 0.3rem; }
+.board-table td.board-actions .board-pick { padding: 0.35rem 0.7rem; font-size: 0.82rem; margin-right: 0.3rem; }
+.board-table tr.picked, .board-table tbody tr.picked:hover { background: #eef5ff; }
 .board-badge { background: var(--primary); color: #fff; border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.75rem; white-space: nowrap; }
 /* 예정(계획) 차수 표기 — 과정명 앞에 붙는다. */
 .board-planned { color: var(--muted); font-weight: 600; }
@@ -421,6 +423,8 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
   .board-table td.board-actions .board-apply-btn { flex: 1; padding: 0.45rem 0.6rem; font-size: 0.9rem; }
   .board-table td.board-actions .board-apply-btn.ghost { flex: 0 0 auto; }
   .board-table td.board-actions .board-apply-btn + .board-apply-btn { margin-left: 0; }
+  .board-table td.board-actions .board-pick { flex: 1; padding: 0.45rem 0.6rem; font-size: 0.9rem; margin-right: 0; }
+  .board-table tr.picked { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
 }
 .board-apply { margin-top: 1.5rem; }
 
@@ -438,7 +442,35 @@ button.chip-move:hover, button.sec-move:hover, button.xc-move:hover { color: var
 }
 .board-apply-btn.ghost { background: transparent; color: var(--primary); border: 1px solid var(--primary); flex: 0 0 auto; }
 .board-apply-btn[disabled] { background: #d6d6d6; color: #6b6b6b; cursor: default; }
-.apply-dialog { border: none; border-radius: 12px; padding: 0; max-width: 26rem; width: calc(100vw - 2rem); }
+/* 묶음 신청: 담기 버튼·하단 고정 바 */
+.board-pick {
+  border: 1px solid var(--primary); border-radius: 6px; background: #fff; color: var(--primary);
+  font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.board-pick.on { background: var(--primary); color: #fff; }
+.board-cart {
+  position: fixed; left: 50%; bottom: 0.8rem; transform: translateX(-50%); z-index: 20;
+  display: flex; align-items: center; gap: 0.6rem; width: max-content; max-width: calc(100vw - 2rem);
+  background: #1f2a44; color: #fff; border-radius: 999px; padding: 0.5rem 0.6rem 0.5rem 1.1rem;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+}
+.board-cart[hidden] { display: none; }
+.board-cart button { border: none; border-radius: 999px; padding: 0.5rem 1rem; font-weight: 700; cursor: pointer; background: #fff; color: var(--primary); }
+.board-cart button.ghost { background: transparent; color: #cdd6e6; padding: 0.5rem 0.6rem; }
+body.has-cart .board-main { padding-bottom: 5rem; }
+.apply-items { display: flex; flex-direction: column; gap: 0.4rem; border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.7rem; background: #f7faff; }
+.apply-items[hidden] { display: none; }
+.apply-items-head { font-size: 0.85rem; color: var(--muted); }
+.apply-item { display: flex; align-items: center; gap: 0.5rem; }
+.apply-item-name { flex: 1; min-width: 0; font-weight: 700; color: var(--primary); font-size: 0.9rem; }
+.apply-item-name small { display: block; color: var(--muted); font-weight: 400; }
+.apply-item select { flex: 0 0 auto; }
+.apply-item-del { border: none; background: transparent; color: var(--muted); font-size: 1rem; cursor: pointer; padding: 0.2rem 0.4rem; }
+.apply-items-total { text-align: right; font-size: 0.9rem; }
+.apply-receipts { width: 100%; border-collapse: collapse; margin: 0.4rem 0; font-size: 0.85rem; }
+.apply-receipts td { border-bottom: 1px solid var(--border); padding: 0.25rem 0.3rem; }
+.apply-receipts td:nth-child(2) { white-space: nowrap; text-align: right; }
+.apply-dialog { border: none; border-radius: 12px; padding: 0; max-width: 26rem; width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); overflow: auto; }
 .apply-dialog::backdrop { background: rgba(0,0,0,0.45); }
 .apply-dialog form { padding: 1.2rem 1.3rem; display: flex; flex-direction: column; gap: 0.7rem; }
 .apply-dialog h2 { margin: 0; }

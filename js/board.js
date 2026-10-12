@@ -59,6 +59,7 @@ function inRange(c, from, to) {
 }
 
 function render() {
+  syncCart();
   const from = document.getElementById("board-from").value;
   const to = document.getElementById("board-to").value;
   const note = document.getElementById("board-filter-note");
@@ -79,6 +80,7 @@ function render() {
   note.textContent = ranged
     ? `${dot(from) || "처음"} - ${dot(to) || "끝"}${isDefault ? " (기본: 다음 달 말일까지)" : ""} · ${list.length}건`
     : `진행 예정·진행 중 · ${list.length}건`;
+  if (applyEnabled) note.textContent += " · 여러 과정은 '담기'로 골라 한 번에 신청할 수 있습니다";
 
   if (!list.length) {
     root.innerHTML = `<p class="empty">${ranged ? "해당 기간에 교육 과정이 없습니다." : "현재 안내 중인 교육 과정이 없습니다."}</p>`;
@@ -107,7 +109,7 @@ function row(c) {
   const period = c.startDate ? `${esc(dot(c.startDate))}${c.endDate && c.endDate !== c.startDate ? " - " + esc(dot(c.endDate)) : ""}` : "-";
   // data-label: 좁은 화면에서 카드로 바뀔 때 각 칸 앞에 붙는 항목명.
   return `
-    <tr class="${full ? "full" : ""}">
+    <tr class="${full ? "full" : ""}${cart.has(c.id) ? " picked" : ""}">
       <td class="bt-type" data-label="유형"><span class="board-badge">${esc(c.courseType || "과정")}</span></td>
       <td class="bt-name" data-label="과정명">${c.planned ? `<span class="board-planned">(예정)</span> ` : ""}${esc(c.name || "")}${c.round ? ` <small>${esc(String(c.round))}차수</small>` : ""}</td>
       <td class="bt-period" data-label="교육기간">${period}</td>
@@ -121,35 +123,74 @@ function row(c) {
       ${applyEnabled ? `<td class="board-actions no-print">
         ${closed
           ? `<button type="button" class="board-apply-btn" disabled title="교육 시작일이 지나 접수가 마감되었습니다">접수 마감</button>`
-          : (!full ? `<button type="button" class="board-apply-btn" data-id="${esc(c.id)}" data-kind="apply">신청</button>` : "")}
+          : (!full ? `<button type="button" class="board-pick${cart.has(c.id) ? " on" : ""}" data-id="${esc(c.id)}" aria-pressed="${cart.has(c.id)}">${cart.has(c.id) ? "✓ 담음" : "+ 담기"}</button>` : "")}
         <button type="button" class="board-apply-btn ghost" data-id="${esc(c.id)}" data-kind="cancel">신청 취소</button>
       </td>` : ""}
     </tr>`;
 }
 
+// ── 묶음 신청: 과정을 담아 한 번에 신청 ──
+const MAX_BUNDLE = 10;
+const cart = new Set(); // 담은 과정 id(화면을 다시 그려도 유지)
+
+const remainOf = (c) => (c.remaining != null ? c.remaining : Math.max(0, (c.capacity || 0) - (c.appliedCount || 0)));
+const courseLabel = (c) =>
+  `${c.name || ""}${c.round ? ` ${c.round}차수` : ""} · ${dot(c.startDate || "")}${c.endDate && c.endDate !== c.startDate ? " - " + dot(c.endDate) : ""}`;
+
+// 담을 수 없게 된 과정(마감·삭제)은 빼고 하단 바를 갱신한다.
+function syncCart() {
+  for (const id of [...cart]) {
+    const c = items.find((x) => x.id === id);
+    const closed = c && c.startDate && c.startDate < todayStr();
+    const full = c && (c.capacity || 0) > 0 && remainOf(c) <= 0;
+    if (!c || closed || full) cart.delete(id);
+  }
+  const bar = document.getElementById("board-cart");
+  bar.hidden = !applyEnabled || cart.size === 0;
+  const total = [...cart].length;
+  document.getElementById("board-cart-text").innerHTML = `선택한 과정 <b>${total}</b>개`;
+  document.body.classList.toggle("has-cart", !bar.hidden);
+}
+
+function togglePick(id) {
+  if (cart.has(id)) cart.delete(id);
+  else {
+    if (cart.size >= MAX_BUNDLE) { alert(`한 번에 ${MAX_BUNDLE}개 과정까지 신청할 수 있습니다.`); return; }
+    cart.add(id);
+  }
+  render();
+}
+
 // ── 온라인 신청/취소 양식 ──
 const dlg = document.getElementById("apply-dialog");
-let current = null; // { id, kind, course }
+let current = null; // { kind, id?(취소), ids?(신청) }
 
-function openDialog(id, kind) {
-  const c = items.find((x) => x.id === id);
-  if (!c) return;
-  current = { id, kind, course: c };
-  const apply = kind === "apply";
-  document.getElementById("apply-title").textContent = apply ? "교육 신청" : "신청 취소";
-  document.getElementById("apply-course").textContent =
-    `${c.name || ""}${c.round ? ` ${c.round}차수` : ""} · ${dot(c.startDate || "")}${c.endDate && c.endDate !== c.startDate ? " - " + dot(c.endDate) : ""}`;
-  document.getElementById("apply-fields-apply").hidden = !apply;
-  document.getElementById("apply-fields-cancel").hidden = apply;
-  if (apply) {
-    const remaining = c.remaining != null ? c.remaining : Math.max(0, (c.capacity || 0) - (c.appliedCount || 0));
-    const maxN = Math.max(1, Math.min(20, remaining || 20));
-    document.getElementById("apply-count").innerHTML =
-      Array.from({ length: maxN }, (_, i) => `<option value="${i + 1}">${i + 1}명</option>`).join("");
-  }
+function countOptions(c, sel) {
+  const maxN = Math.max(1, Math.min(20, remainOf(c) || 20));
+  return Array.from({ length: maxN }, (_, i) =>
+    `<option value="${i + 1}"${i + 1 === sel ? " selected" : ""}>${i + 1}명</option>`).join("");
+}
+
+// 신청 창의 과정 목록(과정별 인원·빼기)
+function renderApplyItems() {
+  const box = document.getElementById("apply-items");
+  const prev = {};
+  box.querySelectorAll("select[data-id]").forEach((s) => { prev[s.dataset.id] = Number(s.value); });
+  const list = current.ids.map((id) => items.find((x) => x.id === id)).filter(Boolean);
+  box.innerHTML = `<div class="apply-items-head">신청 과정 <b>${list.length}</b>개${list.length > 1 ? " — 공문·신청양식은 아래에 한 번만 첨부하세요" : ""}</div>`
+    + list.map((c) => `
+      <div class="apply-item">
+        <div class="apply-item-name">${esc(courseLabel(c))}<small>잔여 ${(c.capacity || 0) > 0 ? remainOf(c) + "석" : "-"}</small></div>
+        <select data-id="${esc(c.id)}" aria-label="신청 인원">${countOptions(c, prev[c.id] || 1)}</select>
+        ${list.length > 1 ? `<button type="button" class="apply-item-del" data-id="${esc(c.id)}" aria-label="이 과정 빼기">✕</button>` : ""}
+      </div>`).join("");
+  const total = [...box.querySelectorAll("select[data-id]")].reduce((n, s) => n + Number(s.value), 0);
+  box.insertAdjacentHTML("beforeend", `<div class="apply-items-total">총 <b id="apply-total">${total}</b>명</div>`);
+}
+
+function resetForm() {
   document.getElementById("apply-file").value = "";
   document.getElementById("apply-form-file").value = "";
-  document.getElementById("apply-form-row").hidden = !apply; // 신청양식은 신청 시에만(취소는 불필요)
   document.getElementById("apply-extra-files").innerHTML = "";
   document.getElementById("apply-receipt").value = "";
   document.getElementById("apply-cancel-count").value = "";
@@ -160,6 +201,36 @@ function openDialog(id, kind) {
   const sendBtn = document.getElementById("apply-send");
   sendBtn.disabled = false;
   sendBtn.hidden = false;
+}
+
+function openApply() {
+  if (!cart.size) return;
+  current = { kind: "apply", ids: [...cart] };
+  document.getElementById("apply-title").textContent = cart.size > 1 ? `교육 신청 (${cart.size}개 과정)` : "교육 신청";
+  document.getElementById("apply-course").hidden = true;
+  document.getElementById("apply-items").hidden = false;
+  document.getElementById("apply-fields-cancel").hidden = true;
+  document.getElementById("apply-form-row").hidden = false;
+  document.getElementById("apply-file-label").textContent = cart.size > 1 ? "공문 첨부 (전체 과정 1건)" : "공문 첨부";
+  document.getElementById("apply-items").innerHTML = "";
+  renderApplyItems();
+  resetForm();
+  dlg.showModal();
+}
+
+function openCancel(id) {
+  const c = items.find((x) => x.id === id);
+  if (!c) return;
+  current = { kind: "cancel", id };
+  document.getElementById("apply-title").textContent = "신청 취소";
+  const p = document.getElementById("apply-course");
+  p.hidden = false;
+  p.textContent = courseLabel(c);
+  document.getElementById("apply-items").hidden = true;
+  document.getElementById("apply-fields-cancel").hidden = false;
+  document.getElementById("apply-form-row").hidden = true; // 신청양식은 신청 시에만(취소는 불필요)
+  document.getElementById("apply-file-label").textContent = "공문 첨부";
+  resetForm();
   dlg.showModal();
 }
 
@@ -184,14 +255,16 @@ async function send() {
   const payload = {
     kind: current.kind,
     org,
-    courseId: current.id,
     email,
     title: document.getElementById("apply-subject").value.trim(),
     body: document.getElementById("apply-body").value.trim(),
   };
   if (current.kind === "apply") {
-    payload.count = Number(document.getElementById("apply-count").value);
+    payload.items = [...document.querySelectorAll("#apply-items select[data-id]")]
+      .map((sel) => ({ courseId: sel.dataset.id, count: Number(sel.value) }));
+    if (!payload.items.length) { status.textContent = "신청할 과정을 담아 주세요."; return; }
   } else {
+    payload.courseId = current.id;
     payload.receiptCode = document.getElementById("apply-receipt").value.trim();
     if (!payload.receiptCode) { status.textContent = "접수번호를 입력하세요."; return; }
     // 취소 인원: 비우면 전체 취소(서버가 남은 인원 전체로 처리).
@@ -235,8 +308,16 @@ async function send() {
     const res = await httpsCallable(fns, "submitApplication")(payload);
     const r = res.data || {};
     if (current.kind === "apply") {
-      status.innerHTML = `✅ 접수 완료! <b>접수번호: ${esc(r.receiptCode || "")}</b><br>` +
-        `확인 메일을 발송했습니다. 접수번호는 취소 시 필요하니 보관하세요.`;
+      const rs = r.receipts || [{ courseName: r.courseName, count: 0, receiptCode: r.receiptCode }];
+      status.innerHTML = rs.length > 1
+        ? `✅ ${rs.length}개 과정 접수 완료! 접수번호는 과정별로 발급됩니다.`
+          + `<table class="apply-receipts"><tbody>${rs.map((x) => `<tr><td>${esc(x.courseName)}</td><td>${x.count}명</td><td><b>${esc(x.receiptCode)}</b></td></tr>`).join("")}</tbody></table>`
+          + `확인 메일에도 같은 내용이 있습니다. 취소는 과정별 접수번호로 합니다.`
+        : `✅ 접수 완료! <b>접수번호: ${esc(rs[0].receiptCode || "")}</b><br>`
+          + `확인 메일을 발송했습니다. 접수번호는 취소 시 필요하니 보관하세요.`;
+      cart.clear();
+      render();
+      document.getElementById("apply-items").querySelectorAll("select,button").forEach((el) => { el.disabled = true; });
     } else {
       const mailNote = r.mailFailed
         ? "(확인 메일 발송은 실패 — 잔여석은 복구됨)"
@@ -256,8 +337,26 @@ async function send() {
 }
 
 root.addEventListener("click", (e) => {
-  const b = e.target.closest(".board-apply-btn");
-  if (b) openDialog(b.dataset.id, b.dataset.kind);
+  const pick = e.target.closest(".board-pick");
+  if (pick) return togglePick(pick.dataset.id);
+  const b = e.target.closest(".board-apply-btn[data-kind=cancel]");
+  if (b) openCancel(b.dataset.id);
+});
+document.getElementById("board-cart-apply").addEventListener("click", openApply);
+document.getElementById("board-cart-clear").addEventListener("click", () => { cart.clear(); render(); });
+document.getElementById("apply-items").addEventListener("change", (e) => {
+  if (!e.target.matches("select[data-id]")) return;
+  const total = [...document.querySelectorAll("#apply-items select[data-id]")].reduce((n, s) => n + Number(s.value), 0);
+  document.getElementById("apply-total").textContent = total;
+});
+document.getElementById("apply-items").addEventListener("click", (e) => {
+  const del = e.target.closest(".apply-item-del");
+  if (!del || !current || current.ids.length <= 1) return;
+  current.ids = current.ids.filter((id) => id !== del.dataset.id);
+  cart.delete(del.dataset.id);
+  document.getElementById("apply-title").textContent = current.ids.length > 1 ? `교육 신청 (${current.ids.length}개 과정)` : "교육 신청";
+  renderApplyItems();
+  render();
 });
 document.getElementById("apply-send").addEventListener("click", send);
 document.getElementById("apply-close").addEventListener("click", () => dlg.close());
