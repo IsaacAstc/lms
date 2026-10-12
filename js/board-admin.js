@@ -196,7 +196,9 @@ async function loadApplications() {
         ? `${a.count || 0}명 <small>(취소 ${cancelled}명)</small>`
         : `${a.count || 0}명`;
       // 접수번호 원문은 이 기능이 들어오기 전 건에는 없다(해시만 저장했다).
-      const code = a.code ? `<code class="receipt-code">${esc(a.code)}</code>` : `<small class="muted">기록 없음</small>`;
+      const code = (a.code ? `<code class="receipt-code">${esc(a.code)}</code>` : `<small class="muted">기록 없음</small>`)
+        // 묶음 신청: 같은 공문으로 함께 접수된 건(묶음 번호 = 첫 과정 접수번호)
+        + (a.groupId ? `<br><small class="muted" title="같은 공문으로 함께 신청된 과정 수">묶음 ${esc(a.groupId)} · ${a.groupSize || "?"}개</small>` : "");
       tr.innerHTML = `<td>${t}</td><td>${code}</td><td>${a.org ? `<b>${esc(a.org)}</b><br>` : ""}${esc(a.courseName || a.courseId)}<br>${via}</td><td>${countCell}</td>
         <td>${label[a.status] || "신청"}${a.rejectReason ? `<br><small>${esc(a.rejectReason)}</small>` : ""}</td>
         <td><input type="text" class="app-memo" maxlength="300" placeholder="메모" value="${esc(a.memo || "")}" style="width:100%;min-width:6rem;box-sizing:border-box"></td>

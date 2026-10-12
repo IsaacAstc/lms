@@ -21,7 +21,8 @@ const MAIL_USER = defineSecret("MAIL_USER");
 const MAIL_PASS = defineSecret("MAIL_PASS");
 
 const MAX_ATTACH_BYTES = 5 * 1024 * 1024; // 첨부 5MB 상한
-const MAX_COUNT = 20;                     // 1회 신청 인원 상한
+const MAX_COUNT = 20;                     // 1회 신청 인원 상한(과정별)
+const MAX_BUNDLE = 10;                    // 묶음 신청 1회 과정 수 상한
 const RATE_LIMIT_PER_HOUR = 10;           // IP당 시간당 요청 상한(남용 방지)
 const NAMED_RATE_LIMIT_PER_HOUR = 300;    // 기명 조사 접수: 기관망 공유 IP를 고려한 별도 상한
 
@@ -114,7 +115,6 @@ exports.submitApplication = onCall(
 
     // ── 입력 검증 ──
     const kind = d.kind === "cancel" ? "cancel" : d.kind === "apply" ? "apply" : bad("요청 종류가 올바르지 않습니다.");
-    const courseId = str(d.courseId, 64, "과정", true);
     const email = str(d.email, 254, "이메일", true);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) bad("이메일 주소 형식이 올바르지 않습니다.");
     const org = str(d.org, 100, "신청기관명", true).replace(/[\r\n"]+/g, " ").trim();
@@ -123,10 +123,24 @@ exports.submitApplication = onCall(
     const body = str(d.body, 5000, "내용", false);
     let count = 0;
     let receiptCode = "";
+    // 신청 과정 목록: 여러 과정을 한 번에(묶음 신청). 예전 형식(courseId+count 하나)도 받는다.
+    let applyItems = [];
     if (kind === "apply") {
-      count = Number(d.count);
-      if (!Number.isInteger(count) || count < 1 || count > MAX_COUNT) bad(`신청 인원은 1~${MAX_COUNT} 사이여야 합니다.`);
+      const raw = Array.isArray(d.items) ? d.items : [{ courseId: d.courseId, count: d.count }];
+      if (!raw.length) bad("신청할 과정을 선택하세요.");
+      if (raw.length > MAX_BUNDLE) bad(`한 번에 ${MAX_BUNDLE}개 과정까지 신청할 수 있습니다.`);
+      const seen = new Set();
+      applyItems = raw.map((it) => {
+        const id = str(it && it.courseId, 64, "과정", true);
+        if (id.startsWith("__")) bad("신청할 수 없는 과정입니다.");
+        if (seen.has(id)) bad("같은 과정이 두 번 들어 있습니다.");
+        seen.add(id);
+        const n = Number(it && it.count);
+        if (!Number.isInteger(n) || n < 1 || n > MAX_COUNT) bad(`신청 인원은 과정별 1~${MAX_COUNT}명이어야 합니다.`);
+        return { courseId: id, count: n };
+      });
     } else {
+      str(d.courseId, 64, "과정", true); // 취소 대조는 접수번호로 하지만 형식은 확인
       receiptCode = str(d.receiptCode, 16, "접수번호", true).toUpperCase().replace(/\s/g, "");
       // 부분 취소: 취소할 인원. 보내지 않으면 전체 취소(기존 동작).
       if (d.cancelCount != null) {
@@ -160,80 +174,105 @@ exports.submitApplication = onCall(
       .split(/[,;\s]+/).filter((a) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a));
     if (!applyTo.length) throw new HttpsError("failed-precondition", "접수 이메일이 설정되지 않았습니다. 관리자에게 문의하세요.");
 
-    const courseRef = db.doc(`courses/${courseId}`);
-    const boardRef = db.doc(`publicBoard/${courseId}`);
-
     if (kind === "apply") {
-      // ── 신청: 잔여석 확인 + 선점(트랜잭션) → 메일 발송 → 실패 시 원복 ──
-      const code = newReceiptCode();
-      const appRef = db.collection("applications").doc();
-      let courseName = "";
+      // ── 신청(묶음 포함): 모든 과정의 잔여석 확인 + 선점을 한 트랜잭션으로 → 메일 → 실패 시 전부 원복 ──
+      // 한 과정이라도 잔여석이 모자라거나 마감이면 전체를 접수하지 않는다(공문 1건과 접수 내용이 어긋나지 않게).
+      const lines = applyItems.map((it) => ({
+        ...it,
+        code: newReceiptCode(),
+        appRef: db.collection("applications").doc(),
+        courseRef: db.doc(`courses/${it.courseId}`),
+        boardRef: db.doc(`publicBoard/${it.courseId}`),
+        courseName: "",
+      }));
+      const bundle = lines.length > 1;
+      const groupId = bundle ? lines[0].code : "";
       await db.runTransaction(async (tx) => {
-        const [cSnap, bSnap] = await Promise.all([tx.get(courseRef), tx.get(boardRef)]);
-        if (!cSnap.exists || !bSnap.exists) throw new HttpsError("not-found", "신청할 수 없는 과정입니다.");
-        const c = cSnap.data();
-        courseName = `${c.name || ""}${c.round ? ` ${c.round}차수` : ""}`;
-        // 신청 마감: 교육 시작일까지. 시작일이 지난 과정은 접수 불가(클라이언트 우회 차단).
-        if (c.startDate && c.startDate < todayKST()) {
-          throw new HttpsError("failed-precondition", "신청이 마감된 과정입니다(교육 시작일 경과).");
-        }
-        const cap = c.capacity || 0;
-        const applied = c.appliedCount || 0;
-        if (cap > 0 && applied + count > cap) {
-          throw new HttpsError("failed-precondition", `잔여석이 부족합니다(잔여 ${Math.max(0, cap - applied)}석).`);
-        }
-        tx.update(courseRef, { appliedCount: applied + count });
-        tx.update(boardRef, {
-          appliedCount: applied + count,
-          remaining: Math.max(0, cap - (applied + count)),
-          updatedAtMs: Date.now(),
+        const snaps = await Promise.all(lines.flatMap((l) => [tx.get(l.courseRef), tx.get(l.boardRef)]));
+        const problems = [];
+        const updates = lines.map((l, i) => {
+          const cSnap = snaps[i * 2];
+          const bSnap = snaps[i * 2 + 1];
+          if (!cSnap.exists || !bSnap.exists) { problems.push("신청할 수 없는 과정이 포함되어 있습니다"); return null; }
+          const c = cSnap.data();
+          l.courseName = `${c.name || ""}${c.round ? ` ${c.round}차수` : ""}`;
+          l.purgeAfter = c.startDate || "";
+          // 신청 마감: 교육 시작일까지. 시작일이 지난 과정은 접수 불가(클라이언트 우회 차단).
+          if (c.startDate && c.startDate < todayKST()) { problems.push(`${l.courseName}: 신청 마감(교육 시작일 경과)`); return null; }
+          const cap = c.capacity || 0;
+          const applied = c.appliedCount || 0;
+          if (cap > 0 && applied + l.count > cap) {
+            problems.push(`${l.courseName}: 잔여 ${Math.max(0, cap - applied)}석`);
+            return null;
+          }
+          return { applied: applied + l.count, cap };
         });
-        // 접수 기록: 접수번호·수치·상태.
-        // email은 '반려 통지' 목적으로만 보관하며, 반려·취소 처리 즉시 삭제하고
-        // 남은 건도 신청 마감일(교육 시작일) 경과 후 자동 삭제한다(purgeAfter).
-        // code는 접수 이력 화면에서 공문과 대조하기 위한 표시용. 취소 대조는
-        // 종전대로 codeHash로 한다. applications는 관리자만 읽을 수 있고,
-        // 접수번호 자체는 개인 식별정보가 아니다.
-        tx.set(appRef, {
-          code, codeHash: sha256(code), courseId, courseName, count, org,
-          status: "active", createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          email, purgeAfter: c.startDate || "",
+        if (problems.length) {
+          throw new HttpsError("failed-precondition",
+            `${bundle ? "다음 과정 때문에 전체 신청이 접수되지 않았습니다 — " : ""}${problems.join(", ")}. `
+            + (bundle ? "해당 과정을 빼거나 인원을 줄여 다시 신청하세요." : "인원을 줄여 다시 신청하세요."));
+        }
+        lines.forEach((l, i) => {
+          const u = updates[i];
+          tx.update(l.courseRef, { appliedCount: u.applied });
+          tx.update(l.boardRef, { appliedCount: u.applied, remaining: Math.max(0, u.cap - u.applied), updatedAtMs: Date.now() });
+          // 접수 기록: 접수번호·수치·상태(과정별 1건 — 취소·반려는 과정별로 한다).
+          // email은 '반려 통지' 목적으로만 보관하며, 반려·취소 처리 즉시 삭제하고
+          // 남은 건도 신청 마감일(교육 시작일) 경과 후 자동 삭제한다(purgeAfter).
+          // code는 접수 이력 화면에서 공문과 대조하기 위한 표시용. 취소 대조는 codeHash로 한다.
+          // groupId: 묶음 신청이면 첫 과정의 접수번호(관리자 화면에서 같은 공문 건을 묶어 보기 위함).
+          tx.set(l.appRef, {
+            code: l.code, codeHash: sha256(l.code), courseId: l.courseId, courseName: l.courseName, count: l.count, org,
+            status: "active", createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            email, purgeAfter: l.purgeAfter,
+            ...(bundle ? { groupId, groupSize: lines.length } : {}),
+          });
         });
       });
 
+      const total = lines.reduce((n, l) => n + l.count, 0);
       try {
         await mailer().sendMail({
           from: `"교육신청 접수" <${MAIL_USER.value()}>`,
           to: applyTo,
           cc: email,
           // 제목(사용자 입력)은 메일 제목에 넣지 않고 본문에만 둔다.
-          subject: `[교육신청] ${org} - ${courseName} ${count}명 (접수번호 ${code})`,
+          subject: bundle
+            ? `[교육신청] ${org} - ${lines[0].courseName} 외 ${lines.length - 1}개 과정 총 ${total}명 (묶음 ${groupId})`
+            : `[교육신청] ${org} - ${lines[0].courseName} ${lines[0].count}명 (접수번호 ${lines[0].code})`,
           text: [
             `신청기관: ${org}`,
-            `과정: ${courseName}`,
-            `신청 인원: ${count}명`, `접수번호: ${code}`,
+            ...(bundle
+              ? [`신청 과정: ${lines.length}개 · 총 ${total}명`, "",
+                ...lines.map((l, i) => `${i + 1}. ${l.courseName} — ${l.count}명 (접수번호 ${l.code})`), ""]
+              : [`과정: ${lines[0].courseName}`, `신청 인원: ${lines[0].count}명`, `접수번호: ${lines[0].code}`]),
             `신청자 이메일: ${email}`, "", ...(title ? [`제목: ${title}`] : []), body || "(내용 없음)", "",
             "※ 이 메일은 공개 현황 보드의 신청 양식에서 자동 발송되었습니다.",
-            "※ 취소는 신청한 페이지의 '신청 취소'에서 접수번호로 가능합니다.",
+            bundle
+              ? "※ 취소는 신청한 페이지의 '신청 취소'에서 과정별 접수번호로 가능합니다."
+              : "※ 취소는 신청한 페이지의 '신청 취소'에서 접수번호로 가능합니다.",
           ].join("\n"),
           attachments,
         });
       } catch (e) {
         console.error("교육 신청 접수 메일 발송 실패:", e?.response || e?.message || e);
-        // 메일 실패 → 선점한 잔여석 원복 + 접수 문서 제거.
+        // 메일 실패 → 선점한 잔여석 전부 원복 + 접수 문서 제거.
         await db.runTransaction(async (tx) => {
-          const cSnap = await tx.get(courseRef);
-          if (cSnap.exists) {
-            const c = cSnap.data();
-            const applied = Math.max(0, (c.appliedCount || 0) - count);
-            tx.update(courseRef, { appliedCount: applied });
-            tx.update(boardRef, { appliedCount: applied, remaining: Math.max(0, (c.capacity || 0) - applied), updatedAtMs: Date.now() });
-          }
-          tx.delete(appRef);
+          const cSnaps = await Promise.all(lines.map((l) => tx.get(l.courseRef)));
+          lines.forEach((l, i) => {
+            if (cSnaps[i].exists) {
+              const c = cSnaps[i].data();
+              const applied = Math.max(0, (c.appliedCount || 0) - l.count);
+              tx.update(l.courseRef, { appliedCount: applied });
+              tx.update(l.boardRef, { appliedCount: applied, remaining: Math.max(0, (c.capacity || 0) - applied), updatedAtMs: Date.now() });
+            }
+            tx.delete(l.appRef);
+          });
         }).catch(() => {});
         throw new HttpsError("internal", "이메일 발송에 실패했습니다. 잠시 후 다시 시도하세요.");
       }
-      return { ok: true, receiptCode: code, courseName };
+      const receipts = lines.map((l) => ({ courseId: l.courseId, courseName: l.courseName, count: l.count, receiptCode: l.code }));
+      return { ok: true, receipts, groupId, receiptCode: receipts[0].receiptCode, courseName: receipts[0].courseName };
     }
 
     // ── 취소: 접수번호 대조 → 잔여석 복구 → 메일 통지 ──

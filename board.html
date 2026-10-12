@@ -31,16 +31,13 @@
         <form id="apply-form" method="dialog">
           <h2 id="apply-title">교육 신청</h2>
           <p id="apply-course" class="apply-course"></p>
+          <!-- 묶음 신청: 담은 과정별 인원 -->
+          <div id="apply-items" class="apply-items" hidden></div>
           <div class="apply-cols">
             <div class="apply-col">
             <label>신청기관명 <small>(필수)</small>
               <input type="text" id="apply-org" maxlength="100" required placeholder="예: ○○공항 보안팀, ○○항공 보안부" />
             </label>
-            <div id="apply-fields-apply">
-              <label>신청 인원
-                <select id="apply-count"></select>
-              </label>
-            </div>
             <div id="apply-fields-cancel" hidden>
               <label>접수번호 <small>(신청 시 발급된 8자리)</small>
                 <input type="text" id="apply-receipt" maxlength="12" autocomplete="off" placeholder="예: A2B3C4D5" />
@@ -55,7 +52,7 @@
             </label>
             </div>
             <div class="apply-col">
-            <label>공문 첨부 <small>(필수 · 파일당 5MB 이하)</small>
+            <label><span id="apply-file-label">공문 첨부</span> <small>(필수 · 파일당 5MB 이하)</small>
               <input type="file" id="apply-file" required />
             </label>
             <div id="apply-form-row" hidden>
@@ -82,6 +79,13 @@
           </div>
         </form>
       </dialog>
+
+      <!-- 담은 과정(묶음 신청) 하단 고정 바 -->
+      <div id="board-cart" class="board-cart no-print" hidden>
+        <span id="board-cart-text"></span>
+        <button type="button" id="board-cart-clear" class="ghost">선택 해제</button>
+        <button type="button" id="board-cart-apply">신청하기</button>
+      </div>
     </main>
     <script type="module" src="js/board.js"></script>
   </body>
