@@ -59,11 +59,14 @@ function showScreen(id) {
   document.getElementById(id).classList.add("active");
 }
 
-function toast(msg) {
+let toastTimer = null;
+function toast(msg, ms = 2000, kind = "") {
   const t = document.getElementById("toast");
   t.textContent = msg;
+  t.classList.toggle("ok", kind === "ok");
   t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 2000);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), ms);
 }
 
 // ---------------------------------------------------------------------
@@ -505,7 +508,7 @@ async function renderCertFile() {
 function prepareCertImage() {
   if (!btnCertImage) return;
   certFile = null;
-  document.getElementById("certHelp").style.display = canShareFiles() ? "block" : "none";
+  document.getElementById("certHelp").style.display = isIOS() && !isInApp() && canShareFiles() ? "block" : "none";
   certRenderPromise = renderCertFile()
     .then((f) => { certFile = f; return f; })
     .catch((e) => { console.error("인증서 이미지 생성 실패", e); return null; });
@@ -527,33 +530,19 @@ function refreshCertButtons() {
   certToggleBtns.forEach((b) => { if (b) b.style.display = show ? "" : "none"; });
 }
 
-// 저장/공유 실행(완료 화면·순위표·목록 공용)
-async function shareCertImage() {
-  const file = await getCertFile();
-  if (!file) {
-    toast("인증서 이미지를 준비 중이에요. 잠시 후 다시 눌러 주세요.");
-    return;
-  }
-  // 모바일: 공유시트 → '사진에 저장'
-  if (canShareFiles() && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({
-        files: [file],
-        title: "항공보안 히어로 인증서",
-        text: "항공보안 히어로 미션을 완료했어요! 🛡️",
-      });
-    } catch (e) {
-      if (e && e.name === "NotAllowedError") {
-        // 준비 전 급히 탭해 iOS 권한이 만료된 경우 — 이미지는 이제 준비됨
-        toast("한 번 더 눌러 저장·공유하세요.");
-      } else if (!e || e.name !== "AbortError") {
-        console.error(e);
-        toast("저장/공유에 실패했어요. 다시 시도하거나 화면을 캡처해 주세요.");
-      }
-    }
-    return;
-  }
-  // 데스크톱 등 공유 미지원 → 다운로드
+// 기기별 저장 경로
+//   iOS 브라우저     : 공유시트 > '이미지 저장'(사진 앱으로 가는 유일한 웹 경로)
+//   안드로이드·PC    : 다운로드(안드로이드 공유시트에는 '갤러리에 저장'이 없다) → 갤러리 '다운로드' 앨범
+//   앱 내 브라우저   : 카카오톡·네이버·인스타 등 웹뷰는 다운로드·파일 공유가 막혀 있어
+//                     이미지를 크게 띄우고 '길게 눌러 저장'으로 안내
+const UA = navigator.userAgent || "";
+const isIOS = () => /iPad|iPhone|iPod/.test(UA) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isInApp = () => /KAKAOTALK|NAVER\(|NAVER\/|Instagram|FBAN|FBAV|Line\/|DaumApps|everytimeApp|; wv\)/i.test(UA);
+const isAndroid = () => /Android/i.test(UA);
+
+function savedNotice(msg) { toast(msg, 3500, "ok"); }
+
+function downloadFile(file) {
   const url = URL.createObjectURL(file);
   const a = document.createElement("a");
   a.href = url;
@@ -561,12 +550,88 @@ async function shareCertImage() {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-[btnCertImage, ...certToggleBtns].forEach((b) => {
-  if (b) b.addEventListener("click", shareCertImage);
+// 길게 눌러 저장 안내(앱 내 브라우저·실패 시 폴백). 이미지는 data URL로 띄워 웹뷰에서도 보이게 한다.
+function showLongPressSave(file) {
+  const sheet = document.getElementById("certSheet");
+  const img = document.getElementById("certSheetImg");
+  const r = new FileReader();
+  r.onload = () => { img.src = r.result; };
+  r.readAsDataURL(file);
+  const ext = document.getElementById("certSheetExternal");
+  // 카카오톡 안드로이드는 외부 브라우저로 다시 열 수 있다(그러면 일반 다운로드 가능).
+  ext.hidden = !(/KAKAOTALK/i.test(UA) && isAndroid());
+  ext.href = "kakaotalk://web/openExternal?url=" + encodeURIComponent(location.href);
+  sheet.hidden = false;
+}
+document.getElementById("certSheetClose").addEventListener("click", () => {
+  document.getElementById("certSheet").hidden = true;
 });
+
+async function shareFile(file) {
+  try {
+    await navigator.share({
+      files: [file],
+      title: "항공보안 히어로 인증서",
+      text: "항공보안 히어로 미션을 완료했어요! 🛡️",
+    });
+    savedNotice(isIOS() ? "✅ 완료! '이미지 저장'을 골랐다면 사진 앱에 있어요." : "✅ 공유를 마쳤어요.");
+  } catch (e) {
+    if (e && e.name === "NotAllowedError") {
+      // 준비 전 급히 탭해 iOS 권한이 만료된 경우 — 이미지는 이제 준비됨
+      toast("한 번 더 눌러 저장·공유하세요.");
+    } else if (e && e.name === "AbortError") {
+      toast("저장·공유를 취소했어요.");
+    } else {
+      console.error(e);
+      showLongPressSave(file);
+    }
+  }
+}
+
+// 저장 버튼(완료 화면·순위표·목록 공용)
+async function saveCertImage() {
+  const file = await getCertFile();
+  if (!file) {
+    toast("인증서 이미지를 준비 중이에요. 잠시 후 다시 눌러 주세요.");
+    return;
+  }
+  if (isInApp()) return showLongPressSave(file);
+  if (isIOS() && canShareFiles() && navigator.canShare({ files: [file] })) return shareFile(file);
+  if (isIOS()) return showLongPressSave(file); // 공유 미지원 구형 iOS
+  try {
+    downloadFile(file);
+    savedNotice(isAndroid()
+      ? "✅ 저장했어요. 갤러리의 '다운로드' 앨범(또는 내 파일 > 다운로드)에서 확인하세요."
+      : "✅ 저장했어요. 다운로드 폴더에서 확인하세요.");
+  } catch (e) {
+    console.error(e);
+    showLongPressSave(file);
+  }
+}
+
+// 공유 버튼(안드로이드 등 공유시트가 있는 기기): 카카오톡 등 다른 앱으로 보내기
+async function shareCertImage() {
+  const file = await getCertFile();
+  if (!file) return toast("인증서 이미지를 준비 중이에요. 잠시 후 다시 눌러 주세요.");
+  if (canShareFiles() && navigator.canShare({ files: [file] })) return shareFile(file);
+  showLongPressSave(file);
+}
+
+// 버튼 문구·공유 버튼 노출을 기기에 맞춘다
+const SAVE_LABEL = isIOS() && !isInApp() ? "인증서 이미지 저장/공유" : "인증서 이미지 저장";
+[btnCertImage, ...certToggleBtns].forEach((b) => {
+  if (!b) return;
+  b.textContent = SAVE_LABEL;
+  b.addEventListener("click", saveCertImage);
+});
+const btnCertShare = document.getElementById("btnCertShare");
+if (btnCertShare) {
+  btnCertShare.hidden = isIOS() || isInApp() || !canShareFiles();
+  btnCertShare.addEventListener("click", shareCertImage);
+}
 document.getElementById("btnBackFromLeaderboard").addEventListener("click", () => {
   if (state.data) {
     renderMenu();
