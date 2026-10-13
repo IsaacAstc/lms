@@ -48,9 +48,9 @@ export const SEED_TRAVEL_RATES = {
   "울 진": { amount: 199600, manual: false },
 };
 
-// 강사 마스터 (교관pool 51명). [강사명, 소속, 여비기준, 강사유형, 직책, 경력합계]
-const INSTRUCTOR_ROWS = [
-];
+// 강사 마스터: 실명·소속·직책은 공개 저장소에 두지 않는다(CLAUDE.md 4절 #7).
+// 운영 기관은 관리자 화면 '강사 관리'에서 직접 등록·가져오기 한다. 형식: [강사명, 소속, 여비기준, 강사유형, 직책, 경력합계]
+const INSTRUCTOR_ROWS = [];
 
 export const SEED_INSTRUCTORS = INSTRUCTOR_ROWS.map(
   ([name, affiliation, travelBasis, instructorType, position, careerYears]) => ({
