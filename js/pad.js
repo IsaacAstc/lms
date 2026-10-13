@@ -37,21 +37,64 @@ let board = null;
 let posts = [];
 let editingPost = null; // 수정 모드일 때 대상
 
+/* 진행 언어: 보드 설정 lang === "en"(국제과정용 '영문 진행'). 링크의 &en=1 이면 불러오기 전부터 영어. */
+const I18N = {
+  ko: {
+    board: "수업 보드", privacy: "⚠️ 개인을 식별할 수 있는 정보(성명, 소속, 연락처 등)는 기재하지 마십시오.",
+    loading: "보드를 불러오는 중…", write: "＋ 글쓰기", column: "칼럼", title: "제목", body: "내용", optional: "(선택)",
+    nick: "닉네임", nickHint: "(자유 필명 — 실명 금지)", link: "링크", linkHint: "(선택 — 유튜브·자료 URL)",
+    image: "이미지", imageHint: "(선택 — 자동 압축)", color: "카드 색", close: "닫기",
+    badLink: "잘못된 접근입니다. 안내받은 보드 링크(QR)로 접속하세요.", notFound: "보드를 찾을 수 없습니다. 링크를 확인하세요.",
+    archived: "종료(보관)된 보드입니다.", loadFail: "보드를 불러오지 못했습니다.", empty: "아직 게시물이 없습니다. 첫 글을 남겨보세요!",
+    pending: "⏳ 승인 대기 — 본인에게만 보입니다", anon: "익명", edit: "수정", del: "삭제", commentPh: "댓글 입력 후 Enter",
+    delConfirm: "이 게시물을 삭제할까요?", delFail: "삭제하지 못했습니다: ", commentFail: "댓글을 남기지 못했습니다: ",
+    newPost: "게시물 작성", editPost: "게시물 수정", post: "게시", save: "수정 저장",
+    imgBig: "이미지가 너무 큽니다. 다른 이미지를 사용하세요.", imgBad: "이미지를 읽을 수 없습니다.",
+    needTitle: "제목을 입력하세요.", linkHttp: "링크는 http(s)://로 시작해야 합니다.", saving: "저장 중…",
+    edited: "✅ 수정했습니다.", postedMod: "✅ 게시했습니다. 교수자 승인 후 모두에게 공개됩니다.", posted: "✅ 게시했습니다!",
+    saveFail: "저장 실패: ",
+  },
+  en: {
+    board: "Class Board", privacy: "⚠️ Do not include any personally identifiable information (name, organization, contact details, etc.).",
+    loading: "Loading board…", write: "＋ New post", column: "Column", title: "Title", body: "Content", optional: "(optional)",
+    nick: "Nickname", nickHint: "(any pen name — no real names)", link: "Link", linkHint: "(optional — YouTube or resource URL)",
+    image: "Image", imageHint: "(optional — auto-compressed)", color: "Card color", close: "Close",
+    badLink: "Invalid access. Please use the board link (QR) you were given.", notFound: "Board not found. Please check the link.",
+    archived: "This board has been closed.", loadFail: "Could not load the board.", empty: "No posts yet. Be the first to post!",
+    pending: "⏳ Awaiting approval — visible only to you", anon: "Anonymous", edit: "Edit", del: "Delete", commentPh: "Write a comment and press Enter",
+    delConfirm: "Delete this post?", delFail: "Could not delete: ", commentFail: "Could not post the comment: ",
+    newPost: "New post", editPost: "Edit post", post: "Post", save: "Save",
+    imgBig: "The image is too large. Please use another image.", imgBad: "Could not read the image.",
+    needTitle: "Please enter a title.", linkHttp: "Links must start with http(s)://.", saving: "Saving…",
+    edited: "✅ Updated.", postedMod: "✅ Posted. It will be visible to everyone after the instructor approves it.", posted: "✅ Posted!",
+    saveFail: "Save failed: ",
+  },
+};
+let LANG = new URLSearchParams(location.search).get("en") === "1" ? "en" : "ko";
+const t = (k) => I18N[LANG][k] ?? I18N.ko[k] ?? k;
+function applyLang(lang) {
+  LANG = lang === "en" ? "en" : "ko";
+  document.documentElement.lang = LANG;
+  document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
+}
+applyLang(LANG);
+
 function fail(msg) { root.innerHTML = `<p class="empty">${esc(msg)}</p>`; }
 
 if (!boardId) {
-  fail("잘못된 접근입니다. 안내받은 보드 링크(QR)로 접속하세요.");
+  fail(t("badLink"));
 } else {
   onSnapshot(doc(db, "collabBoards", boardId), (snap) => {
-    if (!snap.exists()) return fail("보드를 찾을 수 없습니다. 링크를 확인하세요.");
+    if (!snap.exists()) return fail(t("notFound"));
     board = { id: snap.id, ...snap.data() };
-    $("pad-title").textContent = board.title || "수업 보드";
-    document.title = board.title || "수업 보드";
+    if ((board.lang === "en") !== (LANG === "en")) applyLang(board.lang);
+    $("pad-title").textContent = board.title || t("board");
+    document.title = board.title || t("board");
     $("pad-desc").textContent = board.desc || "";
     $("pad-write-btn").hidden = board.active === false;
-    if (board.active === false) fail("종료(보관)된 보드입니다.");
+    if (board.active === false) fail(t("archived"));
     else render();
-  }, () => fail("보드를 불러오지 못했습니다."));
+  }, () => fail(t("loadFail")));
 
   // 보안규칙상 익명 조회는 공개(approved) 글만 가능 — 본인 승인 대기 글은 로컬 캐시로 표시.
   onSnapshot(query(collection(db, "collabPosts"),
@@ -98,7 +141,7 @@ function render() {
   } else {
     const cls = board.layout === "stream" ? "pad-stream" : "pad-wall";
     root.innerHTML = `<div class="${cls}">${list.map(cardHtml).join("") ||
-      `<p class="empty">아직 게시물이 없습니다. 첫 글을 남겨보세요!</p>`}</div>`;
+      `<p class="empty">${esc(t("empty"))}</p>`}</div>`;
   }
   wireCards();
 }
@@ -123,23 +166,23 @@ function cardHtml(p) {
   const reacted = localStorage.getItem(reactedKey(p.id));
   return `
     <article class="pad-card" data-id="${esc(p.id)}" style="background:${esc(p.color || "#ffffff")}">
-      ${p.approved ? "" : `<div class="pad-pending">⏳ 승인 대기 — 본인에게만 보입니다</div>`}
+      ${p.approved ? "" : `<div class="pad-pending">${esc(t("pending"))}</div>`}
       <h3 class="pad-card-title">${esc(p.title)}</h3>
       ${p.body ? `<p class="pad-card-body">${esc(p.body)}</p>` : ""}
       ${p.imageData ? `<img class="pad-card-img" src="${esc(p.imageData)}" alt="">` : ""}
       ${p.linkUrl ? linkCard(p.linkUrl) : ""}
       <div class="pad-card-foot">
-        <span class="pad-nick">${p.nickname ? esc(p.nickname) : "익명"}</span>
+        <span class="pad-nick">${p.nickname ? esc(p.nickname) : esc(t("anon"))}</span>
         ${rx !== "none" ? `<button type="button" class="pad-react${reacted ? " on" : ""}" ${!p.approved ? "disabled" : ""}>
           ${rx === "vote" ? "👍" : "❤️"} ${p.likes || 0}</button>` : ""}
-        ${mine ? `<button type="button" class="pad-mini pad-edit">수정</button>
-                  <button type="button" class="pad-mini pad-del">삭제</button>` : ""}
+        ${mine ? `<button type="button" class="pad-mini pad-edit">${esc(t("edit"))}</button>
+                  <button type="button" class="pad-mini pad-del">${esc(t("del"))}</button>` : ""}
       </div>
       ${board.comments ? `
         <div class="pad-comments">
-          ${(p.comments || []).map((c) => `<div class="pad-comment"><b>${c.nickname ? esc(c.nickname) : "익명"}</b> ${esc(c.text)}</div>`).join("")}
+          ${(p.comments || []).map((c) => `<div class="pad-comment"><b>${c.nickname ? esc(c.nickname) : esc(t("anon"))}</b> ${esc(c.text)}</div>`).join("")}
           ${p.approved ? `<div class="pad-comment-form">
-            <input type="text" class="pad-comment-input" maxlength="300" placeholder="댓글 입력 후 Enter">
+            <input type="text" class="pad-comment-input" maxlength="300" placeholder="${esc(t("commentPh"))}">
           </div>` : ""}
         </div>` : ""}
     </article>`;
@@ -159,9 +202,9 @@ function wireCards() {
     });
     card.querySelector(".pad-edit")?.addEventListener("click", () => openDialog(p));
     card.querySelector(".pad-del")?.addEventListener("click", async () => {
-      if (!confirm("이 게시물을 삭제할까요?")) return;
+      if (!confirm(t("delConfirm"))) return;
       try { await updateDoc(doc(db, "collabPosts", pid), { deleted: true, deviceKey }); }
-      catch (e) { alert("삭제하지 못했습니다: " + e.message); }
+      catch (e) { alert(t("delFail") + e.message); }
     });
     card.querySelector(".pad-comment-input")?.addEventListener("keydown", async (e) => {
       if (e.key !== "Enter") return;
@@ -173,7 +216,7 @@ function wireCards() {
         await updateDoc(doc(db, "collabPosts", pid), {
           comments: [...(p.comments || []), { text, nickname: nick.slice(0, 20), atMs: Date.now() }],
         });
-      } catch (err) { alert("댓글을 남기지 못했습니다: " + err.message); e.target.disabled = false; }
+      } catch (err) { alert(t("commentFail") + err.message); e.target.disabled = false; }
     });
   });
 }
@@ -195,8 +238,8 @@ const pickedColor = () => $("pd-colors").querySelector(".sel")?.dataset.c || "#f
 function openDialog(post = null) {
   editingPost = post;
   imageData = post?.imageData || "";
-  $("pd-heading").textContent = post ? "게시물 수정" : "게시물 작성";
-  $("pd-save").textContent = post ? "수정 저장" : "게시";
+  $("pd-heading").textContent = post ? t("editPost") : t("newPost");
+  $("pd-save").textContent = post ? t("save") : t("post");
   const colWrap = $("pd-col-wrap");
   if (board.layout === "shelf") {
     colWrap.hidden = false;
@@ -232,24 +275,24 @@ $("pd-image").addEventListener("change", (e) => {
     URL.revokeObjectURL(img.src);
     imageData = cv.toDataURL("image/jpeg", 0.8);
     if (imageData.length > 400000) { imageData = cv.toDataURL("image/jpeg", 0.55); }
-    if (imageData.length > 400000) { imageData = ""; $("pd-status").textContent = "이미지가 너무 큽니다. 다른 이미지를 사용하세요."; return; }
+    if (imageData.length > 400000) { imageData = ""; $("pd-status").textContent = t("imgBig"); return; }
     $("pd-image-prev").innerHTML = `<img src="${imageData}" style="max-height:80px;border-radius:6px;">`;
   };
-  img.onerror = () => { $("pd-status").textContent = "이미지를 읽을 수 없습니다."; };
+  img.onerror = () => { $("pd-status").textContent = t("imgBad"); };
   img.src = URL.createObjectURL(f);
 });
 
 $("pd-save").addEventListener("click", async () => {
   const status = $("pd-status");
   const title = cleanText($("pd-title").value.trim()).slice(0, 100);
-  if (!title) { status.textContent = "제목을 입력하세요."; return; }
+  if (!title) { status.textContent = t("needTitle"); return; }
   const body = cleanText($("pd-body").value.trim()).slice(0, 2000);
   const nickname = board.authorMode === "nickname" ? cleanText($("pd-nick").value.trim()).slice(0, 20) : "";
   if (board.authorMode === "nickname") localStorage.setItem(nickKey, nickname);
   const linkUrl = $("pd-link").value.trim().slice(0, 500);
-  if (linkUrl && !/^https?:\/\//.test(linkUrl)) { status.textContent = "링크는 http(s)://로 시작해야 합니다."; return; }
+  if (linkUrl && !/^https?:\/\//.test(linkUrl)) { status.textContent = t("linkHttp"); return; }
   $("pd-save").disabled = true;
-  status.textContent = "저장 중…";
+  status.textContent = t("saving");
   try {
     if (editingPost) {
       await updateDoc(doc(db, "collabPosts", editingPost.id), {
@@ -267,11 +310,10 @@ $("pd-save").addEventListener("click", async () => {
       const ref = await addDoc(collection(db, "collabPosts"), data);
       if (board.moderated) { saveMine([...loadMine(), { ...data, id: ref.id }]); render(); }
     }
-    status.textContent = editingPost ? "✅ 수정했습니다."
-      : board.moderated ? "✅ 게시했습니다. 교수자 승인 후 모두에게 공개됩니다." : "✅ 게시했습니다!";
+    status.textContent = editingPost ? t("edited") : board.moderated ? t("postedMod") : t("posted");
     setTimeout(() => dlg.close(), 900);
   } catch (e) {
-    status.textContent = "저장 실패: " + (e.message || e);
+    status.textContent = t("saveFail") + (e.message || e);
     $("pd-save").disabled = false;
   }
 });
