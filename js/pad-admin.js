@@ -18,10 +18,11 @@ let pendingUnsub = null;
 const LAYOUTS = { shelf: "셸프(칼럼)", wall: "담벼락", stream: "스트림" };
 const REACTIONS = { like: "좋아요", vote: "투표", none: "없음" };
 
-const padUrl = (id) => {
+// 영문 진행 보드는 &en=1 — 참여 화면이 불러오기 전부터 영어로 표시된다.
+const padUrl = (b) => {
   const base = location.origin + location.pathname.replace(/[^/]*$/, "");
   const oq = orgQuery(false); // "&org=..." or ""
-  return `${base}pad.html?board=${id}${oq}`;
+  return `${base}pad.html?board=${b.id}${oq}${b.lang === "en" ? "&en=1" : ""}`;
 };
 
 export function initPadAdmin() {
@@ -57,6 +58,7 @@ function readForm(form) {
     comments: form.pcomments.checked,
     moderated: form.pmoderated.checked,
     authorMode: form.pauthor.value, // nickname | anon
+    lang: form.plang.checked ? "en" : "ko", // 참여 화면 진행 언어
     active: true,
     updatedAtMs: Date.now(),
   };
@@ -94,6 +96,7 @@ function settingsSummary(b) {
     b.comments ? "댓글" : null,
     b.moderated ? "승인제" : null,
     b.authorMode === "nickname" ? "닉네임" : "익명",
+    b.lang === "en" ? "영문" : null,
   ].filter(Boolean).join(" · ");
 }
 
@@ -112,7 +115,7 @@ function renderList() {
       <td>${escapeHtml(settingsSummary(b))}</td>
       <td>${b.layout === "shelf" ? escapeHtml((b.columns || []).map((c) => c.name).join(", ")) : "-"}</td>
       <td class="actions">
-        <a href="${escapeHtml(padUrl(b.id))}" target="_blank" rel="noopener" class="btn-link">열기</a>
+        <a href="${escapeHtml(padUrl(b))}" target="_blank" rel="noopener" class="btn-link">열기</a>
         <button type="button" class="p-copy">URL 복사</button>
         <button type="button" class="p-qr">QR</button>
       </td>
@@ -127,7 +130,7 @@ function renderList() {
         <button type="button" class="del p-del">삭제</button>
       </td>`;
     tr.querySelector(".p-copy").addEventListener("click", (e) => {
-      navigator.clipboard?.writeText(padUrl(b.id));
+      navigator.clipboard?.writeText(padUrl(b));
       e.target.textContent = "복사됨";
       setTimeout(() => { e.target.textContent = "URL 복사"; }, 1500);
     });
@@ -142,6 +145,7 @@ function renderList() {
       form.pcomments.checked = !!b.comments;
       form.pmoderated.checked = !!b.moderated;
       form.pauthor.value = b.authorMode || "nickname";
+      form.plang.checked = b.lang === "en";
       document.getElementById("pad-cols-wrap").hidden = form.playout.value !== "shelf";
       document.getElementById("pad-submit").textContent = "수정 저장";
       document.getElementById("pad-cancel").hidden = false;
@@ -192,7 +196,7 @@ function loadQrLib() {
 
 async function showQr(b) {
   try { await loadQrLib(); } catch (e) { return alert(e.message); }
-  const url = padUrl(b.id);
+  const url = padUrl(b);
   document.getElementById("pad-qr-title").textContent = b.title || "수업 보드";
   document.getElementById("pad-qr-url").textContent = url;
   const box = document.getElementById("pad-qr-box");
