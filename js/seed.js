@@ -14,6 +14,7 @@ async function isEmpty(name) {
 }
 
 async function seedCollection(name, rows) {
+  if (!rows.length) return `${name}: 저장소에 기본 목록 없음 — 관리 화면에서 직접 등록하세요`;
   if (!(await isEmpty(name))) return `${name}: 이미 데이터가 있어 건너뜀`;
   const batch = writeBatch(db);
   for (const row of rows) batch.set(doc(collection(db, name)), row);
