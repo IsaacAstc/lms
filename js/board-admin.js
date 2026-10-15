@@ -19,6 +19,8 @@ export function initBoardAdmin() {
   document.getElementById("board-url-qr").addEventListener("click", showBoardQr);
   document.getElementById("board-form-save").addEventListener("click", saveApplyForm);
   document.getElementById("board-qr-close").addEventListener("click", () => document.getElementById("board-qr-dialog").close());
+  document.getElementById("manual-save").addEventListener("click", saveManual);
+  document.getElementById("manual-cancel-edit").addEventListener("click", () => resetManual());
   document.addEventListener("tabshown", (e) => { if (e.detail === "board") load(); });
 }
 
@@ -103,6 +105,7 @@ async function load() {
     document.getElementById("board-apply-email").value = a.exists() ? (a.data().email || "") : "";
   } catch { /* */ }
   loadApplications();
+  loadManualCourses();
   // 탭 진입 시 차이만 자동 동기화(변경 없으면 쓰기 없음). CSV 대량등록·시드분 자동 반영.
   // 참관자는 쓰기 권한이 없으므로 건너뛴다(불필요한 권한 오류 방지).
   if (!isObserverMode()) autoSync();
@@ -189,7 +192,9 @@ async function loadApplications() {
       const t = a.createdAt?.toDate ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "short", timeStyle: "short" }).format(a.createdAt.toDate()) : "-";
       const tr = document.createElement("tr");
       // 내부용 신청 페이지는 폐기됐지만, 그 경로로 접수된 과거 기록은 구분해 보여준다.
-      const via = a.channel === "internal" ? `<small>내부 · ${esc(a.orgUnit || "-")}</small>` : `<small>공개</small>`;
+      const via = a.channel === "manual"
+        ? `<small class="manual-tag">수동 · ${esc(a.source || "기타")}${a.docNo ? ` · ${esc(a.docNo)}` : ""}</small>`
+        : a.channel === "internal" ? `<small>내부 · ${esc(a.orgUnit || "-")}</small>` : `<small>공개</small>`;
       // 일부 취소가 있었던 건은 원래 인원과 취소분을 같이 보여준다(공문 대조용).
       const cancelled = (a.cancelLog || []).reduce((n, x) => n + (x.count || 0), 0);
       const countCell = cancelled && a.status === "active"
@@ -200,9 +205,11 @@ async function loadApplications() {
         // 묶음 신청: 같은 공문으로 함께 접수된 건(묶음 번호 = 첫 과정 접수번호)
         + (a.groupId ? `<br><small class="muted" title="같은 공문으로 함께 신청된 과정 수">묶음 ${esc(a.groupId)} · ${a.groupSize || "?"}개</small>` : "");
       tr.innerHTML = `<td>${t}</td><td>${code}</td><td>${a.org ? `<b>${esc(a.org)}</b><br>` : ""}${esc(a.courseName || a.courseId)}<br>${via}</td><td>${countCell}</td>
-        <td>${label[a.status] || "신청"}${a.rejectReason ? `<br><small>${esc(a.rejectReason)}</small>` : ""}</td>
+        <td>${a.channel === "manual" && a.status === "cancelled" ? "삭제됨" : (label[a.status] || "신청")}${a.rejectReason ? `<br><small>${esc(a.rejectReason)}</small>` : ""}</td>
         <td><input type="text" class="app-memo" maxlength="300" placeholder="메모" value="${esc(a.memo || "")}" style="width:100%;min-width:6rem;box-sizing:border-box"></td>
-        <td class="actions">${a.status === "active" ? `<button type="button" class="reject">반려</button>` : ""}</td>`;
+        <td class="actions">${a.status !== "active" ? ""
+          : a.channel === "manual" ? `<button type="button" class="m-edit">수정</button> <button type="button" class="m-del danger">삭제</button>`
+          : `<button type="button" class="reject">반려</button>`}</td>`;
       // 관리자 메모: 칸을 벗어나면 저장(바뀐 경우만). 개인정보는 적지 않는다.
       const memo = tr.querySelector(".app-memo");
       memo.addEventListener("change", async () => {
@@ -213,6 +220,9 @@ async function loadApplications() {
       });
       const btn = tr.querySelector(".reject");
       if (btn) btn.addEventListener("click", () => rejectApplication(d.id, a, btn));
+      tr.querySelector(".m-edit")?.addEventListener("click", () => editManual(d.id, a));
+      const del = tr.querySelector(".m-del");
+      if (del) del.addEventListener("click", () => deleteManual(d.id, a, del));
       body.appendChild(tr);
     });
   } catch (e) { body.innerHTML = `<tr><td colspan="7" class="empty">불러오기 실패: ${e.message}</td></tr>`; }
@@ -239,6 +249,106 @@ async function rejectApplication(id, a, btn) {
   } catch (e) {
     alert("반려 실패: " + (e.message || e));
     btn.disabled = false; btn.textContent = "반려";
+  }
+}
+
+// ── 수동 접수(사내 공문·온나라 공문 등 보드 밖 신청) ──
+// 서버(manualApplication)가 트랜잭션으로 신청건수·보드 잔여석을 함께 갱신한다.
+let manualEditId = null;
+let manualCourses = [];
+
+async function loadManualCourses() {
+  const sel = document.getElementById("manual-course");
+  try {
+    const snap = await getDocs(collection(db, "courses"));
+    manualCourses = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => String(b.startDate || "").localeCompare(String(a.startDate || "")));
+    const keep = sel.value;
+    sel.innerHTML = `<option value="">과정 선택…</option>` + manualCourses.map((c) => {
+      const remain = Math.max(0, (c.capacity || 0) - (c.appliedCount || 0));
+      const name = `${c.name || c.id}${c.round ? ` ${c.round}차수` : ""}`;
+      return `<option value="${c.id}">${name.replace(/</g, "&lt;")} (${c.startDate || "일자 미정"} · 잔여 ${remain}석)</option>`;
+    }).join("");
+    sel.value = keep;
+  } catch (e) { document.getElementById("manual-log").textContent = "과정 목록 불러오기 실패: " + e.message; }
+}
+
+function resetManual(msg = "") {
+  manualEditId = null;
+  ["manual-count", "manual-org", "manual-docno"].forEach((id) => { document.getElementById(id).value = ""; });
+  document.getElementById("manual-source").value = "사내 공문";
+  document.getElementById("manual-course").disabled = false;
+  document.getElementById("manual-save").textContent = "등록";
+  document.getElementById("manual-cancel-edit").hidden = true;
+  document.getElementById("manual-log").textContent = msg;
+}
+
+function editManual(id, a) {
+  manualEditId = id;
+  const sel = document.getElementById("manual-course");
+  if (![...sel.options].some((o) => o.value === a.courseId)) {
+    sel.insertAdjacentHTML("beforeend", `<option value="${a.courseId}">${String(a.courseName || a.courseId).replace(/</g, "&lt;")}</option>`);
+  }
+  sel.value = a.courseId;
+  sel.disabled = true; // 과정 변경은 삭제 후 다시 등록
+  document.getElementById("manual-count").value = a.count || "";
+  document.getElementById("manual-org").value = a.org || "";
+  document.getElementById("manual-source").value = a.source || "기타";
+  document.getElementById("manual-docno").value = a.docNo || "";
+  document.getElementById("manual-save").textContent = "수정 저장";
+  document.getElementById("manual-cancel-edit").hidden = false;
+  document.getElementById("manual-log").textContent = `수정 중: ${a.courseName || a.courseId} · ${a.code || ""} (과정을 바꾸려면 삭제 후 다시 등록하세요)`;
+  const fold = document.getElementById("board-manual-fold");
+  fold.open = true;
+  fold.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+async function saveManual() {
+  if (isObserverMode()) return alert("참관자 계정은 조회만 할 수 있습니다.");
+  const btn = document.getElementById("manual-save");
+  const log = document.getElementById("manual-log");
+  const payload = {
+    action: manualEditId ? "update" : "create",
+    applicationId: manualEditId || undefined,
+    courseId: document.getElementById("manual-course").value,
+    count: Number(document.getElementById("manual-count").value),
+    org: document.getElementById("manual-org").value.trim(),
+    source: document.getElementById("manual-source").value,
+    docNo: document.getElementById("manual-docno").value.trim(),
+  };
+  if (!manualEditId && !payload.courseId) return alert("과정을 선택하세요.");
+  if (!Number.isInteger(payload.count) || payload.count < 1 || payload.count > 200) return alert("인원은 1~200명으로 입력하세요.");
+  if (!payload.org) return alert("신청기관을 입력하세요.");
+  const call = httpsCallable(fns, "manualApplication");
+  btn.disabled = true; log.textContent = "처리 중…";
+  try {
+    let res;
+    try { res = await call(payload); }
+    catch (e) {
+      // 정원 초과: 공문으로 확정된 건일 수 있어 확인 후 그대로 등록할 수 있다.
+      if (!e.details?.over) throw e;
+      if (!confirm(`${e.message}\n그래도 등록할까요? (신청건수가 정원을 넘게 됩니다)`)) { log.textContent = "취소했습니다."; return; }
+      res = await call({ ...payload, allowOver: true });
+    }
+    const r = res.data || {};
+    resetManual(manualEditId ? "" : (r.code ? `등록했습니다 — ${r.courseName} ${payload.count}명 (관리번호 ${r.code}, 신청 ${r.applied}/${r.capacity})` : "저장했습니다."));
+    if (payload.action === "update") log.textContent = "수정했습니다" + (r.delta ? ` (인원 ${r.delta > 0 ? "+" : ""}${r.delta}명 반영)` : "") + ".";
+    loadApplications(); loadManualCourses();
+  } catch (e) { log.textContent = "실패: " + (e.message || e); }
+  finally { btn.disabled = false; }
+}
+
+async function deleteManual(id, a, btn) {
+  if (isObserverMode()) return alert("참관자 계정은 조회만 할 수 있습니다.");
+  if (!confirm(`수동 등록 건을 삭제합니다.\n${a.courseName || a.courseId} · ${a.org || ""} ${a.count}명\n잔여석이 ${a.count}석 복구됩니다.`)) return;
+  btn.disabled = true; btn.textContent = "처리 중…";
+  try {
+    await httpsCallable(fns, "manualApplication")({ action: "delete", applicationId: id });
+    if (manualEditId === id) resetManual();
+    loadApplications(); loadManualCourses();
+  } catch (e) {
+    alert("삭제 실패: " + (e.message || e));
+    btn.disabled = false; btn.textContent = "삭제";
   }
 }
 

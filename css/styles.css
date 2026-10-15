@@ -929,3 +929,9 @@ body.has-cart .board-main { padding-bottom: 5rem; }
 .ask-input textarea { flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; resize: vertical; }
 .ask-side { display: flex; flex-direction: column; gap: 6px; }
 .chk-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; }
+
+/* 공개 현황 보드 관리 — 수동 접수 */
+.manual-app-row select#manual-course { min-width: 16rem; max-width: 100%; }
+.manual-app-row input#manual-org { min-width: 12rem; }
+.apps-table .manual-tag { color: #8a5a00; }
+.apps-table button.m-del { color: var(--danger); }
