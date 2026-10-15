@@ -5,6 +5,7 @@
 //   반려·취소 처리 즉시 삭제하고 남은 건도 신청 마감일(교육 시작일) 경과 후 자동 파기한다.
 // - 취소는 신청 시 발급한 접수번호로 본인 확인(해시 대조) 후 잔여석 복구.
 // - 반려는 관리자만(rejectApplication): 잔여석 복구 + 사유 통지 + 이메일 즉시 파기.
+// - 공문 등 보드 밖 신청은 관리자 수동 등록(manualApplication): 등록·수정·삭제, 메일 없음.
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
@@ -388,6 +389,7 @@ exports.rejectApplication = onCall(
     if (!snap.exists) throw new HttpsError("not-found", "접수 기록을 찾을 수 없습니다.");
     const app = snap.data();
     if (app.status !== "active") throw new HttpsError("failed-precondition", "이미 취소·반려된 접수입니다.");
+    if (app.channel === "manual") throw new HttpsError("failed-precondition", "수동 등록 건은 반려 대신 삭제를 이용하세요.");
 
     const applicantEmail = app.email || "";
     // 통지 메일에 넣을 접수 정보(공문 대조용)
@@ -450,6 +452,106 @@ exports.rejectApplication = onCall(
       return { ok: true, rejected: true, mailFailed: true, noApplicantEmail: !applicantEmail };
     }
     return { ok: true, rejected: true, noApplicantEmail: !applicantEmail };
+  }
+);
+
+/* ================================================================
+ *  수동 접수 (관리자 전용)
+ *  사내 공문·온나라 공문 등 보드를 거치지 않은 신청을 관리자가 직접 등록한다.
+ *  잔여석은 온라인 접수와 같은 트랜잭션 방식으로 반영하고, 메일은 보내지 않는다.
+ *  수동 건만 수정(인원·기관·경로·문서번호)과 삭제(취소 처리, 잔여석 복구)를 허용한다.
+ * ================================================================ */
+const MANUAL_SOURCES = ["사내 공문", "온나라 공문", "기타"];
+const MAX_MANUAL_COUNT = 200; // 수동 1건 인원 상한(공문 일괄 신청 고려)
+
+exports.manualApplication = onCall(
+  { region: "asia-northeast3", memory: "256MiB", timeoutSeconds: 30, maxInstances: 5 },
+  async (req) => {
+    const by = await requireAdmin(req, "board");
+    const d = req.data || {};
+    const action = d.action;
+    if (!["create", "update", "delete"].includes(action)) bad("요청 종류가 올바르지 않습니다.");
+
+    // 입력값(생성·수정 공통)
+    const fields = () => {
+      const count = Number(d.count);
+      if (!Number.isInteger(count) || count < 1 || count > MAX_MANUAL_COUNT) bad(`인원은 1~${MAX_MANUAL_COUNT}명으로 입력하세요.`);
+      const source = MANUAL_SOURCES.includes(d.source) ? d.source : "기타";
+      return {
+        count, source,
+        org: str(d.org, 60, "신청기관", true),
+        docNo: str(d.docNo, 60, "문서번호", false),
+      };
+    };
+    const seatsAfter = (c, applied) => ({ appliedCount: applied, remaining: Math.max(0, (c.capacity || 0) - applied), updatedAtMs: Date.now() });
+
+    if (action === "create") {
+      const f = fields();
+      const courseId = str(d.courseId, 128, "과정", true);
+      if (courseId.startsWith("__") || courseId.includes("/")) bad("과정이 올바르지 않습니다.");
+      const appRef = db.collection("applications").doc();
+      const code = "M-" + newReceiptCode().slice(0, 6); // 수동 건 표시용 번호(온라인 취소 대상 아님)
+      const out = await db.runTransaction(async (tx) => {
+        const cRef = db.doc(`courses/${courseId}`);
+        const bRef = db.doc(`publicBoard/${courseId}`);
+        const [cSnap, bSnap] = await Promise.all([tx.get(cRef), tx.get(bRef)]);
+        if (!cSnap.exists) throw new HttpsError("not-found", "과정을 찾을 수 없습니다.");
+        const c = cSnap.data();
+        const applied = (c.appliedCount || 0) + f.count;
+        const remain = (c.capacity || 0) - (c.appliedCount || 0);
+        // 공문으로 이미 확정된 신청일 수 있어 정원 초과도 확인 후 등록할 수 있게 한다.
+        if (c.capacity && applied > c.capacity && !d.allowOver) {
+          throw new HttpsError("failed-precondition", `잔여 ${Math.max(0, remain)}석으로 ${f.count}명을 등록하면 정원을 초과합니다.`, { over: true, remaining: Math.max(0, remain) });
+        }
+        tx.update(cRef, { appliedCount: applied });
+        if (bSnap.exists) tx.update(bRef, seatsAfter(c, applied));
+        const courseName = `${c.name || courseId}${c.round ? ` ${c.round}차수` : ""}`;
+        tx.set(appRef, {
+          code, courseId, courseName, ...f, channel: "manual", status: "active",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(), manualBy: by,
+        });
+        return { courseName, applied, capacity: c.capacity || 0 };
+      });
+      return { ok: true, id: appRef.id, code, ...out };
+    }
+
+    const appRef = db.doc(`applications/${str(d.applicationId, 64, "접수 ID", true)}`);
+    return db.runTransaction(async (tx) => {
+      const aSnap = await tx.get(appRef);
+      if (!aSnap.exists) throw new HttpsError("not-found", "접수 기록을 찾을 수 없습니다.");
+      const a = aSnap.data();
+      if (a.channel !== "manual") throw new HttpsError("failed-precondition", "온라인 접수 건은 수정·삭제할 수 없습니다(반려를 이용하세요).");
+      if (a.status !== "active") throw new HttpsError("failed-precondition", "이미 삭제(취소)된 접수입니다.");
+      const cRef = db.doc(`courses/${a.courseId}`);
+      const bRef = db.doc(`publicBoard/${a.courseId}`);
+      const [cSnap, bSnap] = await Promise.all([tx.get(cRef), tx.get(bRef)]);
+      const c = cSnap.exists ? cSnap.data() : null;
+      const now = admin.firestore.FieldValue.serverTimestamp();
+
+      if (action === "delete") {
+        if (c) {
+          const applied = Math.max(0, (c.appliedCount || 0) - (a.count || 0));
+          tx.update(cRef, { appliedCount: applied });
+          if (bSnap.exists) tx.update(bRef, seatsAfter(c, applied));
+        }
+        tx.update(appRef, { status: "cancelled", cancelledAt: now, cancelledBy: by });
+        return { ok: true, deleted: true };
+      }
+
+      const f = fields();
+      const delta = f.count - (a.count || 0);
+      if (c && delta) {
+        const applied = Math.max(0, (c.appliedCount || 0) + delta);
+        if (delta > 0 && c.capacity && applied > c.capacity && !d.allowOver) {
+          const remain = Math.max(0, (c.capacity || 0) - (c.appliedCount || 0));
+          throw new HttpsError("failed-precondition", `잔여 ${remain}석으로 ${delta}명을 늘리면 정원을 초과합니다.`, { over: true, remaining: remain });
+        }
+        tx.update(cRef, { appliedCount: applied });
+        if (bSnap.exists) tx.update(bRef, seatsAfter(c, applied));
+      }
+      tx.update(appRef, { ...f, editedAt: now, editedBy: by });
+      return { ok: true, updated: true, delta };
+    });
   }
 );
 
